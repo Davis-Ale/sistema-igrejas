@@ -12,17 +12,18 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@saas-church/auth": ["packages/auth/src/index.ts"],
-      "@saas-church/database": ["packages/database/src/index.ts"],
-      "@saas-church/domain": ["packages/domain/src/index.ts"],
-      "@saas-church/members": ["packages/members/src/index.ts"],
-      "@saas-church/trail": ["packages/trail/src/index.ts"],
-      "@saas-church/volunteers": ["packages/volunteers/src/index.ts"],
-      "@saas-church/events": ["packages/events/src/index.ts"],
-      "@saas-church/financial": ["packages/financial/src/index.ts"],
-      "@saas-church/notifications": ["packages/notifications/src/index.ts"]
+      "@sistema-igrejas/auth": ["packages/auth/src/index.ts"],
+      "@sistema-igrejas/database": ["packages/database/src/index.ts"],
+      "@sistema-igrejas/domain": ["packages/domain/src/index.ts"],
+      "@sistema-igrejas/members": ["packages/members/src/index.ts"],
+      "@sistema-igrejas/trail": ["packages/trail/src/index.ts"],
+      "@sistema-igrejas/volunteers": ["packages/volunteers/src/index.ts"],
+      "@sistema-igrejas/events": ["packages/events/src/index.ts"],
+      "@sistema-igrejas/financial": ["packages/financial/src/index.ts"],
+      "@sistema-igrejas/notifications": ["packages/notifications/src/index.ts"]
     }
   }
 }
