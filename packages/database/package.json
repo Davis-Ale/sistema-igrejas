@@ -7,13 +7,17 @@
   "scripts": {
     "generate": "prisma generate --schema prisma/schema.prisma",
     "validate": "prisma validate --schema prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "latest"
+    "@prisma/adapter-pg": "latest",
+    "@prisma/client": "latest",
+    "bcryptjs": "latest"
   },
   "devDependencies": {
     "prisma": "latest",
+    "tsx": "latest",
     "typescript": "latest"
   }
 }

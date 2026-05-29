@@ -1,0 +1,143 @@
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
+import { hash } from "bcryptjs";
+
+const databaseUrl =
+  process.env.DATABASE_URL ??
+  "postgresql://postgres:postgres@localhost:5433/sistema_igrejas?schema=public";
+
+const adapter = new PrismaPg({
+  connectionString: databaseUrl
+});
+
+const prisma = new PrismaClient({
+  adapter
+});
+
+async function upsertDemoChurch() {
+  return prisma.church.upsert({
+    where: {
+      slug: "igreja-demo"
+    },
+    update: {
+      name: "Igreja Demo",
+      plan: "DEMO",
+      locale: "pt-BR"
+    },
+    create: {
+      name: "Igreja Demo",
+      slug: "igreja-demo",
+      plan: "DEMO",
+      locale: "pt-BR"
+    }
+  });
+}
+
+async function upsertDemoCampus(churchId: string) {
+  const existingCampus = await prisma.campus.findFirst({
+    where: {
+      churchId,
+      name: "Sede"
+    }
+  });
+
+  if (existingCampus) {
+    return prisma.campus.update({
+      where: {
+        id: existingCampus.id
+      },
+      data: {
+        name: "Sede",
+        isHeadquarters: true
+      }
+    });
+  }
+
+  return prisma.campus.create({
+    data: {
+      churchId,
+      name: "Sede",
+      isHeadquarters: true
+    }
+  });
+}
+
+async function upsertDemoPastor(churchId: string, campusId: string) {
+  const existingPerson = await prisma.person.findFirst({
+    where: {
+      churchId,
+      phone: "11999999999"
+    }
+  });
+
+  if (existingPerson) {
+    return prisma.person.update({
+      where: {
+        id: existingPerson.id
+      },
+      data: {
+        campusId,
+        name: "Pastor Demo",
+        email: "pastor@sistemaigrejas.local",
+        role: "PASTOR"
+      }
+    });
+  }
+
+  return prisma.person.create({
+    data: {
+      churchId,
+      campusId,
+      name: "Pastor Demo",
+      phone: "11999999999",
+      email: "pastor@sistemaigrejas.local",
+      role: "PASTOR"
+    }
+  });
+}
+
+async function upsertDemoUserAccount(churchId: string, personId: string) {
+  const passwordHash = await hash("12345678", 12);
+
+  return prisma.userAccount.upsert({
+    where: {
+      email: "pastor@sistemaigrejas.local"
+    },
+    update: {
+      churchId,
+      personId,
+      passwordHash,
+      role: "PASTOR",
+      status: "ACTIVE"
+    },
+    create: {
+      churchId,
+      personId,
+      email: "pastor@sistemaigrejas.local",
+      passwordHash,
+      role: "PASTOR",
+      status: "ACTIVE"
+    }
+  });
+}
+
+async function main(): Promise<void> {
+  const church = await upsertDemoChurch();
+  const campus = await upsertDemoCampus(church.id);
+  const pastor = await upsertDemoPastor(church.id, campus.id);
+  await upsertDemoUserAccount(church.id, pastor.id);
+
+  console.log("Seed concluido.");
+  console.log("Igreja: Igreja Demo");
+  console.log("E-mail: pastor@sistemaigrejas.local");
+  console.log("Senha: 12345678");
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
