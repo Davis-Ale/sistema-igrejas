@@ -21,6 +21,11 @@ enum VolunteerStatus {
   SUSPENDED
 }
 
+enum UserAccountStatus {
+  ACTIVE
+  DISABLED
+}
+
 enum RegStatus {
   PENDING
   CONFIRMED
@@ -70,6 +75,7 @@ model Church {
   events        Event[]
   registrations Registration[]
   transactions  Transaction[]
+  userAccounts UserAccount[]
 
   @@index([churchId])
   @@index([cnpj])
@@ -131,6 +137,7 @@ model Person {
   changedLogs        VolunteerLog[]  @relation("VolunteerLogChangedBy")
   registrations      Registration[]
   transactions       Transaction[]
+  userAccount       UserAccount?
 
   @@index([churchId])
   @@index([churchId, campusId])
@@ -370,4 +377,25 @@ model Transaction {
   @@index([churchId, asaasId])
   @@index([churchId, nfseId])
   @@index([churchId, at])
+}
+
+model UserAccount {
+  id           String            @id @default(cuid())
+  churchId     String
+  personId     String?           @unique
+  email        String            @unique
+  passwordHash String
+  role         Role
+  status       UserAccountStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@index([churchId])
+  @@index([churchId, role])
+  @@index([churchId, status])
+  @@index([email])
 }
