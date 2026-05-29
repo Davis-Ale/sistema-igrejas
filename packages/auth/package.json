@@ -9,7 +9,10 @@
   },
   "dependencies": {
     "@fastify/jwt": "latest",
-    "fastify": "latest"
+    "@prisma/client": "latest",
+    "bcryptjs": "latest",
+    "fastify": "latest",
+    "zod": "latest"
   },
   "devDependencies": {
     "typescript": "latest"

@@ -2,7 +2,7 @@ import "dotenv/config";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { authPreHandler } from "@sistema-igrejas/auth";
+import { authPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
@@ -49,6 +49,8 @@ app.get("/health", async () => {
     service: "api-br"
   };
 });
+
+await registerAuthRoutes(app, prisma);
 
 await app.register(
   async (protectedRoutes) => {
