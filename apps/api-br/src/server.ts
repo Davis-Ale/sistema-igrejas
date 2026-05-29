@@ -2,8 +2,14 @@ import "dotenv/config";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
-import Fastify from "fastify";
+import { authPreHandler } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
+import { registerEventRoutes } from "@sistema-igrejas/events";
+import { registerFinancialRoutes } from "@sistema-igrejas/financial";
+import { registerCellRoutes } from "@sistema-igrejas/members";
+import { registerTrailRoutes } from "@sistema-igrejas/trail";
+import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
+import Fastify from "fastify";
 
 const app = Fastify({
   logger: true
@@ -43,6 +49,21 @@ app.get("/health", async () => {
     service: "api-br"
   };
 });
+
+await app.register(
+  async (protectedRoutes) => {
+    protectedRoutes.addHook("preHandler", authPreHandler);
+
+    await registerEventRoutes(protectedRoutes, prisma);
+    await registerFinancialRoutes(protectedRoutes, prisma);
+    await registerCellRoutes(protectedRoutes, prisma);
+    await registerTrailRoutes(protectedRoutes, prisma);
+    await registerVolunteerRoutes(protectedRoutes, prisma);
+  },
+  {
+    prefix: "/api"
+  }
+);
 
 async function start(): Promise<void> {
   try {
