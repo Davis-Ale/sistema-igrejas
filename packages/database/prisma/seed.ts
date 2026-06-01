@@ -14,7 +14,24 @@ const prisma = new PrismaClient({
   adapter
 });
 
+function getTrialDates(): {
+  trialStartedAt: Date;
+  trialEndsAt: Date;
+} {
+  const trialStartedAt = new Date();
+  const trialEndsAt = new Date(trialStartedAt);
+
+  trialEndsAt.setDate(trialEndsAt.getDate() + 15);
+
+  return {
+    trialStartedAt,
+    trialEndsAt
+  };
+}
+
 async function upsertDemoChurch() {
+  const trialDates = getTrialDates();
+
   return prisma.church.upsert({
     where: {
       slug: "igreja-demo"
@@ -22,13 +39,23 @@ async function upsertDemoChurch() {
     update: {
       name: "Igreja Demo",
       plan: "DEMO",
-      locale: "pt-BR"
+      status: "TRIAL",
+      locale: "pt-BR",
+      trialStartedAt: trialDates.trialStartedAt,
+      trialEndsAt: trialDates.trialEndsAt,
+      subscriptionStartedAt: null,
+      subscriptionEndsAt: null,
+      blockedAt: null,
+      blockReason: null
     },
     create: {
       name: "Igreja Demo",
       slug: "igreja-demo",
       plan: "DEMO",
-      locale: "pt-BR"
+      status: "TRIAL",
+      locale: "pt-BR",
+      trialStartedAt: trialDates.trialStartedAt,
+      trialEndsAt: trialDates.trialEndsAt
     }
   });
 }
@@ -129,6 +156,9 @@ async function main(): Promise<void> {
 
   console.log("Seed concluido.");
   console.log("Igreja: Igreja Demo");
+  console.log("Plano: DEMO");
+  console.log("Status: TRIAL");
+  console.log(`Trial termina em: ${church.trialEndsAt?.toISOString()}`);
   console.log("E-mail: pastor@sistemaigrejas.local");
   console.log("Senha: 12345678");
 }
