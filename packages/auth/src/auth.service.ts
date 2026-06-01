@@ -26,7 +26,12 @@ export async function loginWithEmailAndPassword(
           id: true,
           name: true,
           slug: true,
-          plan: true
+          plan: true,
+          status: true,
+          trialStartedAt: true,
+          trialEndsAt: true,
+          blockedAt: true,
+          blockReason: true
         }
       },
       person: {
