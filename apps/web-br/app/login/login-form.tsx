@@ -85,7 +85,7 @@ export function LoginForm() {
       localStorage.setItem("sistema-igrejas.session", JSON.stringify(loginSession));
       setSession(loginSession);
     } catch {
-      setError("Não foi possível conectar à API. Verifique se o backend está rodando.");
+      setError("Não foi possível entrar no sistema agora. Tente novamente em alguns instantes.");
     } finally {
       setIsSubmitting(false);
     }
@@ -135,16 +135,6 @@ export function LoginForm() {
             Entrar no Sistema Igrejas
           </h1>
 
-          <p
-            style={{
-              color: "#64748b",
-              fontSize: "16px",
-              lineHeight: 1.6,
-              margin: 0
-            }}
-          >
-            Use o acesso inicial criado no seed para validar o fluxo real com a API.
-          </p>
         </div>
 
         <label

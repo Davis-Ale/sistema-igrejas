@@ -40,23 +40,11 @@ export default function HomePage() {
             color: "#0f172a",
             fontSize: "40px",
             lineHeight: 1.1,
-            margin: "0 0 16px"
+            margin: "0 0 28px"
           }}
         >
           Gestão da igreja em um só lugar.
         </h1>
-
-        <p
-          style={{
-            color: "#475569",
-            fontSize: "18px",
-            lineHeight: 1.7,
-            margin: "0 0 28px"
-          }}
-        >
-          Entre com o acesso da igreja em período de degustação para testar o
-          fluxo real conectado à API.
-        </p>
 
         <Link
           href="/login"
