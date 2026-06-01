@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main
@@ -49,12 +51,27 @@ export default function HomePage() {
             color: "#475569",
             fontSize: "18px",
             lineHeight: 1.7,
-            margin: 0
+            margin: "0 0 28px"
           }}
         >
-          Base inicial do frontend criada. O próximo passo será ligar a tela de login
-          à API real, usando o acesso da igreja em período de degustação.
+          Entre com o acesso da igreja em período de degustação para testar o
+          fluxo real conectado à API.
         </p>
+
+        <Link
+          href="/login"
+          style={{
+            background: "#2563eb",
+            borderRadius: "999px",
+            color: "#ffffff",
+            display: "inline-flex",
+            fontSize: "16px",
+            fontWeight: 700,
+            padding: "14px 22px"
+          }}
+        >
+          Acessar sistema
+        </Link>
       </section>
     </main>
   );
