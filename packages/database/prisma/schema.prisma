@@ -73,8 +73,15 @@ model Church {
   name      String
   slug      String   @unique
   plan      String
+  status                ChurchStatus @default(TRIAL)
   cnpj      String?
   locale    String   @default("pt-BR")
+  trialStartedAt        DateTime?
+  trialEndsAt           DateTime?
+  subscriptionStartedAt DateTime?
+  subscriptionEndsAt    DateTime?
+  blockedAt             DateTime?
+  blockReason           String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
