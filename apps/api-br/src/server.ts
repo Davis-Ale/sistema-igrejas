@@ -2,7 +2,7 @@ import "dotenv/config";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { authPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
+import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
@@ -54,7 +54,7 @@ await registerAuthRoutes(app, prisma);
 
 await app.register(
   async (protectedRoutes) => {
-    protectedRoutes.addHook("preHandler", authPreHandler);
+    protectedRoutes.addHook("preHandler", createAuthPreHandler(prisma));
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
