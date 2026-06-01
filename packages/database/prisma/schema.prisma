@@ -26,6 +26,20 @@ enum UserAccountStatus {
   DISABLED
 }
 
+enum ChurchStatus {
+  TRIAL
+  ACTIVE
+  BLOCKED
+  CANCELLED
+}
+
+enum TrialStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+  BLOCKED
+}
+
 enum RegStatus {
   PENDING
   CONFIRMED
