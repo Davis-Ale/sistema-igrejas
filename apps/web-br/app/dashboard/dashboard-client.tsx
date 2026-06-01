@@ -10,7 +10,6 @@ type LoginSession = {
   };
   church: {
     name: string;
-    plan: string;
     status: string;
     trialEndsAt: string | null;
   };
@@ -98,10 +97,6 @@ export function DashboardClient() {
         >
           <p style={{ margin: 0 }}>
             Status: <strong>{session.church.status}</strong>
-          </p>
-
-          <p style={{ margin: 0 }}>
-            Plano: <strong>{session.church.plan}</strong>
           </p>
 
           <p style={{ margin: 0 }}>
