@@ -37,7 +37,7 @@ async function upsertDemoChurch() {
       slug: "igreja-demo"
     },
     update: {
-      name: "Igreja Demo",
+      name: "Igreja Demonstração",
       plan: "DEMO",
       status: "TRIAL",
       locale: "pt-BR",
@@ -49,7 +49,7 @@ async function upsertDemoChurch() {
       blockReason: null
     },
     create: {
-      name: "Igreja Demo",
+      name: "Igreja Demonstração",
       slug: "igreja-demo",
       plan: "DEMO",
       status: "TRIAL",
@@ -183,7 +183,7 @@ async function main(): Promise<void> {
   await upsertDemoTrialSignup(church.id, church.trialStartedAt, church.trialEndsAt);
 
   console.log("Seed concluido.");
-  console.log("Igreja: Igreja Demo");
+  console.log("Igreja: Igreja Demonstração");
   console.log("Plano: DEMO");
   console.log("Status: TRIAL");
   console.log(`Trial termina em: ${church.trialEndsAt?.toISOString()}`);
