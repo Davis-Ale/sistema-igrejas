@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 type LoginSession = {
@@ -48,6 +49,7 @@ function formatDate(value: string | null): string {
 }
 
 export function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("pastor@sistemaigrejas.local");
   const [password, setPassword] = useState("12345678");
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export function LoginForm() {
 
       localStorage.setItem("sistema-igrejas.session", JSON.stringify(loginSession));
       setSession(loginSession);
+      router.push("/dashboard");
     } catch {
       setError("Não foi possível entrar no sistema agora. Tente novamente em alguns instantes.");
     } finally {
