@@ -97,6 +97,7 @@ model Church {
   registrations Registration[]
   transactions  Transaction[]
   userAccounts UserAccount[]
+  trialSignups TrialSignup[]
 
   @@index([churchId])
   @@index([cnpj])
@@ -419,4 +420,23 @@ model UserAccount {
   @@index([churchId, role])
   @@index([churchId, status])
   @@index([email])
+}
+
+model TrialSignup {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  churchId    String?
+  status      TrialStatus @default(ACTIVE)
+  startedAt   DateTime    @default(now())
+  endsAt      DateTime?
+  convertedAt DateTime?
+  blockedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  church Church? @relation(fields: [churchId], references: [id], onDelete: SetNull)
+
+  @@index([churchId])
+  @@index([email])
+  @@index([status])
 }
