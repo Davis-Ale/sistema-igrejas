@@ -60,6 +60,33 @@ async function upsertDemoChurch() {
   });
 }
 
+async function upsertDemoTrialSignup(
+  churchId: string,
+  trialStartedAt: Date | null,
+  trialEndsAt: Date | null
+) {
+  return prisma.trialSignup.upsert({
+    where: {
+      email: "pastor@sistemaigrejas.local"
+    },
+    update: {
+      churchId,
+      status: "ACTIVE",
+      startedAt: trialStartedAt ?? new Date(),
+      endsAt: trialEndsAt,
+      convertedAt: null,
+      blockedAt: null
+    },
+    create: {
+      email: "pastor@sistemaigrejas.local",
+      churchId,
+      status: "ACTIVE",
+      startedAt: trialStartedAt ?? new Date(),
+      endsAt: trialEndsAt
+    }
+  });
+}
+
 async function upsertDemoCampus(churchId: string) {
   const existingCampus = await prisma.campus.findFirst({
     where: {
@@ -153,12 +180,14 @@ async function main(): Promise<void> {
   const campus = await upsertDemoCampus(church.id);
   const pastor = await upsertDemoPastor(church.id, campus.id);
   await upsertDemoUserAccount(church.id, pastor.id);
+  await upsertDemoTrialSignup(church.id, church.trialStartedAt, church.trialEndsAt);
 
   console.log("Seed concluido.");
   console.log("Igreja: Igreja Demo");
   console.log("Plano: DEMO");
   console.log("Status: TRIAL");
   console.log(`Trial termina em: ${church.trialEndsAt?.toISOString()}`);
+  console.log("Trial signup: pastor@sistemaigrejas.local");
   console.log("E-mail: pastor@sistemaigrejas.local");
   console.log("Senha: 12345678");
 }
