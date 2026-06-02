@@ -37,30 +37,17 @@ type ApiErrorResponse = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "Não informado";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
 export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("pastor@sistemaigrejas.local");
   const [password, setPassword] = useState("12345678");
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<LoginSession | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setError(null);
-    setSession(null);
     setIsSubmitting(true);
 
     try {
@@ -85,7 +72,6 @@ export function LoginForm() {
       const loginSession = (await response.json()) as LoginSession;
 
       localStorage.setItem("sistema-igrejas.session", JSON.stringify(loginSession));
-      setSession(loginSession);
       router.push("/dashboard");
     } catch {
       setError("Não foi possível entrar no sistema agora. Tente novamente em alguns instantes.");
@@ -132,12 +118,11 @@ export function LoginForm() {
               color: "#0f172a",
               fontSize: "32px",
               lineHeight: 1.1,
-              margin: "0 0 10px"
+              margin: 0
             }}
           >
             Entrar no Sistema Igrejas
           </h1>
-
         </div>
 
         <label
@@ -221,43 +206,6 @@ export function LoginForm() {
           {isSubmitting ? "Entrando..." : "Entrar"}
         </button>
       </form>
-
-      {session ? (
-        <section
-          style={{
-            background: "#f8fafc",
-            border: "1px solid #cbd5e1",
-            borderRadius: "20px",
-            padding: "24px"
-          }}
-        >
-          <h2
-            style={{
-              color: "#0f172a",
-              fontSize: "22px",
-              margin: "0 0 12px"
-            }}
-          >
-            Login realizado
-          </h2>
-
-          <p style={{ color: "#475569", margin: "0 0 8px" }}>
-            Igreja: <strong>{session.church.name}</strong>
-          </p>
-
-          <p style={{ color: "#475569", margin: "0 0 8px" }}>
-            Status: <strong>{session.church.status}</strong>
-          </p>
-
-          <p style={{ color: "#475569", margin: "0 0 8px" }}>
-            Trial termina em: <strong>{formatDate(session.church.trialEndsAt)}</strong>
-          </p>
-
-          <p style={{ color: "#475569", margin: 0 }}>
-            Usuário: <strong>{session.user.email}</strong>
-          </p>
-        </section>
-      ) : null}
     </div>
   );
 }
