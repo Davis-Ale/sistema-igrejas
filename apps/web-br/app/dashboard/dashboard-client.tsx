@@ -96,11 +96,11 @@ export function DashboardClient() {
           }}
         >
           <p style={{ margin: 0 }}>
-            Status: <strong>{session.church.status}</strong>
+            Período de teste ativo
           </p>
 
           <p style={{ margin: 0 }}>
-            Trial termina em: <strong>{formatDate(session.church.trialEndsAt)}</strong>
+            Acesso disponível até: <strong>{formatDate(session.church.trialEndsAt)}</strong>
           </p>
 
           <p style={{ margin: 0 }}>
