@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DashboardSession } from "./dashboard-types";
 
 type DashboardShellProps = {
@@ -78,9 +79,11 @@ export function DashboardShell({ session }: DashboardShellProps) {
           >
             {["Painel", "Membros", "Visitantes", "Células", "Eventos", "Assistente IA"].map(
               (item) => (
-                <div
+                <Link
+                  href={item === "Membros" ? "/dashboard/membros" : "/dashboard"}
                   key={item}
                   style={{
+                    textDecoration: "none",
                     alignItems: "center",
                     background:
                       item === "Painel"
@@ -100,7 +103,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   }}
                 >
                   <span>{item}</span>
-                </div>
+                </Link>
               )
             )}
           </nav>
