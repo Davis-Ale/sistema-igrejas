@@ -80,7 +80,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
             {["Painel", "Membros", "Visitantes", "Células", "Eventos", "Assistente IA"].map(
               (item) => (
                 <Link
-                  href={item === "Membros" ? "/dashboard/membros" : item === "Visitantes" ? "/dashboard/visitantes" : item === "Células" ? "/dashboard/celulas" : "/dashboard"}
+                  href={item === "Membros" ? "/dashboard/membros" : item === "Visitantes" ? "/dashboard/visitantes" : item === "Células" ? "/dashboard/celulas" : item === "Eventos" ? "/dashboard/eventos" : "/dashboard"}
                   key={item}
                   style={{
                     textDecoration: "none",
@@ -188,7 +188,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   margin: "0 0 12px"
                 }}
               >
-                Acesso
+                Sistema
               </p>
 
               <strong
@@ -199,7 +199,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   letterSpacing: "-0.03em"
                 }}
               >
-                Período de teste ativo
+                Área administrativa
               </strong>
             </article>
 
@@ -222,7 +222,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   margin: "0 0 12px"
                 }}
               >
-                Disponível até
+                Módulos
               </p>
 
               <strong
@@ -233,7 +233,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   letterSpacing: "-0.03em"
                 }}
               >
-                {formatDate(session.church.trialEndsAt)}
+                Navegação disponível
               </strong>
             </article>
 
