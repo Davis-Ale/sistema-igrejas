@@ -19,8 +19,9 @@ export function DashboardShell({ session }: DashboardShellProps) {
   return (
     <main
       style={{
-        background: "#f8fafc",
-        color: "#0f172a",
+        background:
+          "radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
+        color: "#f8fafc",
         minHeight: "100vh"
       }}
     >
@@ -33,22 +34,22 @@ export function DashboardShell({ session }: DashboardShellProps) {
       >
         <aside
           style={{
-            background: "#ffffff",
-            borderRight: "1px solid #e2e8f0",
+            background: "rgba(15, 23, 42, 0.72)",
+            borderRight: "1px solid rgba(148, 163, 184, 0.18)",
             display: "flex",
             flexDirection: "column",
-            gap: "28px",
+            gap: "32px",
             padding: "28px 22px"
           }}
         >
           <div>
             <p
               style={{
-                color: "#2563eb",
+                color: "#60a5fa",
                 fontSize: "13px",
                 fontWeight: 800,
                 letterSpacing: "0.08em",
-                margin: "0 0 10px",
+                margin: "0 0 12px",
                 textTransform: "uppercase"
               }}
             >
@@ -57,9 +58,10 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
             <h1
               style={{
-                color: "#0f172a",
+                color: "#f8fafc",
                 fontSize: "22px",
-                lineHeight: 1.15,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.1,
                 margin: 0
               }}
             >
@@ -71,35 +73,44 @@ export function DashboardShell({ session }: DashboardShellProps) {
             aria-label="Navegação principal"
             style={{
               display: "grid",
-              gap: "8px"
+              gap: "10px"
             }}
           >
-            {["Painel", "Membros", "Visitantes", "Células", "Eventos", "IA geral"].map((item) => (
-              <div
-                key={item}
-                style={{
-                  alignItems: "center",
-                  background: item === "Painel" ? "#eff6ff" : "transparent",
-                  borderRadius: "14px",
-                  color: item === "Painel" ? "#1d4ed8" : "#475569",
-                  display: "flex",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  justifyContent: "space-between",
-                  padding: "12px 14px"
-                }}
-              >
-                <span>{item}</span>
-              </div>
-            ))}
+            {["Painel", "Membros", "Visitantes", "Células", "Eventos", "Assistente IA"].map(
+              (item) => (
+                <div
+                  key={item}
+                  style={{
+                    alignItems: "center",
+                    background:
+                      item === "Painel"
+                        ? "linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(14, 165, 233, 0.76))"
+                        : "rgba(15, 23, 42, 0.24)",
+                    border:
+                      item === "Painel"
+                        ? "1px solid rgba(147, 197, 253, 0.34)"
+                        : "1px solid transparent",
+                    borderRadius: "16px",
+                    color: item === "Painel" ? "#ffffff" : "#cbd5e1",
+                    display: "flex",
+                    fontSize: "15px",
+                    fontWeight: 800,
+                    justifyContent: "space-between",
+                    padding: "13px 14px"
+                  }}
+                >
+                  <span>{item}</span>
+                </div>
+              )
+            )}
           </nav>
         </aside>
 
         <section
           style={{
             display: "grid",
-            gap: "28px",
-            padding: "28px"
+            gap: "30px",
+            padding: "32px"
           }}
         >
           <header
@@ -112,9 +123,9 @@ export function DashboardShell({ session }: DashboardShellProps) {
             <div>
               <p
                 style={{
-                  color: "#64748b",
+                  color: "#94a3b8",
                   fontSize: "14px",
-                  margin: "0 0 6px"
+                  margin: "0 0 8px"
                 }}
               >
                 Painel da igreja
@@ -122,10 +133,10 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
               <h2
                 style={{
-                  color: "#0f172a",
-                  fontSize: "30px",
-                  letterSpacing: "-0.03em",
-                  lineHeight: 1.1,
+                  color: "#f8fafc",
+                  fontSize: "34px",
+                  letterSpacing: "-0.04em",
+                  lineHeight: 1.05,
                   margin: 0
                 }}
               >
@@ -135,13 +146,13 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
             <div
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "rgba(15, 23, 42, 0.68)",
+                border: "1px solid rgba(148, 163, 184, 0.22)",
                 borderRadius: "999px",
-                color: "#475569",
+                color: "#e2e8f0",
                 fontSize: "14px",
-                fontWeight: 700,
-                padding: "10px 14px"
+                fontWeight: 800,
+                padding: "12px 16px"
               }}
             >
               {session.user.email}
@@ -151,24 +162,27 @@ export function DashboardShell({ session }: DashboardShellProps) {
           <section
             style={{
               display: "grid",
-              gap: "16px",
+              gap: "18px",
               gridTemplateColumns: "repeat(3, minmax(0, 1fr))"
             }}
           >
             <article
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "22px",
-                padding: "22px"
+                background:
+                  "linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(15, 23, 42, 0.92))",
+                border: "1px solid rgba(74, 222, 128, 0.22)",
+                borderRadius: "24px",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.34)",
+                minHeight: "150px",
+                padding: "24px"
               }}
             >
               <p
                 style={{
-                  color: "#64748b",
+                  color: "#bbf7d0",
                   fontSize: "14px",
-                  fontWeight: 700,
-                  margin: "0 0 10px"
+                  fontWeight: 800,
+                  margin: "0 0 12px"
                 }}
               >
                 Acesso
@@ -176,9 +190,10 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
               <strong
                 style={{
-                  color: "#0f172a",
+                  color: "#ffffff",
                   display: "block",
-                  fontSize: "20px"
+                  fontSize: "22px",
+                  letterSpacing: "-0.03em"
                 }}
               >
                 Período de teste ativo
@@ -187,18 +202,21 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
             <article
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "22px",
-                padding: "22px"
+                background:
+                  "linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(15, 23, 42, 0.92))",
+                border: "1px solid rgba(96, 165, 250, 0.22)",
+                borderRadius: "24px",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.34)",
+                minHeight: "150px",
+                padding: "24px"
               }}
             >
               <p
                 style={{
-                  color: "#64748b",
+                  color: "#bfdbfe",
                   fontSize: "14px",
-                  fontWeight: 700,
-                  margin: "0 0 10px"
+                  fontWeight: 800,
+                  margin: "0 0 12px"
                 }}
               >
                 Disponível até
@@ -206,9 +224,10 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
               <strong
                 style={{
-                  color: "#0f172a",
+                  color: "#ffffff",
                   display: "block",
-                  fontSize: "20px"
+                  fontSize: "22px",
+                  letterSpacing: "-0.03em"
                 }}
               >
                 {formatDate(session.church.trialEndsAt)}
@@ -217,28 +236,32 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
             <article
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "22px",
-                padding: "22px"
+                background:
+                  "linear-gradient(135deg, rgba(168, 85, 247, 0.28), rgba(15, 23, 42, 0.92))",
+                border: "1px solid rgba(196, 181, 253, 0.22)",
+                borderRadius: "24px",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.34)",
+                minHeight: "150px",
+                padding: "24px"
               }}
             >
               <p
                 style={{
-                  color: "#64748b",
+                  color: "#ddd6fe",
                   fontSize: "14px",
-                  fontWeight: 700,
-                  margin: "0 0 10px"
+                  fontWeight: 800,
+                  margin: "0 0 12px"
                 }}
               >
-                IA geral
+                Assistente IA
               </p>
 
               <strong
                 style={{
-                  color: "#0f172a",
+                  color: "#ffffff",
                   display: "block",
-                  fontSize: "20px"
+                  fontSize: "22px",
+                  letterSpacing: "-0.03em"
                 }}
               >
                 Recurso planejado
@@ -248,20 +271,21 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
           <section
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: "28px",
-              boxShadow: "0 24px 80px rgba(15, 23, 42, 0.06)",
-              padding: "28px"
+              background:
+                "linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.74))",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              borderRadius: "30px",
+              boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
+              padding: "22px"
             }}
           >
             <p
               style={{
-                color: "#2563eb",
+                color: "#60a5fa",
                 fontSize: "13px",
-                fontWeight: 800,
+                fontWeight: 900,
                 letterSpacing: "0.08em",
-                margin: "0 0 12px",
+                margin: "0 0 14px",
                 textTransform: "uppercase"
               }}
             >
@@ -270,27 +294,26 @@ export function DashboardShell({ session }: DashboardShellProps) {
 
             <h3
               style={{
-                color: "#0f172a",
-                fontSize: "26px",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.15,
-                margin: "0 0 12px"
+                color: "#ffffff",
+                fontSize: "24px",
+                letterSpacing: "-0.04em",
+                lineHeight: 1.12,
+                margin: "0 0 14px"
               }}
             >
-              Painel pronto para receber os módulos reais.
+              Bem-vindo ao painel.
             </h3>
 
             <p
               style={{
-                color: "#64748b",
-                fontSize: "16px",
-                lineHeight: 1.6,
+                color: "#cbd5e1",
+                fontSize: "15px",
+                lineHeight: 1.5,
                 margin: 0,
-                maxWidth: "680px"
+                maxWidth: "720px"
               }}
             >
-              A partir daqui, as próximas telas serão conectadas ao fluxo real do sistema,
-              seguindo a ordem aprovada.
+              Escolha uma opção no menu para começar.
             </p>
           </section>
         </section>
