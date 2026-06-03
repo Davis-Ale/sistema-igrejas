@@ -80,7 +80,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
             {["Painel", "Membros", "Visitantes", "Células", "Eventos", "Assistente IA"].map(
               (item) => (
                 <Link
-                  href={item === "Membros" ? "/dashboard/membros" : item === "Visitantes" ? "/dashboard/visitantes" : "/dashboard"}
+                  href={item === "Membros" ? "/dashboard/membros" : item === "Visitantes" ? "/dashboard/visitantes" : item === "Células" ? "/dashboard/celulas" : "/dashboard"}
                   key={item}
                   style={{
                     textDecoration: "none",
