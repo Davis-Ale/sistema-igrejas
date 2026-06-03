@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function MembrosPage() {
   return (
     <main
@@ -21,6 +23,20 @@ export default function MembrosPage() {
           padding: "28px"
         }}
       >
+        <Link
+          href="/dashboard"
+          style={{
+            color: "#93c5fd",
+            display: "inline-flex",
+            fontSize: "14px",
+            fontWeight: 800,
+            marginBottom: "22px",
+            textDecoration: "none"
+          }}
+        >
+          ← Voltar ao painel
+        </Link>
+
         <p
           style={{
             color: "#60a5fa",
