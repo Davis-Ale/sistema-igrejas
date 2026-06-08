@@ -16,15 +16,15 @@ function hasValidSession() {
 
   try {
     const parsedSession = JSON.parse(storedSession) as {
-      church?: { id?: string; name?: string };
-      user?: { id?: string; email?: string };
+      church?: { name?: string; status?: string; trialEndsAt?: string | null };
+      user?: { email?: string; role?: string };
     };
 
     return Boolean(
-      parsedSession.church?.id &&
-        parsedSession.church?.name &&
-        parsedSession.user?.id &&
-        parsedSession.user?.email
+      parsedSession.church?.name &&
+        parsedSession.church?.status &&
+        parsedSession.user?.email &&
+        parsedSession.user?.role
     );
   } catch {
     localStorage.removeItem("sistema-igrejas.session");
