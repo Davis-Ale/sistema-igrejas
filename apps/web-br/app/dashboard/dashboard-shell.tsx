@@ -1,20 +1,128 @@
 import Link from "next/link";
+import { ReactNode } from "react";
 import { DashboardSession } from "./dashboard-types";
 
 type DashboardShellProps = {
   session: DashboardSession;
 };
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "Não informado";
-  }
+type IconProps = {
+  children: ReactNode;
+};
 
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
+function NavIcon({ children }: IconProps) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        alignItems: "center",
+        background: "rgba(15, 23, 42, 0.34)",
+        border: "1px solid rgba(148, 163, 184, 0.16)",
+        borderRadius: "12px",
+        display: "inline-flex",
+        height: "30px",
+        justifyContent: "center",
+        width: "30px"
+      }}
+    >
+      <svg
+        fill="none"
+        height="17"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+        width="17"
+      >
+        {children}
+      </svg>
+    </span>
+  );
 }
+
+const navigationItems = [
+  {
+    label: "Painel",
+    href: "/dashboard",
+    icon: (
+      <NavIcon>
+        <path d="M4 11.5 12 5l8 6.5" />
+        <path d="M6.5 10.5V19h11v-8.5" />
+        <path d="M10 19v-5h4v5" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Membros",
+    href: "/dashboard/membros",
+    icon: (
+      <NavIcon>
+        <path d="M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19" />
+        <path d="M10 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path d="M20 19v-1.2A3 3 0 0 0 17.6 15" />
+        <path d="M15.5 4.7a2.7 2.7 0 0 1 0 5.2" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Visitantes",
+    href: "/dashboard/visitantes",
+    icon: (
+      <NavIcon>
+        <path d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M5 20a7 7 0 0 1 14 0" />
+        <path d="M18.5 5.5v4" />
+        <path d="M16.5 7.5h4" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Células",
+    href: "/dashboard/celulas",
+    icon: (
+      <NavIcon>
+        <path d="M4 10.5 12 4l8 6.5" />
+        <path d="M6.5 9.5V20h11V9.5" />
+        <path d="M9 20v-5h6v5" />
+        <path d="M9 11.5h6" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Eventos",
+    href: "/dashboard/eventos",
+    icon: (
+      <NavIcon>
+        <path d="M7 4v3" />
+        <path d="M17 4v3" />
+        <path d="M5 8h14" />
+        <path d="M6.5 6h11A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-9A2.5 2.5 0 0 1 6.5 6Z" />
+        <path d="M8 12h2" />
+        <path d="M14 12h2" />
+        <path d="M8 16h2" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Assistente IA",
+    href: "/dashboard/assistente",
+    icon: (
+      <NavIcon>
+        <path d="M12 3.5 13.4 8a2 2 0 0 0 1.3 1.3l4.5 1.4-4.5 1.4a2 2 0 0 0-1.3 1.3L12 18l-1.4-4.6a2 2 0 0 0-1.3-1.3l-4.5-1.4 4.5-1.4A2 2 0 0 0 10.6 8L12 3.5Z" />
+        <path d="M19 16v4" />
+        <path d="M17 18h4" />
+      </NavIcon>
+    )
+  }
+];
+
+const moduleShortcuts = [
+  { label: "Membros", href: "/dashboard/membros" },
+  { label: "Visitantes", href: "/dashboard/visitantes" },
+  { label: "Células", href: "/dashboard/celulas" },
+  { label: "Eventos", href: "/dashboard/eventos" }
+];
 
 export function DashboardShell({ session }: DashboardShellProps) {
   return (
@@ -65,35 +173,34 @@ export function DashboardShell({ session }: DashboardShellProps) {
               gap: "10px"
             }}
           >
-            {["Painel", "Membros", "Visitantes", "Células", "Eventos", "Assistente IA"].map(
-              (item) => (
-                <Link
-                  href={item === "Membros" ? "/dashboard/membros" : item === "Visitantes" ? "/dashboard/visitantes" : item === "Células" ? "/dashboard/celulas" : item === "Eventos" ? "/dashboard/eventos" : item === "Assistente IA" ? "/dashboard/assistente" : "/dashboard"}
-                  key={item}
-                  style={{
-                    textDecoration: "none",
-                    alignItems: "center",
-                    background:
-                      item === "Painel"
-                        ? "linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(14, 165, 233, 0.76))"
-                        : "rgba(15, 23, 42, 0.24)",
-                    border:
-                      item === "Painel"
-                        ? "1px solid rgba(147, 197, 253, 0.34)"
-                        : "1px solid transparent",
-                    borderRadius: "16px",
-                    color: item === "Painel" ? "#ffffff" : "#cbd5e1",
-                    display: "flex",
-                    fontSize: "15px",
-                    fontWeight: 800,
-                    justifyContent: "space-between",
-                    padding: "13px 14px"
-                  }}
-                >
-                  <span>{item}</span>
-                </Link>
-              )
-            )}
+            {navigationItems.map((item) => (
+              <Link
+                href={item.href}
+                key={item.href}
+                style={{
+                  alignItems: "center",
+                  background:
+                    item.href === "/dashboard"
+                      ? "linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(14, 165, 233, 0.76))"
+                      : "rgba(15, 23, 42, 0.24)",
+                  border:
+                    item.href === "/dashboard"
+                      ? "1px solid rgba(147, 197, 253, 0.34)"
+                      : "1px solid transparent",
+                  borderRadius: "16px",
+                  color: item.href === "/dashboard" ? "#ffffff" : "#cbd5e1",
+                  display: "flex",
+                  fontSize: "15px",
+                  fontWeight: 800,
+                  gap: "12px",
+                  padding: "13px 14px",
+                  textDecoration: "none"
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </Link>
+            ))}
           </nav>
         </aside>
 
@@ -157,7 +264,8 @@ export function DashboardShell({ session }: DashboardShellProps) {
               gridTemplateColumns: "repeat(3, minmax(0, 1fr))"
             }}
           >
-            <article
+            <Link
+              href="/dashboard"
               style={{
                 background:
                   "linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(15, 23, 42, 0.92))",
@@ -165,7 +273,8 @@ export function DashboardShell({ session }: DashboardShellProps) {
                 borderRadius: "24px",
                 boxShadow: "0 24px 70px rgba(15, 23, 42, 0.34)",
                 minHeight: "150px",
-                padding: "24px"
+                padding: "24px",
+                textDecoration: "none"
               }}
             >
               <p
@@ -189,7 +298,19 @@ export function DashboardShell({ session }: DashboardShellProps) {
               >
                 Área administrativa
               </strong>
-            </article>
+
+              <span
+                style={{
+                  color: "#bbf7d0",
+                  display: "inline-block",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  marginTop: "28px"
+                }}
+              >
+                Visão geral →
+              </span>
+            </Link>
 
             <article
               style={{
@@ -218,14 +339,43 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   color: "#ffffff",
                   display: "block",
                   fontSize: "22px",
-                  letterSpacing: "-0.03em"
+                  letterSpacing: "-0.03em",
+                  marginBottom: "18px"
                 }}
               >
                 Navegação disponível
               </strong>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px"
+                }}
+              >
+                {moduleShortcuts.map((module) => (
+                  <Link
+                    href={module.href}
+                    key={module.href}
+                    style={{
+                      background: "rgba(15, 23, 42, 0.46)",
+                      border: "1px solid rgba(147, 197, 253, 0.2)",
+                      borderRadius: "999px",
+                      color: "#dbeafe",
+                      fontSize: "13px",
+                      fontWeight: 800,
+                      padding: "8px 10px",
+                      textDecoration: "none"
+                    }}
+                  >
+                    {module.label}
+                  </Link>
+                ))}
+              </div>
             </article>
 
-            <article
+            <Link
+              href="/dashboard/assistente"
               style={{
                 background:
                   "linear-gradient(135deg, rgba(168, 85, 247, 0.28), rgba(15, 23, 42, 0.92))",
@@ -233,7 +383,8 @@ export function DashboardShell({ session }: DashboardShellProps) {
                 borderRadius: "24px",
                 boxShadow: "0 24px 70px rgba(15, 23, 42, 0.34)",
                 minHeight: "150px",
-                padding: "24px"
+                padding: "24px",
+                textDecoration: "none"
               }}
             >
               <p
@@ -257,7 +408,19 @@ export function DashboardShell({ session }: DashboardShellProps) {
               >
                 Recurso planejado
               </strong>
-            </article>
+
+              <span
+                style={{
+                  color: "#ddd6fe",
+                  display: "inline-block",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  marginTop: "28px"
+                }}
+              >
+                Abrir assistente →
+              </span>
+            </Link>
           </section>
 
           <section
@@ -304,7 +467,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                 maxWidth: "720px"
               }}
             >
-              Escolha uma opção no menu para começar.
+              Escolha uma opção no menu ou nos atalhos acima para começar.
             </p>
           </section>
         </section>
