@@ -56,18 +56,6 @@ export function DashboardShell({ session }: DashboardShellProps) {
             >
               Sistema Igrejas
             </p>
-
-            <h1
-              style={{
-                color: "#f8fafc",
-                fontSize: "22px",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.1,
-                margin: 0
-              }}
-            >
-              {session.church.name}
-            </h1>
           </div>
 
           <nav
@@ -131,7 +119,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   margin: "0 0 8px"
                 }}
               >
-                Painel da igreja
+                Igreja logada
               </p>
 
               <h2
@@ -143,7 +131,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   margin: 0
                 }}
               >
-                Visão geral
+                {session.church.name}
               </h2>
             </div>
 
