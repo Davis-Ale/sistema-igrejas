@@ -1,26 +1,16 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { hash } from "bcryptjs";
+import bcrypt from "bcryptjs";
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://postgres:postgres@localhost:5433/sistema_igrejas?schema=public";
+const prisma = new PrismaClient();
 
-const adapter = new PrismaPg({
-  connectionString: databaseUrl
-});
+const LOCAL_CHURCH_NAME = "Igreja Local";
+const LOCAL_CHURCH_SLUG = "igreja-local";
+const LOCAL_USER_EMAIL = "pastor@sistemaigrejas.local";
+const LOCAL_USER_PASSWORD = "12345678";
 
-const prisma = new PrismaClient({
-  adapter
-});
-
-function getTrialDates(): {
-  trialStartedAt: Date;
-  trialEndsAt: Date;
-} {
+function getTrialDates() {
   const trialStartedAt = new Date();
   const trialEndsAt = new Date(trialStartedAt);
-
   trialEndsAt.setDate(trialEndsAt.getDate() + 15);
 
   return {
@@ -29,15 +19,15 @@ function getTrialDates(): {
   };
 }
 
-async function upsertDemoChurch() {
+async function upsertLocalChurch() {
   const trialDates = getTrialDates();
 
   return prisma.church.upsert({
     where: {
-      slug: "igreja-demo"
+      slug: LOCAL_CHURCH_SLUG
     },
     update: {
-      name: "Igreja Demonstração",
+      name: LOCAL_CHURCH_NAME,
       plan: "DEMO",
       status: "TRIAL",
       locale: "pt-BR",
@@ -49,8 +39,8 @@ async function upsertDemoChurch() {
       blockReason: null
     },
     create: {
-      name: "Igreja Demonstração",
-      slug: "igreja-demo",
+      name: LOCAL_CHURCH_NAME,
+      slug: LOCAL_CHURCH_SLUG,
       plan: "DEMO",
       status: "TRIAL",
       locale: "pt-BR",
@@ -60,114 +50,91 @@ async function upsertDemoChurch() {
   });
 }
 
-async function upsertDemoTrialSignup(
+async function upsertLocalTrialSignup(
   churchId: string,
   trialStartedAt: Date | null,
   trialEndsAt: Date | null
 ) {
   return prisma.trialSignup.upsert({
     where: {
-      email: "pastor@sistemaigrejas.local"
+      email: LOCAL_USER_EMAIL
     },
     update: {
       churchId,
-      status: "ACTIVE",
-      startedAt: trialStartedAt ?? new Date(),
-      endsAt: trialEndsAt,
-      convertedAt: null,
-      blockedAt: null
+      trialStartedAt,
+      trialEndsAt,
+      status: "ACTIVE"
     },
     create: {
-      email: "pastor@sistemaigrejas.local",
       churchId,
-      status: "ACTIVE",
-      startedAt: trialStartedAt ?? new Date(),
-      endsAt: trialEndsAt
+      email: LOCAL_USER_EMAIL,
+      trialStartedAt,
+      trialEndsAt,
+      status: "ACTIVE"
     }
   });
 }
 
-async function upsertDemoCampus(churchId: string) {
-  const existingCampus = await prisma.campus.findFirst({
+async function upsertLocalCampus(churchId: string) {
+  return prisma.campus.upsert({
     where: {
-      churchId,
-      name: "Sede"
-    }
-  });
-
-  if (existingCampus) {
-    return prisma.campus.update({
-      where: {
-        id: existingCampus.id
-      },
-      data: {
-        name: "Sede",
-        isHeadquarters: true
+      churchId_name: {
+        churchId,
+        name: "Campus Principal"
       }
-    });
-  }
-
-  return prisma.campus.create({
-    data: {
+    },
+    update: {
+      isMain: true
+    },
+    create: {
       churchId,
-      name: "Sede",
-      isHeadquarters: true
+      name: "Campus Principal",
+      isMain: true
     }
   });
 }
 
-async function upsertDemoPastor(churchId: string, campusId: string) {
-  const existingPerson = await prisma.person.findFirst({
+async function upsertLocalPastor(churchId: string, campusId: string) {
+  return prisma.member.upsert({
     where: {
-      churchId,
-      phone: "11999999999"
-    }
-  });
-
-  if (existingPerson) {
-    return prisma.person.update({
-      where: {
-        id: existingPerson.id
-      },
-      data: {
-        campusId,
-        name: "Pastor Demo",
-        email: "pastor@sistemaigrejas.local",
-        role: "PASTOR"
+      churchId_email: {
+        churchId,
+        email: LOCAL_USER_EMAIL
       }
-    });
-  }
-
-  return prisma.person.create({
-    data: {
+    },
+    update: {
+      campusId,
+      fullName: "Pastor Local",
+      status: "ACTIVE"
+    },
+    create: {
       churchId,
       campusId,
-      name: "Pastor Demo",
-      phone: "11999999999",
-      email: "pastor@sistemaigrejas.local",
-      role: "PASTOR"
+      fullName: "Pastor Local",
+      email: LOCAL_USER_EMAIL,
+      status: "ACTIVE"
     }
   });
 }
 
-async function upsertDemoUserAccount(churchId: string, personId: string) {
-  const passwordHash = await hash("12345678", 12);
+async function upsertLocalUserAccount(churchId: string, memberId: string) {
+  const passwordHash = await bcrypt.hash(LOCAL_USER_PASSWORD, 10);
 
   return prisma.userAccount.upsert({
     where: {
-      email: "pastor@sistemaigrejas.local"
+      email: LOCAL_USER_EMAIL
     },
     update: {
       churchId,
-      personId,
+      memberId,
       passwordHash,
       role: "PASTOR",
       status: "ACTIVE"
     },
     create: {
       churchId,
-      personId,
-      email: "pastor@sistemaigrejas.local",
+      memberId,
+      email: LOCAL_USER_EMAIL,
       passwordHash,
       role: "PASTOR",
       status: "ACTIVE"
@@ -176,27 +143,28 @@ async function upsertDemoUserAccount(churchId: string, personId: string) {
 }
 
 async function main(): Promise<void> {
-  const church = await upsertDemoChurch();
-  const campus = await upsertDemoCampus(church.id);
-  const pastor = await upsertDemoPastor(church.id, campus.id);
-  await upsertDemoUserAccount(church.id, pastor.id);
-  await upsertDemoTrialSignup(church.id, church.trialStartedAt, church.trialEndsAt);
+  const church = await upsertLocalChurch();
+  const campus = await upsertLocalCampus(church.id);
+  const pastor = await upsertLocalPastor(church.id, campus.id);
+  await upsertLocalUserAccount(church.id, pastor.id);
+  await upsertLocalTrialSignup(church.id, church.trialStartedAt, church.trialEndsAt);
 
   console.log("Seed concluido.");
-  console.log("Igreja: Igreja Demonstração");
+  console.log(`Igreja: ${LOCAL_CHURCH_NAME}`);
   console.log("Plano: DEMO");
   console.log("Status: TRIAL");
   console.log(`Trial termina em: ${church.trialEndsAt?.toISOString()}`);
-  console.log("Trial signup: pastor@sistemaigrejas.local");
-  console.log("E-mail: pastor@sistemaigrejas.local");
-  console.log("Senha: 12345678");
+  console.log(`Trial signup: ${LOCAL_USER_EMAIL}`);
+  console.log(`E-mail: ${LOCAL_USER_EMAIL}`);
+  console.log(`Senha: ${LOCAL_USER_PASSWORD}`);
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect();
+  })
+  .catch(async (error) => {
+    console.error(error);
+    await prisma.$disconnect();
+    process.exit(1);
   });
