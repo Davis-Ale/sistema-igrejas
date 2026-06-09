@@ -1,11 +1,26 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required.");
+}
+
+const adapter = new PrismaPg({
+  connectionString: databaseUrl
+});
+
+const prisma = new PrismaClient({
+  adapter
+});
 
 const LOCAL_CHURCH_NAME = "Igreja Local";
 const LOCAL_CHURCH_SLUG = "igreja-local";
 const LOCAL_USER_EMAIL = "pastor@sistemaigrejas.local";
+const LOCAL_USER_PHONE = "00000000000";
 const LOCAL_USER_PASSWORD = "12345678";
 
 function getTrialDates() {
@@ -61,63 +76,83 @@ async function upsertLocalTrialSignup(
     },
     update: {
       churchId,
-      trialStartedAt,
-      trialEndsAt,
+      startedAt: trialStartedAt ?? undefined,
+      endsAt: trialEndsAt,
       status: "ACTIVE"
     },
     create: {
       churchId,
       email: LOCAL_USER_EMAIL,
-      trialStartedAt,
-      trialEndsAt,
+      startedAt: trialStartedAt ?? undefined,
+      endsAt: trialEndsAt,
       status: "ACTIVE"
     }
   });
 }
 
 async function upsertLocalCampus(churchId: string) {
-  return prisma.campus.upsert({
+  const existingCampus = await prisma.campus.findFirst({
     where: {
-      churchId_name: {
-        churchId,
-        name: "Campus Principal"
+      churchId,
+      name: "Campus Principal"
+    }
+  });
+
+  if (existingCampus) {
+    return prisma.campus.update({
+      where: {
+        id: existingCampus.id
+      },
+      data: {
+        isHeadquarters: true
       }
-    },
-    update: {
-      isMain: true
-    },
-    create: {
+    });
+  }
+
+  return prisma.campus.create({
+    data: {
       churchId,
       name: "Campus Principal",
-      isMain: true
+      isHeadquarters: true
     }
   });
 }
 
 async function upsertLocalPastor(churchId: string, campusId: string) {
-  return prisma.member.upsert({
+  const existingPastor = await prisma.person.findFirst({
     where: {
-      churchId_email: {
-        churchId,
-        email: LOCAL_USER_EMAIL
+      churchId,
+      email: LOCAL_USER_EMAIL
+    }
+  });
+
+  if (existingPastor) {
+    return prisma.person.update({
+      where: {
+        id: existingPastor.id
+      },
+      data: {
+        campusId,
+        name: "Pastor Local",
+        phone: LOCAL_USER_PHONE,
+        role: "PASTOR"
       }
-    },
-    update: {
-      campusId,
-      fullName: "Pastor Local",
-      status: "ACTIVE"
-    },
-    create: {
+    });
+  }
+
+  return prisma.person.create({
+    data: {
       churchId,
       campusId,
-      fullName: "Pastor Local",
+      name: "Pastor Local",
+      phone: LOCAL_USER_PHONE,
       email: LOCAL_USER_EMAIL,
-      status: "ACTIVE"
+      role: "PASTOR"
     }
   });
 }
 
-async function upsertLocalUserAccount(churchId: string, memberId: string) {
+async function upsertLocalUserAccount(churchId: string, personId: string) {
   const passwordHash = await bcrypt.hash(LOCAL_USER_PASSWORD, 10);
 
   return prisma.userAccount.upsert({
@@ -126,14 +161,14 @@ async function upsertLocalUserAccount(churchId: string, memberId: string) {
     },
     update: {
       churchId,
-      memberId,
+      personId,
       passwordHash,
       role: "PASTOR",
       status: "ACTIVE"
     },
     create: {
       churchId,
-      memberId,
+      personId,
       email: LOCAL_USER_EMAIL,
       passwordHash,
       role: "PASTOR",
