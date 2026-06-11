@@ -154,6 +154,8 @@ model Visitor {
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
 
+  registrations Registration[]
+
   @@index([churchId])
   @@index([churchId, campusId])
   @@index([churchId, email])
@@ -376,7 +378,8 @@ model Registration {
   id          String    @id @default(cuid())
   churchId    String
   eventId     String
-  personId    String
+  personId    String?
+  visitorId   String?
   status      RegStatus @default(PENDING)
   paymentId   String?
   checkedInAt DateTime?
@@ -385,15 +388,18 @@ model Registration {
 
   church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
-  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: Cascade)
 
   @@index([churchId])
   @@index([churchId, eventId])
   @@index([churchId, personId])
+  @@index([churchId, visitorId])
   @@index([churchId, status])
   @@index([churchId, paymentId])
   @@unique([eventId, personId])
+  @@unique([eventId, visitorId])
 }
 
 model Transaction {

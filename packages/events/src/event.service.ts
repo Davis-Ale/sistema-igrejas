@@ -35,7 +35,23 @@ export async function listEvents(prisma: PrismaClient, churchId: string) {
         select: {
           id: true,
           status: true,
-          checkedInAt: true
+          checkedInAt: true,
+          person: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true
+            }
+          },
+          visitor: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true
+            }
+          }
         }
       },
       trailStage: {
@@ -71,6 +87,14 @@ export async function getEventById(
               phone: true,
               email: true
             }
+          },
+          visitor: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true
+            }
           }
         },
         orderBy: {
@@ -98,7 +122,7 @@ export async function createRegistration(
   churchId: string,
   input: CreateRegistrationInput
 ) {
-  const [event, person] = await Promise.all([
+  const [event, person, visitor] = await Promise.all([
     prisma.event.findFirst({
       where: {
         id: input.eventId,
@@ -117,23 +141,40 @@ export async function createRegistration(
         }
       }
     }),
-    prisma.person.findFirst({
-      where: {
-        id: input.personId,
-        churchId
-      },
-      select: {
-        id: true
-      }
-    })
+    input.personId
+      ? prisma.person.findFirst({
+          where: {
+            id: input.personId,
+            churchId
+          },
+          select: {
+            id: true
+          }
+        })
+      : Promise.resolve(null),
+    input.visitorId
+      ? prisma.visitor.findFirst({
+          where: {
+            id: input.visitorId,
+            churchId
+          },
+          select: {
+            id: true
+          }
+        })
+      : Promise.resolve(null)
   ]);
 
   if (!event) {
     throw new Error("EVENT_NOT_FOUND");
   }
 
-  if (!person) {
+  if (input.personId && !person) {
     throw new Error("PERSON_NOT_FOUND");
+  }
+
+  if (input.visitorId && !visitor) {
+    throw new Error("VISITOR_NOT_FOUND");
   }
 
   if (event.registrations.length >= event.capacity) {
@@ -144,7 +185,8 @@ export async function createRegistration(
     data: {
       churchId,
       eventId: input.eventId,
-      personId: input.personId,
+      personId: input.personId ?? null,
+      visitorId: input.visitorId ?? null,
       paymentId: input.paymentId ?? null
     }
   });

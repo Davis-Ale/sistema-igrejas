@@ -18,11 +18,16 @@ export const createEventSchema = z.object({
   trailStageId: z.string().trim().min(1).optional()
 });
 
-export const createRegistrationSchema = z.object({
-  eventId: z.string().trim().min(1, "Evento é obrigatório."),
-  personId: z.string().trim().min(1, "Pessoa é obrigatória."),
-  paymentId: z.string().trim().min(1).optional()
-});
+export const createRegistrationSchema = z
+  .object({
+    eventId: z.string().trim().min(1, "Evento é obrigatório."),
+    personId: z.string().trim().min(1, "Pessoa é obrigatória.").optional(),
+    visitorId: z.string().trim().min(1, "Visitante é obrigatório.").optional(),
+    paymentId: z.string().trim().min(1).optional()
+  })
+  .refine((input) => Boolean(input.personId) !== Boolean(input.visitorId), {
+    message: "Informe membro ou visitante, mas não ambos."
+  });
 
 export const updateRegistrationStatusSchema = z.object({
   registrationId: z.string().trim().min(1, "Inscrição é obrigatória."),

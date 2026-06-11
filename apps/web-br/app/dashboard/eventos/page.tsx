@@ -10,12 +10,18 @@ type LoginSession = {
 
 type RegistrationStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "CHECKED_IN";
 
-type Member = {
+type ParticipantType = "member" | "visitor";
+
+type Participant = {
   id: string;
   name: string;
   phone: string;
   email: string | null;
 };
+
+type Member = Participant;
+
+type Visitor = Participant;
 
 type EventSummary = {
   id: string;
@@ -29,6 +35,8 @@ type EventSummary = {
     id: string;
     status: RegistrationStatus;
     checkedInAt: string | null;
+    person: Participant | null;
+    visitor: Participant | null;
   }>;
   trailStage: {
     id: string;
@@ -41,12 +49,8 @@ type EventDetail = Omit<EventSummary, "registrations"> & {
     id: string;
     status: RegistrationStatus;
     checkedInAt: string | null;
-    person: {
-      id: string;
-      name: string;
-      phone: string;
-      email: string | null;
-    };
+    person: Participant | null;
+    visitor: Participant | null;
   }>;
 };
 
@@ -62,6 +66,11 @@ const statusLabels: Record<RegistrationStatus, string> = {
   CONFIRMED: "Confirmada",
   CANCELLED: "Cancelada",
   CHECKED_IN: "Check-in realizado"
+};
+
+const participantTypeLabels: Record<ParticipantType, string> = {
+  member: "Membro",
+  visitor: "Visitante"
 };
 
 function getSessionToken() {
@@ -107,12 +116,28 @@ function formatMoney(value: string | number) {
   }).format(Number.isFinite(numberValue) ? numberValue : 0);
 }
 
+function getRegistrationParticipant(registration: {
+  person: Participant | null;
+  visitor: Participant | null;
+}) {
+  return registration.person ?? registration.visitor;
+}
+
+function getRegistrationParticipantType(registration: {
+  person: Participant | null;
+  visitor: Participant | null;
+}) {
+  return registration.person ? "Membro" : "Visitante";
+}
+
 export default function EventosPage() {
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<EventDetail | null>(null);
-  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [participantType, setParticipantType] = useState<ParticipantType>("member");
+  const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState("50");
@@ -130,7 +155,9 @@ export default function EventosPage() {
     [events, selectedEventId]
   );
 
-  async function loadEventsAndMembers() {
+  const selectableParticipants = participantType === "member" ? members : visitors;
+
+  async function loadEventsMembersAndVisitors() {
     const token = getSessionToken();
 
     if (!token) {
@@ -143,13 +170,18 @@ export default function EventosPage() {
     setIsLoading(true);
 
     try {
-      const [eventsResponse, membersResponse] = await Promise.all([
+      const [eventsResponse, membersResponse, visitorsResponse] = await Promise.all([
         fetch(`${API_BASE_URL}/api/events`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         }),
         fetch(`${API_BASE_URL}/api/members`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`${API_BASE_URL}/api/visitors`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -170,11 +202,20 @@ export default function EventosPage() {
         return;
       }
 
+      if (!visitorsResponse.ok) {
+        const data = (await visitorsResponse.json()) as ApiErrorResponse;
+
+        setError(data.message ?? "Não foi possível carregar os visitantes.");
+        return;
+      }
+
       const eventsData = (await eventsResponse.json()) as EventSummary[];
       const membersData = (await membersResponse.json()) as Member[];
+      const visitorsData = (await visitorsResponse.json()) as Visitor[];
 
       setEvents(eventsData);
       setMembers(membersData);
+      setVisitors(visitorsData);
 
       const firstEvent = eventsData[0];
 
@@ -269,7 +310,7 @@ export default function EventosPage() {
       setPrice("0");
       setIsPublic(false);
       setSuccessMessage("Evento cadastrado com sucesso.");
-      await loadEventsAndMembers();
+      await loadEventsMembersAndVisitors();
     } catch {
       setError("Não foi possível cadastrar o evento agora.");
     } finally {
@@ -287,6 +328,16 @@ export default function EventosPage() {
       return;
     }
 
+    if (!selectedEventId) {
+      setError("Selecione um evento para fazer a inscrição.");
+      return;
+    }
+
+    if (!selectedParticipantId) {
+      setError("Selecione um membro ou visitante para fazer a inscrição.");
+      return;
+    }
+
     setError(null);
     setSuccessMessage(null);
     setIsRegistering(true);
@@ -295,7 +346,8 @@ export default function EventosPage() {
       const response = await fetch(`${API_BASE_URL}/api/events/registrations`, {
         body: JSON.stringify({
           eventId: selectedEventId,
-          personId: selectedPersonId
+          personId: participantType === "member" ? selectedParticipantId : undefined,
+          visitorId: participantType === "visitor" ? selectedParticipantId : undefined
         }),
         headers: {
           Authorization: `Bearer ${token}`,
@@ -307,16 +359,16 @@ export default function EventosPage() {
       if (!response.ok) {
         const data = (await response.json()) as ApiErrorResponse;
 
-        setError(data.message ?? "Não foi possível inscrever o membro.");
+        setError(data.message ?? "Não foi possível fazer a inscrição.");
         return;
       }
 
-      setSelectedPersonId("");
+      setSelectedParticipantId("");
       setSuccessMessage("Inscrição realizada com sucesso.");
-      await loadEventsAndMembers();
+      await loadEventsMembersAndVisitors();
       await loadSelectedEvent(selectedEventId);
     } catch {
-      setError("Não foi possível inscrever o membro agora.");
+      setError("Não foi possível fazer a inscrição agora.");
     } finally {
       setIsRegistering(false);
     }
@@ -357,7 +409,7 @@ export default function EventosPage() {
       setSuccessMessage(
         status === "CHECKED_IN" ? "Check-in realizado com sucesso." : "Inscrição atualizada."
       );
-      await loadEventsAndMembers();
+      await loadEventsMembersAndVisitors();
       await loadSelectedEvent(selectedEventId);
     } catch {
       setError("Não foi possível atualizar a inscrição agora.");
@@ -367,7 +419,7 @@ export default function EventosPage() {
   }
 
   useEffect(() => {
-    void loadEventsAndMembers();
+    void loadEventsMembersAndVisitors();
   }, []);
 
   useEffect(() => {
@@ -411,7 +463,7 @@ export default function EventosPage() {
                 textDecoration: "none"
               }}
             >
-              ← Voltar ao painel
+              Voltar ao painel
             </Link>
 
             <p
@@ -448,7 +500,7 @@ export default function EventosPage() {
                 maxWidth: "780px"
               }}
             >
-              Crie eventos, controle inscrições e faça check-in sem depender de fluxos genéricos de plataformas externas.
+              Crie eventos, controle inscrições de membros e visitantes e faça check-in sem depender de fluxos genéricos de plataformas externas.
             </p>
           </div>
 
@@ -563,7 +615,7 @@ export default function EventosPage() {
             }}
           >
             <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Inscrever membro
+              Inscrever participante
             </h2>
 
             <div
@@ -591,17 +643,35 @@ export default function EventosPage() {
               </label>
 
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Membro
+                Tipo de participante
                 <select
-                  onChange={(event) => setSelectedPersonId(event.target.value)}
+                  onChange={(event) => {
+                    setParticipantType(event.target.value as ParticipantType);
+                    setSelectedParticipantId("");
+                  }}
                   required
                   style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={selectedPersonId}
+                  value={participantType}
                 >
-                  <option value="">Selecione um membro</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
+                  <option value="member">Membro</option>
+                  <option value="visitor">Visitante</option>
+                </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                {participantTypeLabels[participantType]}
+                <select
+                  onChange={(event) => setSelectedParticipantId(event.target.value)}
+                  required
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={selectedParticipantId}
+                >
+                  <option value="">
+                    {participantType === "member" ? "Selecione um membro" : "Selecione um visitante"}
+                  </option>
+                  {selectableParticipants.map((participant) => (
+                    <option key={participant.id} value={participant.id}>
+                      {participant.name}
                     </option>
                   ))}
                 </select>
@@ -609,22 +679,22 @@ export default function EventosPage() {
             </div>
 
             <button
-              disabled={isRegistering || events.length === 0 || members.length === 0}
+              disabled={isRegistering || events.length === 0 || selectableParticipants.length === 0}
               style={{
                 background: "#2563eb",
                 border: 0,
                 borderRadius: "14px",
                 color: "#ffffff",
-                cursor: isRegistering || events.length === 0 || members.length === 0 ? "not-allowed" : "pointer",
+                cursor: isRegistering || events.length === 0 || selectableParticipants.length === 0 ? "not-allowed" : "pointer",
                 font: "inherit",
                 fontWeight: 900,
                 justifySelf: "start",
-                opacity: isRegistering || events.length === 0 || members.length === 0 ? 0.72 : 1,
+                opacity: isRegistering || events.length === 0 || selectableParticipants.length === 0 ? 0.72 : 1,
                 padding: "13px 18px"
               }}
               type="submit"
             >
-              {isRegistering ? "Inscrevendo..." : "Inscrever membro"}
+              {isRegistering ? "Inscrevendo..." : "Inscrever participante"}
             </button>
           </form>
 
@@ -673,6 +743,9 @@ export default function EventosPage() {
                   const checkedInRegistrations = event.registrations.filter(
                     (registration) => registration.status === "CHECKED_IN"
                   );
+                  const visitorRegistrations = event.registrations.filter(
+                    (registration) => registration.visitor
+                  );
 
                   return (
                     <article
@@ -693,11 +766,11 @@ export default function EventosPage() {
                           </h3>
 
                           <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
-                            {formatDate(event.date)} • {formatMoney(event.price)}
+                            {formatDate(event.date)} - {formatMoney(event.price)}
                           </p>
 
                           <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
-                            Slug: {event.slug} • {event.isPublic ? "Público" : "Interno"}
+                            Slug: {event.slug} - {event.isPublic ? "Público" : "Interno"}
                           </p>
                         </div>
 
@@ -707,7 +780,7 @@ export default function EventosPage() {
                       </div>
 
                       <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                        Check-ins: {checkedInRegistrations.length}
+                        Check-ins: {checkedInRegistrations.length} - Visitantes inscritos: {visitorRegistrations.length}
                       </p>
                     </article>
                   );
@@ -739,51 +812,59 @@ export default function EventosPage() {
 
               {selectedEvent && selectedEvent.registrations.length > 0 ? (
                 <div style={{ display: "grid", gap: "10px" }}>
-                  {selectedEvent.registrations.map((registration) => (
-                    <article
-                      key={registration.id}
-                      style={{
-                        alignItems: "center",
-                        background: "rgba(15, 23, 42, 0.82)",
-                        border: "1px solid rgba(148, 163, 184, 0.16)",
-                        borderRadius: "18px",
-                        display: "flex",
-                        gap: "12px",
-                        justifyContent: "space-between",
-                        padding: "14px"
-                      }}
-                    >
-                      <div>
-                        <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
-                          {registration.person.name}
-                        </h3>
+                  {selectedEvent.registrations.map((registration) => {
+                    const participant = getRegistrationParticipant(registration);
 
-                        <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                          {registration.person.phone} • {statusLabels[registration.status]}
-                        </p>
-                      </div>
+                    if (!participant) {
+                      return null;
+                    }
 
-                      <button
-                        disabled={isUpdatingStatus || registration.status === "CHECKED_IN"}
-                        onClick={() => updateRegistrationStatus(registration.id, "CHECKED_IN")}
+                    return (
+                      <article
+                        key={registration.id}
                         style={{
-                          background: registration.status === "CHECKED_IN" ? "#16a34a" : "#2563eb",
-                          border: 0,
-                          borderRadius: "14px",
-                          color: "#ffffff",
-                          cursor: isUpdatingStatus || registration.status === "CHECKED_IN" ? "not-allowed" : "pointer",
-                          font: "inherit",
-                          fontWeight: 900,
-                          opacity: isUpdatingStatus ? 0.72 : 1,
-                          padding: "10px 14px",
-                          whiteSpace: "nowrap"
+                          alignItems: "center",
+                          background: "rgba(15, 23, 42, 0.82)",
+                          border: "1px solid rgba(148, 163, 184, 0.16)",
+                          borderRadius: "18px",
+                          display: "flex",
+                          gap: "12px",
+                          justifyContent: "space-between",
+                          padding: "14px"
                         }}
-                        type="button"
                       >
-                        {registration.status === "CHECKED_IN" ? "Presente" : "Fazer check-in"}
-                      </button>
-                    </article>
-                  ))}
+                        <div>
+                          <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
+                            {participant.name}
+                          </h3>
+
+                          <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
+                            {getRegistrationParticipantType(registration)} - {participant.phone} - {statusLabels[registration.status]}
+                          </p>
+                        </div>
+
+                        <button
+                          disabled={isUpdatingStatus || registration.status === "CHECKED_IN"}
+                          onClick={() => updateRegistrationStatus(registration.id, "CHECKED_IN")}
+                          style={{
+                            background: registration.status === "CHECKED_IN" ? "#16a34a" : "#2563eb",
+                            border: 0,
+                            borderRadius: "14px",
+                            color: "#ffffff",
+                            cursor: isUpdatingStatus || registration.status === "CHECKED_IN" ? "not-allowed" : "pointer",
+                            font: "inherit",
+                            fontWeight: 900,
+                            opacity: isUpdatingStatus ? 0.72 : 1,
+                            padding: "10px 14px",
+                            whiteSpace: "nowrap"
+                          }}
+                          type="button"
+                        >
+                          {registration.status === "CHECKED_IN" ? "Presente" : "Fazer check-in"}
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>
