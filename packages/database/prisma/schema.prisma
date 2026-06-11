@@ -21,6 +21,13 @@ enum VolunteerStatus {
   SUSPENDED
 }
 
+enum VisitorStatus {
+  NEW
+  CONTACTED
+  INTEGRATED
+  ARCHIVED
+}
+
 enum UserAccountStatus {
   ACTIVE
   DISABLED
@@ -98,6 +105,7 @@ model Church {
   transactions  Transaction[]
   userAccounts UserAccount[]
   trialSignups TrialSignup[]
+  visitors      Visitor[]
 
   @@index([churchId])
   @@index([cnpj])
@@ -122,11 +130,36 @@ model Campus {
   celulas      Celula[]
   events       Event[]
   transactions Transaction[]
+  visitors     Visitor[]
 
   @@index([churchId])
   @@index([churchId, cnpj])
   @@index([churchId, pastorId])
   @@index([churchId, isHeadquarters])
+}
+
+model Visitor {
+  id           String        @id @default(cuid())
+  churchId     String
+  campusId     String?
+  name         String
+  phone        String
+  email        String?
+  status       VisitorStatus @default(NEW)
+  firstVisitAt DateTime?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([churchId])
+  @@index([churchId, campusId])
+  @@index([churchId, email])
+  @@index([churchId, phone])
+  @@index([churchId, status])
+  @@index([churchId, firstVisitAt])
 }
 
 model Person {
