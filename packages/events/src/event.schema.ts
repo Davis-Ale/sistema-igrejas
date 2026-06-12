@@ -44,7 +44,13 @@ export const updateRegistrationStatusSchema = z.object({
   paymentId: z.string().trim().min(1).optional()
 });
 
+export const checkInByTokenSchema = z.object({
+  eventId: z.string().trim().min(1, "Evento é obrigatório."),
+  checkInToken: z.string().trim().min(1, "Código de check-in é obrigatório.")
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
 export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;
 export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationStatusSchema>;
+export type CheckInByTokenInput = z.infer<typeof checkInByTokenSchema>;

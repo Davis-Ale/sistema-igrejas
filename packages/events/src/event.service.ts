@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type {
+  CheckInByTokenInput,
   CreateEventInput,
   CreatePublicRegistrationInput,
   CreateRegistrationInput,
@@ -403,5 +404,69 @@ export async function updateRegistrationStatus(
       id: registration.id
     },
     data: registrationUpdateData
+  });
+}
+
+export async function checkInRegistrationByToken(
+  prisma: PrismaClient,
+  churchId: string,
+  input: CheckInByTokenInput
+) {
+  const registration = await prisma.registration.findFirst({
+    where: {
+      checkInToken: input.checkInToken,
+      churchId,
+      eventId: input.eventId
+    },
+    select: {
+      id: true,
+      status: true
+    }
+  });
+
+  if (!registration) {
+    throw new Error("REGISTRATION_NOT_FOUND");
+  }
+
+  if (registration.status === "CANCELLED") {
+    throw new Error("REGISTRATION_CANCELLED");
+  }
+
+  if (registration.status === "CHECKED_IN") {
+    throw new Error("REGISTRATION_ALREADY_CHECKED_IN");
+  }
+
+  return prisma.registration.update({
+    where: {
+      id: registration.id
+    },
+    data: {
+      checkedInAt: new Date(),
+      status: "CHECKED_IN"
+    },
+    include: {
+      event: {
+        select: {
+          id: true,
+          title: true
+        }
+      },
+      person: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      },
+      visitor: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      }
+    }
   });
 }

@@ -2,11 +2,13 @@ import type {} from "@sistema-igrejas/auth";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import {
+  checkInByTokenSchema,
   createEventSchema,
   createRegistrationSchema,
   updateRegistrationStatusSchema
 } from "./event.schema.js";
 import {
+  checkInRegistrationByToken,
   createEvent,
   createRegistration,
   getEventById,
@@ -55,10 +57,34 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
+  if (error.message === "VISITOR_NOT_FOUND") {
+    await reply.code(404).send({
+      error: "VISITOR_NOT_FOUND",
+      message: "Visitante não encontrado."
+    });
+    return;
+  }
+
   if (error.message === "REGISTRATION_NOT_FOUND") {
     await reply.code(404).send({
       error: "REGISTRATION_NOT_FOUND",
-      message: "Inscrição não encontrada."
+      message: "Inscrição não encontrada para este evento."
+    });
+    return;
+  }
+
+  if (error.message === "REGISTRATION_CANCELLED") {
+    await reply.code(409).send({
+      error: "REGISTRATION_CANCELLED",
+      message: "Esta inscrição foi cancelada e não pode fazer check-in."
+    });
+    return;
+  }
+
+  if (error.message === "REGISTRATION_ALREADY_CHECKED_IN") {
+    await reply.code(409).send({
+      error: "REGISTRATION_ALREADY_CHECKED_IN",
+      message: "Check-in já realizado para esta inscrição."
     });
     return;
   }
@@ -130,6 +156,18 @@ export async function registerEventRoutes(
       const churchId = getChurchId(request);
       const input = updateRegistrationStatusSchema.parse(request.body);
       const registration = await updateRegistrationStatus(prisma, churchId, input);
+
+      await reply.code(200).send(registration);
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.post("/events/registrations/check-in-token", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const input = checkInByTokenSchema.parse(request.body);
+      const registration = await checkInRegistrationByToken(prisma, churchId, input);
 
       await reply.code(200).send(registration);
     } catch (error) {
