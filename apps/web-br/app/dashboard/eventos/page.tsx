@@ -31,6 +31,9 @@ type EventSummary = {
   capacity: number;
   price: string | number;
   isPublic: boolean;
+  isPaid: boolean;
+  publicRegistrationEnabled: boolean;
+  waitlistEnabled: boolean;
   registrations: Array<{
     id: string;
     status: RegistrationStatus;
@@ -285,10 +288,13 @@ export default function EventosPage() {
         body: JSON.stringify({
           capacity: Number(capacity),
           date: new Date(date).toISOString(),
+          isPaid: Number(price) > 0,
           isPublic,
           price: Number(price),
+          publicRegistrationEnabled: isPublic,
           slug,
-          title
+          title,
+          waitlistEnabled: true
         }),
         headers: {
           Authorization: `Bearer ${token}`,
@@ -782,6 +788,18 @@ export default function EventosPage() {
                       <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
                         Check-ins: {checkedInRegistrations.length} - Visitantes inscritos: {visitorRegistrations.length}
                       </p>
+
+                      {event.isPublic && event.publicRegistrationEnabled ? (
+                        <div style={{ background: "rgba(37, 99, 235, 0.12)", border: "1px solid rgba(96, 165, 250, 0.2)", borderRadius: "14px", display: "grid", gap: "8px", padding: "12px" }}>
+                          <p style={{ color: "#bfdbfe", fontSize: "13px", fontWeight: 900, margin: 0 }}>
+                            Link público de inscrição
+                          </p>
+
+                          <Link href={"/eventos/" + event.id} style={{ color: "#93c5fd", fontSize: "14px", fontWeight: 800, textDecoration: "none", wordBreak: "break-all" }}>
+                            {"/eventos/" + event.id}
+                          </Link>
+                        </div>
+                      ) : null}
                     </article>
                   );
                 })}
