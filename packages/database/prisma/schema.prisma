@@ -343,18 +343,21 @@ model VolunteerLog {
 }
 
 model Event {
-  id           String   @id @default(cuid())
-  churchId     String
-  campusId     String?
-  title        String
-  slug         String
-  date         DateTime
-  capacity     Int
-  price        Decimal  @default(0) @db.Decimal(12, 2)
-  isPublic     Boolean  @default(false)
-  trailStageId String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                        String   @id @default(cuid())
+  churchId                  String
+  campusId                  String?
+  title                     String
+  slug                      String
+  date                      DateTime
+  capacity                  Int
+  price                     Decimal  @default(0) @db.Decimal(12, 2)
+  isPublic                  Boolean  @default(false)
+  isPaid                    Boolean  @default(false)
+  publicRegistrationEnabled Boolean  @default(false)
+  waitlistEnabled           Boolean  @default(true)
+  trailStageId              String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
@@ -370,21 +373,28 @@ model Event {
   @@index([churchId, slug])
   @@index([churchId, date])
   @@index([churchId, isPublic])
+  @@index([churchId, isPaid])
+  @@index([churchId, publicRegistrationEnabled])
   @@index([churchId, trailStageId])
   @@unique([churchId, slug])
 }
 
 model Registration {
-  id          String    @id @default(cuid())
-  churchId    String
-  eventId     String
-  personId    String?
-  visitorId   String?
-  status      RegStatus @default(PENDING)
-  paymentId   String?
-  checkedInAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  churchId             String
+  eventId              String
+  personId             String?
+  visitorId            String?
+  status               RegStatus @default(PENDING)
+  paymentStatus        String    @default("NOT_REQUIRED")
+  paymentId            String?
+  checkInToken         String    @unique @default(cuid())
+  checkedInAt          DateTime?
+  confirmedAt          DateTime?
+  waitlistedAt         DateTime?
+  registrationSource   String    @default("ADMIN")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
@@ -397,7 +407,10 @@ model Registration {
   @@index([churchId, personId])
   @@index([churchId, visitorId])
   @@index([churchId, status])
+  @@index([churchId, paymentStatus])
   @@index([churchId, paymentId])
+  @@index([churchId, checkInToken])
+  @@index([churchId, registrationSource])
   @@unique([eventId, personId])
   @@unique([eventId, visitorId])
 }
