@@ -1,9 +1,34 @@
 import type { PrismaClient } from "@prisma/client";
 import type {
   CreateEventInput,
+  CreatePublicRegistrationInput,
   CreateRegistrationInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
+
+function buildRegistrationStatus(event: { isPaid: boolean }, isWaitlisted: boolean) {
+  if (isWaitlisted) {
+    return "PENDING" as const;
+  }
+
+  return event.isPaid ? ("PENDING" as const) : ("CONFIRMED" as const);
+}
+
+function buildPaymentStatus(event: { isPaid: boolean }, isWaitlisted: boolean) {
+  if (isWaitlisted) {
+    return event.isPaid ? "WAITING_PAYMENT" : "WAITLISTED";
+  }
+
+  return event.isPaid ? "PENDING" : "NOT_REQUIRED";
+}
+
+function buildConfirmedAt(event: { isPaid: boolean }, isWaitlisted: boolean) {
+  if (event.isPaid || isWaitlisted) {
+    return null;
+  }
+
+  return new Date();
+}
 
 export async function createEvent(
   prisma: PrismaClient,
@@ -20,6 +45,9 @@ export async function createEvent(
       capacity: input.capacity,
       price: input.price,
       isPublic: input.isPublic,
+      isPaid: input.isPaid,
+      publicRegistrationEnabled: input.publicRegistrationEnabled,
+      waitlistEnabled: input.waitlistEnabled,
       trailStageId: input.trailStageId ?? null
     }
   });
@@ -35,7 +63,13 @@ export async function listEvents(prisma: PrismaClient, churchId: string) {
         select: {
           id: true,
           status: true,
+          paymentStatus: true,
+          paymentId: true,
+          checkInToken: true,
           checkedInAt: true,
+          confirmedAt: true,
+          waitlistedAt: true,
+          registrationSource: true,
           person: {
             select: {
               id: true,
@@ -117,6 +151,46 @@ export async function getEventById(
   return event;
 }
 
+export async function getPublicEventById(prisma: PrismaClient, eventId: string) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      isPublic: true,
+      publicRegistrationEnabled: true
+    },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      date: true,
+      capacity: true,
+      price: true,
+      isPaid: true,
+      isPublic: true,
+      publicRegistrationEnabled: true,
+      waitlistEnabled: true,
+      registrations: {
+        where: {
+          status: {
+            not: "CANCELLED"
+          }
+        },
+        select: {
+          id: true,
+          status: true,
+          waitlistedAt: true
+        }
+      }
+    }
+  });
+
+  if (!event) {
+    throw new Error("PUBLIC_EVENT_NOT_FOUND");
+  }
+
+  return event;
+}
+
 export async function createRegistration(
   prisma: PrismaClient,
   churchId: string,
@@ -136,7 +210,8 @@ export async function createRegistration(
             }
           },
           select: {
-            id: true
+            id: true,
+            waitlistedAt: true
           }
         }
       }
@@ -177,7 +252,12 @@ export async function createRegistration(
     throw new Error("VISITOR_NOT_FOUND");
   }
 
-  if (event.registrations.length >= event.capacity) {
+  const activeRegistrations = event.registrations.filter(
+    (registration) => !registration.waitlistedAt
+  );
+  const isWaitlisted = activeRegistrations.length >= event.capacity;
+
+  if (isWaitlisted && !event.waitlistEnabled) {
     throw new Error("EVENT_CAPACITY_REACHED");
   }
 
@@ -187,7 +267,96 @@ export async function createRegistration(
       eventId: input.eventId,
       personId: input.personId ?? null,
       visitorId: input.visitorId ?? null,
-      paymentId: input.paymentId ?? null
+      status: buildRegistrationStatus(event, isWaitlisted),
+      paymentStatus: buildPaymentStatus(event, isWaitlisted),
+      paymentId: input.paymentId ?? null,
+      confirmedAt: buildConfirmedAt(event, isWaitlisted),
+      waitlistedAt: isWaitlisted ? new Date() : null,
+      registrationSource: "ADMIN"
+    }
+  });
+}
+
+export async function createPublicRegistration(
+  prisma: PrismaClient,
+  eventId: string,
+  input: CreatePublicRegistrationInput
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      isPublic: true,
+      publicRegistrationEnabled: true
+    },
+    include: {
+      registrations: {
+        where: {
+          status: {
+            not: "CANCELLED"
+          }
+        },
+        select: {
+          id: true,
+          waitlistedAt: true
+        }
+      }
+    }
+  });
+
+  if (!event) {
+    throw new Error("PUBLIC_EVENT_NOT_FOUND");
+  }
+
+  const activeRegistrations = event.registrations.filter(
+    (registration) => !registration.waitlistedAt
+  );
+  const isWaitlisted = activeRegistrations.length >= event.capacity;
+
+  if (isWaitlisted && !event.waitlistEnabled) {
+    throw new Error("EVENT_CAPACITY_REACHED");
+  }
+
+  const visitor = await prisma.visitor.create({
+    data: {
+      churchId: event.churchId,
+      campusId: event.campusId,
+      name: input.name,
+      phone: input.phone,
+      email: input.email ?? null,
+      firstVisitAt: new Date(),
+      notes: `Inscrição pública no evento: ${event.title}`
+    }
+  });
+
+  return prisma.registration.create({
+    data: {
+      churchId: event.churchId,
+      eventId: event.id,
+      visitorId: visitor.id,
+      status: buildRegistrationStatus(event, isWaitlisted),
+      paymentStatus: buildPaymentStatus(event, isWaitlisted),
+      confirmedAt: buildConfirmedAt(event, isWaitlisted),
+      waitlistedAt: isWaitlisted ? new Date() : null,
+      registrationSource: "PUBLIC"
+    },
+    include: {
+      visitor: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      },
+      event: {
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          price: true,
+          isPaid: true
+        }
+      }
     }
   });
 }
@@ -218,10 +387,16 @@ export async function updateRegistrationStatus(
           paymentId: input.paymentId ?? null,
           checkedInAt: new Date()
         }
-      : {
-          status: input.status,
-          paymentId: input.paymentId ?? null
-        };
+      : input.status === "CONFIRMED"
+        ? {
+            status: input.status,
+            paymentId: input.paymentId ?? null,
+            confirmedAt: new Date()
+          }
+        : {
+            status: input.status,
+            paymentId: input.paymentId ?? null
+          };
 
   return prisma.registration.update({
     where: {

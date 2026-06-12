@@ -4,7 +4,7 @@ import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
-import { registerEventRoutes } from "@sistema-igrejas/events";
+import { registerEventRoutes, registerPublicEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
 import { registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
@@ -51,6 +51,7 @@ app.get("/health", async () => {
 });
 
 await registerAuthRoutes(app, prisma);
+await registerPublicEventRoutes(app, prisma);
 
 await app.register(
   async (protectedRoutes) => {

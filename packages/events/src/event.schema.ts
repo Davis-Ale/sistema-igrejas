@@ -15,6 +15,9 @@ export const createEventSchema = z.object({
   capacity: z.coerce.number().int().positive("Capacidade deve ser maior que zero."),
   price: z.coerce.number().min(0, "Preço não pode ser negativo.").default(0),
   isPublic: z.boolean().default(false),
+  isPaid: z.boolean().default(false),
+  publicRegistrationEnabled: z.boolean().default(false),
+  waitlistEnabled: z.boolean().default(true),
   trailStageId: z.string().trim().min(1).optional()
 });
 
@@ -29,6 +32,12 @@ export const createRegistrationSchema = z
     message: "Informe membro ou visitante, mas não ambos."
   });
 
+export const createPublicRegistrationSchema = z.object({
+  name: z.string().trim().min(2, "Nome é obrigatório."),
+  phone: z.string().trim().min(8, "Telefone é obrigatório."),
+  email: z.string().trim().email("E-mail inválido.").optional()
+});
+
 export const updateRegistrationStatusSchema = z.object({
   registrationId: z.string().trim().min(1, "Inscrição é obrigatória."),
   status: registrationStatusSchema,
@@ -37,4 +46,5 @@ export const updateRegistrationStatusSchema = z.object({
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
+export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;
 export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationStatusSchema>;
