@@ -141,6 +141,7 @@ export default function EventosPage() {
   const [selectedEvent, setSelectedEvent] = useState<EventDetail | null>(null);
   const [participantType, setParticipantType] = useState<ParticipantType>("member");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [checkInToken, setCheckInToken] = useState("");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState("50");
@@ -377,6 +378,63 @@ export default function EventosPage() {
       setError("Não foi possível fazer a inscrição agora.");
     } finally {
       setIsRegistering(false);
+    }
+  }
+
+  async function handleCheckInByToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    if (!selectedEventId) {
+      setError("Selecione um evento para validar o check-in.");
+      return;
+    }
+
+    const normalizedToken = checkInToken.trim();
+
+    if (!normalizedToken) {
+      setError("Informe o código de check-in.");
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setIsUpdatingStatus(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/events/registrations/check-in-token`, {
+        body: JSON.stringify({
+          checkInToken: normalizedToken,
+          eventId: selectedEventId
+        }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as ApiErrorResponse;
+
+        setError(data.message ?? "Não foi possível validar o código de check-in.");
+        return;
+      }
+
+      setCheckInToken("");
+      setSuccessMessage("Check-in por código realizado com sucesso.");
+      await loadEventsMembersAndVisitors();
+      await loadSelectedEvent(selectedEventId);
+    } catch {
+      setError("Não foi possível validar o código de check-in agora.");
+    } finally {
+      setIsUpdatingStatus(false);
     }
   }
 
@@ -821,6 +879,48 @@ export default function EventosPage() {
               <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
                 Check-in: {selectedEventSummary.title}
               </h2>
+
+              <form
+                onSubmit={handleCheckInByToken}
+                style={{
+                  background: "rgba(2, 6, 23, 0.28)",
+                  border: "1px solid rgba(148, 163, 184, 0.16)",
+                  borderRadius: "18px",
+                  display: "grid",
+                  gap: "12px",
+                  padding: "14px"
+                }}
+              >
+                <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                  Código de check-in
+                  <input
+                    onChange={(event) => setCheckInToken(event.target.value)}
+                    placeholder="Cole o código apresentado pelo participante"
+                    style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                    type="text"
+                    value={checkInToken}
+                  />
+                </label>
+
+                <button
+                  disabled={isUpdatingStatus || !checkInToken.trim()}
+                  style={{
+                    background: "#16a34a",
+                    border: 0,
+                    borderRadius: "14px",
+                    color: "#ffffff",
+                    cursor: isUpdatingStatus || !checkInToken.trim() ? "not-allowed" : "pointer",
+                    font: "inherit",
+                    fontWeight: 900,
+                    justifySelf: "start",
+                    opacity: isUpdatingStatus || !checkInToken.trim() ? 0.72 : 1,
+                    padding: "11px 16px"
+                  }}
+                  type="submit"
+                >
+                  {isUpdatingStatus ? "Validando..." : "Validar código e fazer check-in"}
+                </button>
+              </form>
 
               {!selectedEvent || selectedEvent.registrations.length === 0 ? (
                 <p style={{ color: "#cbd5e1", margin: 0 }}>
