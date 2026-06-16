@@ -161,6 +161,27 @@ function getRegistrationParticipantType(registration: {
   return registration.person ? "Membro" : "Visitante";
 }
 
+function getRegistrationStats(registrations: Array<{
+  status: RegistrationStatus;
+  paymentStatus: string;
+  waitlistedAt: string | null;
+  visitor: Participant | null;
+}>) {
+  const active = registrations.filter((registration) => registration.status !== "CANCELLED");
+  const checkedIn = registrations.filter((registration) => registration.status === "CHECKED_IN");
+  const visitors = registrations.filter((registration) => registration.visitor);
+  const waitlisted = registrations.filter((registration) => registration.waitlistedAt);
+  const pendingPayment = registrations.filter((registration) => registration.paymentStatus === "PENDING_PAYMENT");
+
+  return {
+    active: active.length,
+    checkedIn: checkedIn.length,
+    visitors: visitors.length,
+    waitlisted: waitlisted.length,
+    pendingPayment: pendingPayment.length
+  };
+}
+
 export default function EventosPage() {
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -829,15 +850,7 @@ export default function EventosPage() {
             {!isLoading && events.length > 0 ? (
               <div style={{ display: "grid", gap: "12px" }}>
                 {events.map((event) => {
-                  const activeRegistrations = event.registrations.filter(
-                    (registration) => registration.status !== "CANCELLED"
-                  );
-                  const checkedInRegistrations = event.registrations.filter(
-                    (registration) => registration.status === "CHECKED_IN"
-                  );
-                  const visitorRegistrations = event.registrations.filter(
-                    (registration) => registration.visitor
-                  );
+                  const stats = getRegistrationStats(event.registrations);
 
                   return (
                     <article
@@ -867,12 +880,12 @@ export default function EventosPage() {
                         </div>
 
                         <span style={{ background: "rgba(37, 99, 235, 0.18)", border: "1px solid rgba(96, 165, 250, 0.22)", borderRadius: "999px", color: "#bfdbfe", fontSize: "12px", fontWeight: 900, padding: "6px 10px", whiteSpace: "nowrap" }}>
-                          {activeRegistrations.length}/{event.capacity} inscritos
+                          {stats.active}/{event.capacity} inscritos
                         </span>
                       </div>
 
                       <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                        Check-ins: {checkedInRegistrations.length} - Visitantes inscritos: {visitorRegistrations.length}
+                        Check-ins: {stats.checkedIn} - Visitantes inscritos: {stats.visitors} - Lista de espera: {stats.waitlisted} - Pagamento pendente: {stats.pendingPayment}
                       </p>
 
                       {event.isPublic && event.publicRegistrationEnabled ? (
