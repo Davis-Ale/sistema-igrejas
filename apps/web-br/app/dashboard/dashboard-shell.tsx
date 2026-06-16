@@ -90,6 +90,19 @@ const navigationItems = [
     )
   },
   {
+    label: "Financeiro",
+    href: "/dashboard/financeiro",
+    icon: (
+      <NavIcon>
+        <path d="M4 7.5h16" />
+        <path d="M6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9A2.5 2.5 0 0 1 6.5 5Z" />
+        <path d="M7.5 12h4" />
+        <path d="M7.5 15h2.5" />
+        <path d="M15.5 12.5h1" />
+      </NavIcon>
+    )
+  },
+  {
     label: "Eventos",
     href: "/dashboard/eventos",
     icon: (
@@ -121,7 +134,8 @@ const moduleShortcuts = [
   { label: "Membros", href: "/dashboard/membros" },
   { label: "Visitantes", href: "/dashboard/visitantes" },
   { label: "Células", href: "/dashboard/celulas" },
-  { label: "Eventos", href: "/dashboard/eventos" }
+  { label: "Eventos", href: "/dashboard/eventos" },
+  { label: "Financeiro", href: "/dashboard/financeiro" }
 ];
 
 export function DashboardShell({ session }: DashboardShellProps) {
