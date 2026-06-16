@@ -37,7 +37,11 @@ type EventSummary = {
   registrations: Array<{
     id: string;
     status: RegistrationStatus;
+    paymentStatus: string;
+    checkInToken: string;
     checkedInAt: string | null;
+    waitlistedAt: string | null;
+    registrationSource: string;
     person: Participant | null;
     visitor: Participant | null;
   }>;
@@ -51,7 +55,11 @@ type EventDetail = Omit<EventSummary, "registrations"> & {
   registrations: Array<{
     id: string;
     status: RegistrationStatus;
+    paymentStatus: string;
+    checkInToken: string;
     checkedInAt: string | null;
+    waitlistedAt: string | null;
+    registrationSource: string;
     person: Participant | null;
     visitor: Participant | null;
   }>;
@@ -75,6 +83,26 @@ const participantTypeLabels: Record<ParticipantType, string> = {
   member: "Membro",
   visitor: "Visitante"
 };
+
+const paymentStatusLabels: Record<string, string> = {
+  NOT_REQUIRED: "Não exige pagamento",
+  PAID: "Pago",
+  PENDING_PAYMENT: "Pagamento pendente",
+  WAITLISTED: "Lista de espera"
+};
+
+const registrationSourceLabels: Record<string, string> = {
+  ADMIN: "Equipe",
+  PUBLIC: "Página pública"
+};
+
+function formatPaymentStatus(paymentStatus: string) {
+  return paymentStatusLabels[paymentStatus] ?? paymentStatus;
+}
+
+function formatRegistrationSource(registrationSource: string) {
+  return registrationSourceLabels[registrationSource] ?? registrationSource;
+}
 
 function getSessionToken() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
@@ -958,6 +986,11 @@ export default function EventosPage() {
 
                           <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
                             {getRegistrationParticipantType(registration)} - {participant.phone} - {statusLabels[registration.status]}
+                          </p>
+
+                          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
+                            Código: {registration.checkInToken} - Origem: {formatRegistrationSource(registration.registrationSource)} - Pagamento: {formatPaymentStatus(registration.paymentStatus)}
+                            {registration.waitlistedAt ? " - Lista de espera" : ""}
                           </p>
                         </div>
 
