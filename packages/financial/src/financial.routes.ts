@@ -3,12 +3,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import {
   createTransactionSchema,
-  listTransactionsQuerySchema
+  listTransactionsQuerySchema,
+  transactionParamsSchema,
+  updateTransactionSchema
 } from "./financial.schema.js";
 import {
   createTransaction,
   getFinancialSummary,
-  listTransactions
+  listTransactions,
+  updateTransaction
 } from "./financial.service.js";
 
 function getChurchId(request: FastifyRequest): string {
@@ -52,6 +55,14 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
+  if (error.message === "TRANSACTION_NOT_FOUND") {
+    await reply.code(404).send({
+      error: "TRANSACTION_NOT_FOUND",
+      message: "Transação não encontrada."
+    });
+    return;
+  }
+
   await reply.code(500).send({
     error: "INTERNAL_SERVER_ERROR",
     message: "Erro interno."
@@ -80,6 +91,23 @@ export async function registerFinancialRoutes(
       const transaction = await createTransaction(prisma, churchId, input);
 
       await reply.code(201).send(transaction);
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.patch("/financial/transactions/:transactionId", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = transactionParamsSchema.parse(request.params);
+      const input = updateTransactionSchema.parse(request.body);
+
+      return await updateTransaction(
+        prisma,
+        churchId,
+        params.transactionId,
+        input
+      );
     } catch (error) {
       await sendRouteError(error, reply);
     }

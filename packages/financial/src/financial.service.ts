@@ -1,13 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 import type {
   CreateTransactionInput,
-  ListTransactionsQueryInput
+  ListTransactionsQueryInput,
+  UpdateTransactionInput
 } from "./financial.schema.js";
 
-export async function createTransaction(
+async function ensureRelatedRecordsBelongToChurch(
   prisma: PrismaClient,
   churchId: string,
-  input: CreateTransactionInput
+  input: {
+    personId?: string | undefined;
+    eventId?: string | undefined;
+  }
 ) {
   const [person, event] = await Promise.all([
     input.personId
@@ -41,6 +45,14 @@ export async function createTransaction(
   if (input.eventId && !event) {
     throw new Error("EVENT_NOT_FOUND");
   }
+}
+
+export async function createTransaction(
+  prisma: PrismaClient,
+  churchId: string,
+  input: CreateTransactionInput
+) {
+  await ensureRelatedRecordsBelongToChurch(prisma, churchId, input);
 
   return prisma.transaction.create({
     data: {
@@ -57,6 +69,67 @@ export async function createTransaction(
       asaasId: input.asaasId ?? null,
       nfseId: input.nfseId ?? null,
       at: input.at ?? new Date()
+    }
+  });
+}
+
+export async function updateTransaction(
+  prisma: PrismaClient,
+  churchId: string,
+  transactionId: string,
+  input: UpdateTransactionInput
+) {
+  const transaction = await prisma.transaction.findFirst({
+    where: {
+      id: transactionId,
+      churchId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!transaction) {
+    throw new Error("TRANSACTION_NOT_FOUND");
+  }
+
+  await ensureRelatedRecordsBelongToChurch(prisma, churchId, input);
+
+  return prisma.transaction.update({
+    where: {
+      id: transactionId
+    },
+    data: {
+      ...(input.campusId !== undefined ? { campusId: input.campusId } : {}),
+      ...(input.cnpj !== undefined ? { cnpj: input.cnpj } : {}),
+      ...(input.personId !== undefined ? { personId: input.personId } : {}),
+      ...(input.eventId !== undefined ? { eventId: input.eventId } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.direction !== undefined ? { direction: input.direction } : {}),
+      ...(input.amount !== undefined ? { amount: input.amount } : {}),
+      ...(input.method !== undefined ? { method: input.method } : {}),
+      ...(input.costCenter !== undefined ? { costCenter: input.costCenter } : {}),
+      ...(input.asaasId !== undefined ? { asaasId: input.asaasId } : {}),
+      ...(input.nfseId !== undefined ? { nfseId: input.nfseId } : {}),
+      ...(input.at !== undefined ? { at: input.at } : {})
+    },
+    include: {
+      person: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      },
+      event: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          date: true
+        }
+      }
     }
   });
 }

@@ -87,6 +87,10 @@ function getSummaryBalance(summary: FinancialSummary) {
   return Number(summary.income) - Number(summary.expense);
 }
 
+function formatDateInput(value: string) {
+  return value.slice(0, 10);
+}
+
 export default function FinanceiroPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<FinancialSummary>({
@@ -103,6 +107,7 @@ export default function FinanceiroPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
 
   function getSessionToken() {
     const storedSession = localStorage.getItem("sistema-igrejas.session");
@@ -188,7 +193,11 @@ export default function FinanceiroPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/financial/transactions`, {
+      const requestUrl = editingTransactionId
+        ? `${API_BASE_URL}/api/financial/transactions/${editingTransactionId}`
+        : `${API_BASE_URL}/api/financial/transactions`;
+
+      const response = await fetch(requestUrl, {
         body: JSON.stringify({
           amount: Number(amount),
           at: at ? new Date(`${at}T00:00:00.000Z`).toISOString() : undefined,
@@ -201,7 +210,7 @@ export default function FinanceiroPage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        method: "POST"
+        method: editingTransactionId ? "PATCH" : "POST"
       });
 
       if (!response.ok) {
@@ -214,13 +223,38 @@ export default function FinanceiroPage() {
       setAmount("");
       setCostCenter("Geral");
       setAt("");
-      setSuccessMessage("Transação lançada com sucesso.");
+      setEditingTransactionId(null);
+      setSuccessMessage(editingTransactionId ? "Transação corrigida com sucesso." : "Transação lançada com sucesso.");
       await loadFinancialData();
     } catch {
       setError("Não foi possível lançar a transação agora.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function startEditingTransaction(transaction: Transaction) {
+    setEditingTransactionId(transaction.id);
+    setType(transaction.type);
+    setDirection(transaction.direction);
+    setAmount(String(Number(transaction.amount)));
+    setMethod(transaction.method);
+    setCostCenter(transaction.costCenter);
+    setAt(formatDateInput(transaction.at));
+    setError(null);
+    setSuccessMessage(null);
+  }
+
+  function cancelEditingTransaction() {
+    setEditingTransactionId(null);
+    setType("TITHE");
+    setDirection("IN");
+    setAmount("");
+    setMethod("PIX");
+    setCostCenter("Geral");
+    setAt("");
+    setError(null);
+    setSuccessMessage(null);
   }
 
   useEffect(() => {
@@ -373,7 +407,7 @@ export default function FinanceiroPage() {
             }}
           >
             <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Novo lançamento
+              {editingTransactionId ? "Corrigir lançamento" : "Novo lançamento"}
             </h2>
 
             <div
@@ -462,7 +496,8 @@ export default function FinanceiroPage() {
               </label>
             </div>
 
-            <button
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+              <button
               disabled={isSubmitting}
               style={{
                 background: "#2563eb",
@@ -478,8 +513,36 @@ export default function FinanceiroPage() {
               }}
               type="submit"
             >
-              {isSubmitting ? "Lançando..." : "Lançar transação"}
-            </button>
+              {isSubmitting
+                ? editingTransactionId
+                  ? "Salvando correção..."
+                  : "Lançando..."
+                : editingTransactionId
+                  ? "Salvar correção"
+                  : "Lançar transação"}
+              </button>
+
+              {editingTransactionId ? (
+                <button
+                  disabled={isSubmitting}
+                  onClick={cancelEditingTransaction}
+                  style={{
+                    background: "rgba(15, 23, 42, 0.72)",
+                    border: "1px solid rgba(148, 163, 184, 0.32)",
+                    borderRadius: "14px",
+                    color: "#e5e7eb",
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    font: "inherit",
+                    fontWeight: 900,
+                    opacity: isSubmitting ? 0.72 : 1,
+                    padding: "13px 18px"
+                  }}
+                  type="button"
+                >
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
           </form>
 
           {error ? (
@@ -543,9 +606,19 @@ export default function FinanceiroPage() {
                         </p>
                       </div>
 
-                      <strong style={{ color: transaction.direction === "IN" ? "#bbf7d0" : "#fecaca", fontSize: "16px", whiteSpace: "nowrap" }}>
-                        {transaction.direction === "IN" ? "+" : "-"} {formatMoney(transaction.amount)}
-                      </strong>
+                      <div style={{ alignItems: "end", display: "grid", gap: "8px", justifyItems: "end" }}>
+                        <strong style={{ color: transaction.direction === "IN" ? "#bbf7d0" : "#fecaca", fontSize: "16px", whiteSpace: "nowrap" }}>
+                          {transaction.direction === "IN" ? "+" : "-"} {formatMoney(transaction.amount)}
+                        </strong>
+
+                      <button
+                        onClick={() => startEditingTransaction(transaction)}
+                        style={{ background: "rgba(37, 99, 235, 0.16)", border: "1px solid rgba(96, 165, 250, 0.32)", borderRadius: "999px", color: "#bfdbfe", cursor: "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, padding: "8px 12px" }}
+                        type="button"
+                      >
+                        Editar
+                      </button>
+                      </div>
                     </div>
 
                     {transaction.person || transaction.event || transaction.asaasId || transaction.nfseId ? (

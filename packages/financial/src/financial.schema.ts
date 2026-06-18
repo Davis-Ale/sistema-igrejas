@@ -35,6 +35,8 @@ export const createTransactionSchema = z.object({
   at: z.coerce.date().optional()
 });
 
+export const updateTransactionSchema = createTransactionSchema.partial();
+
 export const listTransactionsQuerySchema = z.object({
   type: txTypeSchema.optional(),
   direction: txDirectionSchema.optional(),
@@ -46,5 +48,10 @@ export const listTransactionsQuerySchema = z.object({
   to: z.coerce.date().optional()
 });
 
+export const transactionParamsSchema = z.object({
+  transactionId: z.string().trim().min(1)
+});
+
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
+export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type ListTransactionsQueryInput = z.infer<typeof listTransactionsQuerySchema>;
