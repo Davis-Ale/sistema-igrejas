@@ -5,7 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes, registerPublicEventRoutes } from "@sistema-igrejas/events";
-import { registerFinancialRoutes } from "@sistema-igrejas/financial";
+import { registerAsaasRoutes, registerFinancialRoutes } from "@sistema-igrejas/financial";
 import { registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
 import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
@@ -71,6 +71,7 @@ await app.register(
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
+    await registerAsaasRoutes(protectedRoutes);
     await registerCellRoutes(protectedRoutes, prisma);
     await registerMemberRoutes(protectedRoutes, prisma);
     await registerVisitorRoutes(protectedRoutes, prisma);
