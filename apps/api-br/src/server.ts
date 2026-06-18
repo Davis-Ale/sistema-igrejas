@@ -34,6 +34,18 @@ const host = process.env.HOST ?? "0.0.0.0";
 const jwtSecret = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
 await app.register(cors, {
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type"
+  ],
+  methods: [
+    "GET",
+    "POST",
+    "PATCH",
+    "PUT",
+    "DELETE",
+    "OPTIONS"
+  ],
   origin: true
 });
 
