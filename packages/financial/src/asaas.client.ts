@@ -67,7 +67,7 @@ export function createAsaasClient(config: AsaasClientConfig = {}) {
       requestInit.body = JSON.stringify(options.body);
     }
 
-    const response = await fetch(``, requestInit);
+    const response = await fetch(`${baseUrl}${normalizedPath}`, requestInit);
 
     const responseBody = await response.text();
 
