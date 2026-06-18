@@ -310,7 +310,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   letterSpacing: "-0.03em"
                 }}
               >
-                Área administrativa
+                Painel
               </strong>
 
               <span
@@ -322,7 +322,7 @@ export function DashboardShell({ session }: DashboardShellProps) {
                   marginTop: "28px"
                 }}
               >
-                Visão geral →
+                Abrir →
               </span>
             </Link>
 

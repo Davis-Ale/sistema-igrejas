@@ -39,42 +39,7 @@ export default function AssistentePage() {
             ← Voltar ao painel
           </Link>
 
-          <p
-            style={{
-              color: "#60a5fa",
-              fontSize: "13px",
-              fontWeight: 900,
-              letterSpacing: "0.08em",
-              margin: "0 0 14px",
-              textTransform: "uppercase"
-            }}
-          >
-            Assistente IA
-          </p>
 
-          <h1
-            style={{
-              color: "#ffffff",
-              fontSize: "30px",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.12,
-              margin: "0 0 12px"
-            }}
-          >
-            Assistente do sistema
-          </h1>
-
-          <p
-            style={{
-              color: "#cbd5e1",
-              fontSize: "15px",
-              lineHeight: 1.6,
-              margin: 0,
-              maxWidth: "720px"
-            }}
-          >
-            Esta área será preparada para apoiar o uso geral do sistema com IA, respeitando os dados reais da igreja logada e as permissões de cada usuário.
-          </p>
         </section>
       </main>
     </DashboardAuthGuard>

@@ -212,42 +212,7 @@ export default function VisitantesPage() {
               ← Voltar ao painel
             </Link>
 
-            <p
-              style={{
-                color: "#60a5fa",
-                fontSize: "13px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                margin: "0 0 14px",
-                textTransform: "uppercase"
-              }}
-            >
-              Visitantes
-            </p>
 
-            <h1
-              style={{
-                color: "#ffffff",
-                fontSize: "30px",
-                letterSpacing: "-0.04em",
-                lineHeight: 1.12,
-                margin: "0 0 12px"
-              }}
-            >
-              Gestão de visitantes
-            </h1>
-
-            <p
-              style={{
-                color: "#cbd5e1",
-                fontSize: "15px",
-                lineHeight: 1.6,
-                margin: 0,
-                maxWidth: "760px"
-              }}
-            >
-              Cadastre e acompanhe visitantes reais vinculados à igreja autenticada.
-            </p>
           </div>
 
           <form

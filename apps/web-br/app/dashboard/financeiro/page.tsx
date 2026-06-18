@@ -301,42 +301,7 @@ export default function FinanceiroPage() {
               Voltar ao painel
             </Link>
 
-            <p
-              style={{
-                color: "#60a5fa",
-                fontSize: "13px",
-                fontWeight: 900,
-                letterSpacing: "0.1em",
-                margin: "0 0 10px",
-                textTransform: "uppercase"
-              }}
-            >
-              Financeiro
-            </p>
 
-            <h1
-              style={{
-                color: "#ffffff",
-                fontSize: "36px",
-                letterSpacing: "-0.04em",
-                lineHeight: 1,
-                margin: 0
-              }}
-            >
-              Entradas, saídas e lançamentos
-            </h1>
-
-            <p
-              style={{
-                color: "#cbd5e1",
-                fontSize: "16px",
-                lineHeight: 1.6,
-                margin: "14px 0 0",
-                maxWidth: "780px"
-              }}
-            >
-              Acompanhe o resumo financeiro e registre movimentações manuais. A integração real com Asaas será conectada em corte próprio.
-            </p>
           </div>
 
           <section
