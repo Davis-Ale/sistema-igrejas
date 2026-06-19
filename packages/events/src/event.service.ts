@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   CheckInByTokenInput,
   CreateEventInput,
@@ -29,6 +29,33 @@ function buildConfirmedAt(event: { isPaid: boolean }, isWaitlisted: boolean) {
   }
 
   return new Date();
+}
+
+async function createEventRegistrationTransaction(
+  prisma: PrismaClient,
+  input: {
+    churchId: string;
+    campusId: string | null;
+    eventId: string;
+    personId: string | null;
+    amount: Prisma.Decimal | number | string;
+  }
+) {
+  const transaction = await prisma.transaction.create({
+    data: {
+      churchId: input.churchId,
+      campusId: input.campusId,
+      personId: input.personId,
+      eventId: input.eventId,
+      type: "EVENT",
+      direction: "IN",
+      amount: input.amount,
+      method: "PIX",
+      costCenter: "EVENTOS"
+    }
+  });
+
+  return transaction.id;
 }
 
 export async function createEvent(
@@ -262,7 +289,7 @@ export async function createRegistration(
     throw new Error("EVENT_CAPACITY_REACHED");
   }
 
-  return prisma.registration.create({
+  const registration = await prisma.registration.create({
     data: {
       churchId,
       eventId: input.eventId,
@@ -274,6 +301,27 @@ export async function createRegistration(
       confirmedAt: buildConfirmedAt(event, isWaitlisted),
       waitlistedAt: isWaitlisted ? new Date() : null,
       registrationSource: "ADMIN"
+    }
+  });
+
+  if (!event.isPaid || isWaitlisted || input.paymentId) {
+    return registration;
+  }
+
+  const paymentId = await createEventRegistrationTransaction(prisma, {
+    churchId,
+    campusId: event.campusId,
+    eventId: event.id,
+    personId: input.personId ?? null,
+    amount: event.price
+  });
+
+  return prisma.registration.update({
+    where: {
+      id: registration.id
+    },
+    data: {
+      paymentId
     }
   });
 }
