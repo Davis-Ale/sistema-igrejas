@@ -171,7 +171,7 @@ function getRegistrationStats(registrations: Array<{
   const checkedIn = registrations.filter((registration) => registration.status === "CHECKED_IN");
   const visitors = registrations.filter((registration) => registration.visitor);
   const waitlisted = registrations.filter((registration) => registration.waitlistedAt);
-  const pendingPayment = registrations.filter((registration) => registration.paymentStatus === "PENDING_PAYMENT");
+  const pendingPayment = registrations.filter((registration) => registration.paymentStatus === "PENDING" || registration.paymentStatus === "WAITING_PAYMENT");
 
   return {
     active: active.length,
