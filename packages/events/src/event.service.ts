@@ -377,7 +377,7 @@ export async function createPublicRegistration(
     }
   });
 
-  return prisma.registration.create({
+  const registration = await prisma.registration.create({
     data: {
       churchId: event.churchId,
       eventId: event.id,
@@ -387,6 +387,46 @@ export async function createPublicRegistration(
       confirmedAt: buildConfirmedAt(event, isWaitlisted),
       waitlistedAt: isWaitlisted ? new Date() : null,
       registrationSource: "PUBLIC"
+    },
+    include: {
+      visitor: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      },
+      event: {
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          price: true,
+          isPaid: true
+        }
+      }
+    }
+  });
+
+  if (!event.isPaid || isWaitlisted) {
+    return registration;
+  }
+
+  const paymentId = await createEventRegistrationTransaction(prisma, {
+    churchId: event.churchId,
+    campusId: event.campusId,
+    eventId: event.id,
+    personId: null,
+    amount: event.price
+  });
+
+  return prisma.registration.update({
+    where: {
+      id: registration.id
+    },
+    data: {
+      paymentId
     },
     include: {
       visitor: {
