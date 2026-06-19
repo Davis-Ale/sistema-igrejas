@@ -461,7 +461,14 @@ export async function updateRegistrationStatus(
       churchId
     },
     select: {
-      id: true
+      id: true,
+      paymentId: true,
+      paymentStatus: true,
+      event: {
+        select: {
+          isPaid: true
+        }
+      }
     }
   });
 
@@ -474,17 +481,20 @@ export async function updateRegistrationStatus(
       ? {
           status: input.status,
           paymentId: input.paymentId ?? null,
+          paymentStatus: registration.event.isPaid && (input.paymentId ?? registration.paymentId) ? "PAID" : registration.paymentStatus,
           checkedInAt: new Date()
         }
       : input.status === "CONFIRMED"
         ? {
             status: input.status,
             paymentId: input.paymentId ?? null,
+            paymentStatus: registration.event.isPaid && (input.paymentId ?? registration.paymentId) ? "PAID" : registration.paymentStatus,
             confirmedAt: new Date()
           }
         : {
             status: input.status,
-            paymentId: input.paymentId ?? null
+            paymentId: input.paymentId ?? null,
+            paymentStatus: input.status === "CANCELLED" ? "CANCELLED" : registration.paymentStatus
           };
 
   return prisma.registration.update({
