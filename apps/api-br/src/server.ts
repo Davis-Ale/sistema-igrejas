@@ -72,7 +72,7 @@ await app.register(
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
-    await registerAsaasRoutes(protectedRoutes);
+    await registerAsaasRoutes(protectedRoutes, prisma);
     await registerCellRoutes(protectedRoutes, prisma);
     await registerMemberRoutes(protectedRoutes, prisma);
     await registerVisitorRoutes(protectedRoutes, prisma);

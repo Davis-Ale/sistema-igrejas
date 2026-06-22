@@ -2,6 +2,7 @@ import type {} from "@sistema-igrejas/auth";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AsaasClientError } from "./asaas.client.js";
+import { createTransaction, updateTransaction } from "./financial.service.js";
 import { createAsaasChargeSchema } from "./asaas.schema.js";
 import {
   createAsaasCustomer,
@@ -20,6 +21,14 @@ type AsaasWebhookBody = {
   event?: unknown;
   payment?: AsaasWebhookPayment;
 };
+
+function getAsaasPaymentMethod(billingType: "BOLETO" | "PIX" | "CREDIT_CARD") {
+  if (billingType === "CREDIT_CARD") {
+    return "CARD" as const;
+  }
+
+  return billingType;
+}
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -168,11 +177,21 @@ export async function registerAsaasWebhookRoutes(
   });
 }
 
-export async function registerAsaasRoutes(app: FastifyInstance): Promise<void> {
+export async function registerAsaasRoutes(app: FastifyInstance, prisma: PrismaClient): Promise<void> {
   app.post("/financial/asaas/charges", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       const input = createAsaasChargeSchema.parse(request.body);
+
+      const transaction = await createTransaction(prisma, churchId, {
+        amount: input.value,
+        costCenter: input.costCenter ?? "ASAAS",
+        direction: "IN",
+        eventId: input.eventId,
+        method: getAsaasPaymentMethod(input.billingType),
+        personId: input.personId,
+        type: input.eventId ? "EVENT" : "OTHER"
+      });
 
       const customerInput: CreateAsaasCustomerInput = {
         externalReference: `${churchId}:${input.externalReference}:customer`,
@@ -197,7 +216,7 @@ export async function registerAsaasRoutes(app: FastifyInstance): Promise<void> {
         billingType: input.billingType,
         customerId: customer.id,
         dueDate: input.dueDate,
-        externalReference: `${churchId}:${input.externalReference}:payment`,
+        externalReference: `::payment`,
         value: input.value
       };
 
@@ -207,9 +226,14 @@ export async function registerAsaasRoutes(app: FastifyInstance): Promise<void> {
 
       const payment = await createAsaasPayment(paymentInput);
 
+      await updateTransaction(prisma, churchId, transaction.id, {
+        asaasId: payment.id
+      });
+
       await reply.code(201).send({
         customer,
-        payment
+        payment,
+        transaction
       });
     } catch (error) {
       await sendAsaasRouteError(error, reply);

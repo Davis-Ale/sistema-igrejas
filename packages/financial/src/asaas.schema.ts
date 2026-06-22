@@ -15,6 +15,9 @@ export const createAsaasChargeSchema = z.object({
     name: z.string().trim().min(1, "Nome do cliente é obrigatório.")
   }),
   description: z.string().trim().min(1).optional(),
+  eventId: z.string().trim().min(1).optional(),
+  personId: z.string().trim().min(1).optional(),
+  costCenter: z.string().trim().min(1).optional(),
   dueDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Data de vencimento deve usar YYYY-MM-DD."),
   externalReference: z.string().trim().min(1, "Referência externa é obrigatória."),
   value: z.coerce.number().positive("Valor deve ser maior que zero.")
