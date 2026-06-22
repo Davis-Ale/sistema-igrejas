@@ -5,7 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes, registerPublicEventRoutes } from "@sistema-igrejas/events";
-import { registerAsaasRoutes, registerFinancialRoutes } from "@sistema-igrejas/financial";
+import { registerAsaasRoutes, registerAsaasWebhookRoutes, registerFinancialRoutes } from "@sistema-igrejas/financial";
 import { registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
 import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
@@ -64,6 +64,7 @@ app.get("/health", async () => {
 
 await registerAuthRoutes(app, prisma);
 await registerPublicEventRoutes(app, prisma);
+await registerAsaasWebhookRoutes(app, prisma);
 
 await app.register(
   async (protectedRoutes) => {

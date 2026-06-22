@@ -1,4 +1,5 @@
 import type {} from "@sistema-igrejas/auth";
+import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AsaasClientError } from "./asaas.client.js";
 import { createAsaasChargeSchema } from "./asaas.schema.js";
@@ -9,12 +10,67 @@ import {
   type CreateAsaasPaymentInput
 } from "./asaas.service.js";
 
+type AsaasWebhookPayment = {
+  id?: unknown;
+  status?: unknown;
+  externalReference?: unknown;
+};
+
+type AsaasWebhookBody = {
+  event?: unknown;
+  payment?: AsaasWebhookPayment;
+};
+
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
     throw new Error("CHURCH_CONTEXT_REQUIRED");
   }
 
   return request.churchId;
+}
+
+function mapAsaasPaymentStatus(status: unknown): string | null {
+  if (typeof status !== "string") {
+    return null;
+  }
+
+  if (status === "RECEIVED" || status === "CONFIRMED") {
+    return "PAID";
+  }
+
+  if (status === "CANCELLED" || status === "REFUNDED") {
+    return "CANCELLED";
+  }
+
+  if (status === "OVERDUE") {
+    return "OVERDUE";
+  }
+
+  return "PENDING";
+}
+
+function parseAsaasExternalReference(externalReference: unknown) {
+  if (typeof externalReference !== "string" || externalReference.length === 0) {
+    return null;
+  }
+
+  const parts = externalReference.split(":");
+
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const churchId = parts[0];
+  const referenceId = parts.slice(1, -1).join(":");
+
+  if (!churchId || !referenceId) {
+    return null;
+  }
+
+  return {
+    churchId,
+    referenceId
+  };
 }
 
 async function sendAsaasRouteError(error: unknown, reply: FastifyReply): Promise<void> {
@@ -54,6 +110,61 @@ async function sendAsaasRouteError(error: unknown, reply: FastifyReply): Promise
   await reply.code(500).send({
     error: "INTERNAL_SERVER_ERROR",
     message: "Erro interno."
+  });
+}
+
+export async function registerAsaasWebhookRoutes(
+  app: FastifyInstance,
+  prisma: PrismaClient
+): Promise<void> {
+  app.post("/webhooks/asaas", async (request, reply) => {
+    const body = request.body as AsaasWebhookBody;
+    const payment = body.payment ?? {};
+    const paymentId = typeof payment.id === "string" ? payment.id : null;
+    const paymentStatus = mapAsaasPaymentStatus(payment.status);
+    const reference = parseAsaasExternalReference(payment.externalReference);
+
+    if (paymentId && reference) {
+      await prisma.transaction.updateMany({
+        where: {
+          id: reference.referenceId,
+          churchId: reference.churchId
+        },
+        data: {
+          asaasId: paymentId
+        }
+      });
+    }
+
+    if (paymentStatus && reference) {
+      await prisma.registration.updateMany({
+        where: {
+          churchId: reference.churchId,
+          OR: [
+            {
+              id: reference.referenceId
+            },
+            {
+              paymentId: reference.referenceId
+            },
+            ...(paymentId
+              ? [
+                  {
+                    paymentId
+                  }
+                ]
+              : [])
+          ]
+        },
+        data: {
+          paymentStatus
+        }
+      });
+    }
+
+    await reply.send({
+      received: true
+    });
   });
 }
 
