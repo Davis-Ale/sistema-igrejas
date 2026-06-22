@@ -118,6 +118,29 @@ const navigationItems = [
     )
   },
   {
+    label: "Trilho",
+    href: "/dashboard/trilho",
+    icon: (
+      <NavIcon>
+        <path d="M5 19V5" />
+        <path d="M5 5h9l-1.5 3L14 11H5" />
+        <path d="M8 19h8" />
+      </NavIcon>
+    )
+  },
+  {
+    label: "Voluntários",
+    href: "/dashboard/voluntarios",
+    icon: (
+      <NavIcon>
+        <path d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M5 20a7 7 0 0 1 14 0" />
+        <path d="M19 5v4" />
+        <path d="M17 7h4" />
+      </NavIcon>
+    )
+  },
+  {
     label: "Assistente IA",
     href: "/dashboard/assistente",
     icon: (
@@ -135,7 +158,9 @@ const moduleShortcuts = [
   { label: "Visitantes", href: "/dashboard/visitantes" },
   { label: "Células", href: "/dashboard/celulas" },
   { label: "Eventos", href: "/dashboard/eventos" },
-  { label: "Financeiro", href: "/dashboard/financeiro" }
+  { label: "Financeiro", href: "/dashboard/financeiro" },
+  { label: "Trilho", href: "/dashboard/trilho" },
+  { label: "Voluntários", href: "/dashboard/voluntarios" }
 ];
 
 export function DashboardShell({ session }: DashboardShellProps) {
