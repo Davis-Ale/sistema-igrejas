@@ -279,6 +279,7 @@ model Celula {
   region    String
   meetDay   String
   meetTime  String   @default("")
+  profile   String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

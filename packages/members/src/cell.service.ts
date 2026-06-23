@@ -28,7 +28,8 @@ export async function createCell(
       name: input.name,
       region: input.region,
       meetDay: input.meetDay,
-      meetTime: input.meetTime
+      meetTime: input.meetTime,
+      profile: input.profile
     }
   });
 }

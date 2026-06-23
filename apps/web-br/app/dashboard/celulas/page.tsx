@@ -31,6 +31,7 @@ type Cell = {
   region: string;
   meetDay: string;
   meetTime: string;
+  profile: string;
   createdAt: string;
   updatedAt: string;
   leader: {
@@ -80,6 +81,7 @@ export default function CelulasPage() {
   const [region, setRegion] = useState("");
   const [meetDay, setMeetDay] = useState("");
   const [meetTime, setMeetTime] = useState("");
+  const [profile, setProfile] = useState("");
   const [leaderId, setLeaderId] = useState("");
   const [selectedCellId, setSelectedCellId] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
@@ -179,6 +181,7 @@ export default function CelulasPage() {
           leaderId,
           meetDay,
           meetTime,
+          profile,
           name,
           region
         }),
@@ -200,6 +203,7 @@ export default function CelulasPage() {
       setRegion("");
       setMeetDay("");
       setMeetTime("");
+      setProfile("");
       setSuccessMessage("Célula cadastrada com sucesso.");
       await loadData();
     } catch {
@@ -366,6 +370,24 @@ export default function CelulasPage() {
                   type="time"
                   value={meetTime}
                 />
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Tipo/perfil
+                <select
+                  onChange={(event) => setProfile(event.target.value)}
+                  required
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={profile}
+                >
+                  <option value="">Selecione</option>
+                  <option value="Famílias">Famílias</option>
+                  <option value="Jovens">Jovens</option>
+                  <option value="Mulheres">Mulheres</option>
+                  <option value="Homens">Homens</option>
+                  <option value="Adolescentes">Adolescentes</option>
+                  <option value="Terceira idade">Terceira idade</option>
+                </select>
               </label>
 
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
@@ -552,7 +574,7 @@ export default function CelulasPage() {
                         </h3>
 
                         <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
-                          Região: {cell.region} • Dia: {cell.meetDay} • Horário: {cell.meetTime}
+                          Região: {cell.region} • Perfil: {cell.profile} • Dia: {cell.meetDay} • Horário: {cell.meetTime}
                         </p>
 
                         <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
