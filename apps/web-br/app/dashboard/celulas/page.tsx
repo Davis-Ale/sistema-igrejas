@@ -82,6 +82,7 @@ export default function CelulasPage() {
   const [meetDay, setMeetDay] = useState("");
   const [meetTime, setMeetTime] = useState("");
   const [profile, setProfile] = useState("");
+  const [regionSearch, setRegionSearch] = useState("");
   const [leaderId, setLeaderId] = useState("");
   const [selectedCellId, setSelectedCellId] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
@@ -91,6 +92,18 @@ export default function CelulasPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
+
+  const filteredCells = useMemo(() => {
+    const search = regionSearch.trim().toLowerCase();
+
+    if (!search) {
+      return cells;
+    }
+
+    return cells.filter((cell) => {
+      return cell.region.toLowerCase().includes(search);
+    });
+  }, [cells, regionSearch]);
 
   const availableMembers = useMemo(() => {
     if (!selectedCellId) {
@@ -462,7 +475,7 @@ export default function CelulasPage() {
                   value={selectedCellId}
                 >
                   <option value="">Selecione uma célula</option>
-                  {cells.map((cell) => (
+                  {filteredCells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
                       {cell.name}
                     </option>
@@ -543,17 +556,28 @@ export default function CelulasPage() {
               Células cadastradas
             </h2>
 
+            <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              Buscar por bairro ou região
+              <input
+                onChange={(event) => setRegionSearch(event.target.value)}
+                placeholder="Ex.: Água Verde, Boqueirão, Centro"
+                style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                type="search"
+                value={regionSearch}
+              />
+            </label>
+
             {isLoading ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando células...</p>
             ) : null}
 
-            {!isLoading && cells.length === 0 ? (
+            {!isLoading && filteredCells.length === 0 ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>
                 Nenhuma célula cadastrada ainda.
               </p>
             ) : null}
 
-            {!isLoading && cells.length > 0 ? (
+            {!isLoading && filteredCells.length > 0 ? (
               <div style={{ display: "grid", gap: "12px" }}>
                 {cells.map((cell) => (
                   <article
