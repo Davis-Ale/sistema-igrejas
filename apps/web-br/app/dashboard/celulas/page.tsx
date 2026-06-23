@@ -475,7 +475,7 @@ export default function CelulasPage() {
                   value={selectedCellId}
                 >
                   <option value="">Selecione uma célula</option>
-                  {filteredCells.map((cell) => (
+                  {cells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
                       {cell.name}
                     </option>
@@ -571,15 +571,21 @@ export default function CelulasPage() {
               <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando células...</p>
             ) : null}
 
-            {!isLoading && filteredCells.length === 0 ? (
+            {!isLoading && cells.length === 0 ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>
                 Nenhuma célula cadastrada ainda.
               </p>
             ) : null}
 
+            {!isLoading && cells.length > 0 && filteredCells.length === 0 ? (
+              <p style={{ color: "#cbd5e1", margin: 0 }}>
+                Nenhuma célula encontrada para esse bairro ou região.
+              </p>
+            ) : null}
+
             {!isLoading && filteredCells.length > 0 ? (
               <div style={{ display: "grid", gap: "12px" }}>
-                {cells.map((cell) => (
+                {filteredCells.map((cell) => (
                   <article
                     key={cell.id}
                     style={{
