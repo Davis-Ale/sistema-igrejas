@@ -5,7 +5,8 @@ export const createCellSchema = z.object({
   leaderId: z.string().trim().min(1, "Líder é obrigatório."),
   name: z.string().trim().min(1, "Nome da célula é obrigatório."),
   region: z.string().trim().min(1, "Região é obrigatória."),
-  meetDay: z.string().trim().min(1, "Dia de encontro é obrigatório.")
+  meetDay: z.string().trim().min(1, "Dia de encontro é obrigatório."),
+  meetTime: z.string().trim().min(1, "Horário é obrigatório.")
 });
 
 export const addPersonToCellSchema = z.object({

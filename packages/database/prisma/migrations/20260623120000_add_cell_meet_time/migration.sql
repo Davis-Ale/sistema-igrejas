@@ -1,0 +1,1 @@
+ALTER TABLE "Celula" ADD COLUMN "meetTime" TEXT NOT NULL DEFAULT '';

@@ -27,7 +27,8 @@ export async function createCell(
       leaderId: input.leaderId,
       name: input.name,
       region: input.region,
-      meetDay: input.meetDay
+      meetDay: input.meetDay,
+      meetTime: input.meetTime
     }
   });
 }
