@@ -1,7 +1,8 @@
 import type {} from "@sistema-igrejas/auth";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
-import { createMemberSchema } from "./member.schema.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { ZodError } from "zod";
+import { createMemberSchema, listMembersQuerySchema } from "./member.schema.js";
 import { createMember, listMembers } from "./member.service.js";
 
 function getChurchId(request: FastifyRequest): string {
@@ -12,19 +13,20 @@ function getChurchId(request: FastifyRequest): string {
   return request.churchId;
 }
 
-async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
-  if (!(error instanceof Error)) {
-    await reply.code(500).send({
-      error: "INTERNAL_SERVER_ERROR",
-      message: "Erro interno."
+async function sendMemberRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof ZodError) {
+    await reply.code(400).send({
+      error: "VALIDATION_ERROR",
+      message: "Dados inválidos.",
+      issues: error.issues
     });
     return;
   }
 
-  if (error.message === "CHURCH_CONTEXT_REQUIRED") {
+  if (error instanceof Error && error.message === "CHURCH_CONTEXT_REQUIRED") {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
-      message: "Contexto de autenticação obrigatório."
+      message: "Contexto de igreja obrigatório."
     });
     return;
   }
@@ -42,10 +44,11 @@ export async function registerMemberRoutes(
   app.get("/members", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
+      const query = listMembersQuerySchema.parse(request.query);
 
-      return await listMembers(prisma, churchId);
+      return await listMembers(prisma, churchId, query);
     } catch (error) {
-      await sendRouteError(error, reply);
+      await sendMemberRouteError(error, reply);
     }
   });
 
@@ -57,7 +60,7 @@ export async function registerMemberRoutes(
 
       await reply.code(201).send(member);
     } catch (error) {
-      await sendRouteError(error, reply);
+      await sendMemberRouteError(error, reply);
     }
   });
 }

@@ -4,9 +4,9 @@ import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
-import { registerEventRoutes, registerPublicEventRoutes } from "@sistema-igrejas/events";
-import { registerAsaasRoutes, registerAsaasWebhookRoutes, registerFinancialRoutes } from "@sistema-igrejas/financial";
-import { registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
+import { registerEventRoutes } from "@sistema-igrejas/events";
+import { registerFinancialRoutes } from "@sistema-igrejas/financial";
+import { registerCellRoutes, registerMemberRoutes } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
 import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
 import Fastify from "fastify";
@@ -34,18 +34,6 @@ const host = process.env.HOST ?? "0.0.0.0";
 const jwtSecret = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
 await app.register(cors, {
-  allowedHeaders: [
-    "Authorization",
-    "Content-Type"
-  ],
-  methods: [
-    "GET",
-    "POST",
-    "PATCH",
-    "PUT",
-    "DELETE",
-    "OPTIONS"
-  ],
   origin: true
 });
 
@@ -63,8 +51,6 @@ app.get("/health", async () => {
 });
 
 await registerAuthRoutes(app, prisma);
-await registerPublicEventRoutes(app, prisma);
-await registerAsaasWebhookRoutes(app, prisma);
 
 await app.register(
   async (protectedRoutes) => {
@@ -72,10 +58,8 @@ await app.register(
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
-    await registerAsaasRoutes(protectedRoutes, prisma);
     await registerCellRoutes(protectedRoutes, prisma);
     await registerMemberRoutes(protectedRoutes, prisma);
-    await registerVisitorRoutes(protectedRoutes, prisma);
     await registerTrailRoutes(protectedRoutes, prisma);
     await registerVolunteerRoutes(protectedRoutes, prisma);
   },

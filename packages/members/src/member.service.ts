@@ -1,25 +1,58 @@
-import type { PrismaClient } from "@prisma/client";
-import type { CreateMemberInput } from "./member.schema.js";
+import { Role, type PrismaClient } from "@prisma/client";
+import type { CreateMemberInput, ListMembersQueryInput } from "./member.schema.js";
 
-export async function listMembers(prisma: PrismaClient, churchId: string) {
+const memberSelect = {
+  id: true,
+  name: true,
+  phone: true,
+  email: true,
+  role: true,
+  volunteerStatus: true,
+  campusId: true,
+  createdAt: true,
+  updatedAt: true
+} as const;
+
+export async function listMembers(
+  prisma: PrismaClient,
+  churchId: string,
+  query: ListMembersQueryInput
+) {
+  const search = query.search?.trim();
+
   return prisma.person.findMany({
     where: {
-      churchId
-    },
-    select: {
-      id: true,
-      campusId: true,
-      name: true,
-      phone: true,
-      email: true,
-      role: true,
-      volunteerStatus: true,
-      createdAt: true,
-      updatedAt: true
+      churchId,
+      role: Role.MEMBER,
+      ...(search
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              },
+              {
+                phone: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              },
+              {
+                email: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              }
+            ]
+          }
+        : {})
     },
     orderBy: {
       name: "asc"
-    }
+    },
+    select: memberSelect
   });
 }
 
@@ -34,19 +67,9 @@ export async function createMember(
       campusId: input.campusId ?? null,
       name: input.name,
       phone: input.phone,
-      email: input.email?.trim() ? input.email : null,
-      role: input.role
+      email: input.email ?? null,
+      role: Role.MEMBER
     },
-    select: {
-      id: true,
-      campusId: true,
-      name: true,
-      phone: true,
-      email: true,
-      role: true,
-      volunteerStatus: true,
-      createdAt: true,
-      updatedAt: true
-    }
+    select: memberSelect
   });
 }

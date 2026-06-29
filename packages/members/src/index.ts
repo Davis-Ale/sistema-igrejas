@@ -5,6 +5,3 @@ export * from "./membership.service.js";
 export * from "./member.routes.js";
 export * from "./member.schema.js";
 export * from "./member.service.js";
-export * from "./visitor.routes.js";
-export * from "./visitor.schema.js";
-export * from "./visitor.service.js";
