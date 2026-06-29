@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createAuthPreHandler, registerAuthRoutes } from "@sistema-igrejas/auth";
+import { registerAssistantRoutes } from "./assistant/assistant.routes.js";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
@@ -55,6 +56,8 @@ await registerAuthRoutes(app, prisma);
 await app.register(
   async (protectedRoutes) => {
     protectedRoutes.addHook("preHandler", createAuthPreHandler(prisma));
+
+    await registerAssistantRoutes(protectedRoutes, prisma);
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
