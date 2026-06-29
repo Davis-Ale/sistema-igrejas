@@ -1,13 +1,28 @@
 import { z } from "zod";
 
+const optionalTextSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const trimmedValue = value.trim();
+
+    return trimmedValue.length > 0 ? trimmedValue : undefined;
+  },
+  z.string().optional()
+);
+
 export const createVisitorSchema = z.object({
-  campusId: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1, "Nome é obrigatório."),
   phone: z.string().trim().min(1, "Telefone é obrigatório."),
-  email: z.string().trim().email("E-mail inválido.").optional().or(z.literal("")),
-  status: z.enum(["NEW", "CONTACTED", "INTEGRATED", "ARCHIVED"]).default("NEW"),
-  firstVisitAt: z.string().trim().datetime("Data da primeira visita inválida.").optional().or(z.literal("")),
-  notes: z.string().trim().optional().or(z.literal(""))
+  email: optionalTextSchema,
+  campusId: optionalTextSchema
+});
+
+export const listVisitorsQuerySchema = z.object({
+  search: optionalTextSchema
 });
 
 export type CreateVisitorInput = z.infer<typeof createVisitorSchema>;
+export type ListVisitorsQueryInput = z.infer<typeof listVisitorsQuerySchema>;

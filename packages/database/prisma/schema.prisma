@@ -12,6 +12,7 @@ enum Role {
   LEADER
   VOLUNTEER
   MEMBER
+  VISITOR
 }
 
 enum VolunteerStatus {

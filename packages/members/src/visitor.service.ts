@@ -1,26 +1,58 @@
-import type { PrismaClient } from "@prisma/client";
-import type { CreateVisitorInput } from "./visitor.schema.js";
+import { Role, type PrismaClient } from "@prisma/client";
+import type { CreateVisitorInput, ListVisitorsQueryInput } from "./visitor.schema.js";
 
-export async function listVisitors(prisma: PrismaClient, churchId: string) {
-  return prisma.visitor.findMany({
+const visitorSelect = {
+  id: true,
+  name: true,
+  phone: true,
+  email: true,
+  role: true,
+  volunteerStatus: true,
+  campusId: true,
+  createdAt: true,
+  updatedAt: true
+} as const;
+
+export async function listVisitors(
+  prisma: PrismaClient,
+  churchId: string,
+  query: ListVisitorsQueryInput
+) {
+  const search = query.search?.trim();
+
+  return prisma.person.findMany({
     where: {
-      churchId
-    },
-    select: {
-      id: true,
-      campusId: true,
-      name: true,
-      phone: true,
-      email: true,
-      status: true,
-      firstVisitAt: true,
-      notes: true,
-      createdAt: true,
-      updatedAt: true
+      churchId,
+      role: Role.VISITOR,
+      ...(search
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              },
+              {
+                phone: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              },
+              {
+                email: {
+                  contains: search,
+                  mode: "insensitive"
+                }
+              }
+            ]
+          }
+        : {})
     },
     orderBy: {
-      createdAt: "desc"
-    }
+      name: "asc"
+    },
+    select: visitorSelect
   });
 }
 
@@ -29,28 +61,15 @@ export async function createVisitor(
   churchId: string,
   input: CreateVisitorInput
 ) {
-  return prisma.visitor.create({
+  return prisma.person.create({
     data: {
       churchId,
       campusId: input.campusId ?? null,
       name: input.name,
       phone: input.phone,
-      email: input.email?.trim() ? input.email : null,
-      status: input.status,
-      firstVisitAt: input.firstVisitAt ? new Date(input.firstVisitAt) : null,
-      notes: input.notes?.trim() ? input.notes : null
+      email: input.email ?? null,
+      role: Role.VISITOR
     },
-    select: {
-      id: true,
-      campusId: true,
-      name: true,
-      phone: true,
-      email: true,
-      status: true,
-      firstVisitAt: true,
-      notes: true,
-      createdAt: true,
-      updatedAt: true
-    }
+    select: visitorSelect
   });
 }
