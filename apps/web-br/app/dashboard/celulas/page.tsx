@@ -400,7 +400,7 @@ export default function CelulasPage() {
                   <option value="Mulheres">Mulheres</option>
                   <option value="Homens">Homens</option>
                   <option value="Adolescentes">Adolescentes</option>
-                  <option value="Terceira idade">Terceira idade</option>
+                  <option value="Sêniores / melhor idade">Sêniores / melhor idade</option>
                 </select>
               </label>
 
@@ -558,10 +558,10 @@ export default function CelulasPage() {
             </h2>
 
             <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-              Buscar por bairro ou região
+              Buscar por bairro/região
               <input
                 onChange={(event) => setRegionSearch(event.target.value)}
-                placeholder="Ex.: Água Verde, Boqueirão, Centro"
+                placeholder="Ex.: Água Verde, Boqueirão, Pinheirinho, Centro"
                 style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
                 type="search"
                 value={regionSearch}
@@ -581,7 +581,7 @@ export default function CelulasPage() {
                 <option value="Mulheres">Mulheres</option>
                 <option value="Homens">Homens</option>
                 <option value="Adolescentes">Adolescentes</option>
-                <option value="Terceira idade">Terceira idade</option>
+                <option value="Sêniores / melhor idade">Sêniores / melhor idade</option>
               </select>
             </label>
 
@@ -622,7 +622,7 @@ export default function CelulasPage() {
                         </h3>
 
                         <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
-                          Região: {cell.region} • Perfil: {cell.profile} • Dia: {cell.meetDay} • Horário: {cell.meetTime}
+                          Bairro/região: {cell.region} • Perfil: {cell.profile} • Dia: {cell.meetDay} • Horário: {cell.meetTime}
                         </p>
 
                         <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
