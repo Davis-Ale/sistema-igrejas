@@ -71,6 +71,7 @@ type ApiErrorResponse = {
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const WEB_BASE_URL = process.env.NEXT_PUBLIC_WEB_BASE_URL ?? "http://localhost:3000";
 
 const statusLabels: Record<RegistrationStatus, string> = {
   PENDING: "Pendente",
@@ -87,7 +88,9 @@ const participantTypeLabels: Record<ParticipantType, string> = {
 const paymentStatusLabels: Record<string, string> = {
   NOT_REQUIRED: "Não exige pagamento",
   PAID: "Pago",
+  PENDING: "Pagamento pendente",
   PENDING_PAYMENT: "Pagamento pendente",
+  WAITING_PAYMENT: "Aguardando pagamento",
   WAITLISTED: "Lista de espera"
 };
 
@@ -98,6 +101,10 @@ const registrationSourceLabels: Record<string, string> = {
 
 function formatPaymentStatus(paymentStatus: string) {
   return paymentStatusLabels[paymentStatus] ?? paymentStatus;
+}
+
+function getPublicEventLink(eventId: string) {
+  return `/eventos/`;
 }
 
 function formatRegistrationSource(registrationSource: string) {
@@ -860,7 +867,7 @@ export default function EventosPage() {
                           </p>
 
                           <Link href={"/eventos/" + event.id} style={{ color: "#93c5fd", fontSize: "14px", fontWeight: 800, textDecoration: "none", wordBreak: "break-all" }}>
-                            {"/eventos/" + event.id}
+                            {getPublicEventLink(event.id)}
                           </Link>
                         </div>
                       ) : null}
