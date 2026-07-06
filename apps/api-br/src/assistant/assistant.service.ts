@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
+
+type AssistantRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER";
 import type { AssistantMessageInput } from "./assistant.schema.js";
 
 type AssistantContext = {
@@ -78,7 +80,49 @@ function formatCurrency(value: unknown) {
 }
 
 function getEventPublicLink(eventId: string) {
-  return `${WEB_BASE_URL}/eventos/${eventId}`;
+  return `/eventos/`;
+}
+
+function canViewFinancialSummary(role: AssistantRole) {
+  return role === "SUPER_ADMIN" || role === "PASTOR";
+}
+
+async function getFinancialSummary(prisma: PrismaClient, churchId: string) {
+  const [income, expenses, totalTransactions] = await Promise.all([
+    prisma.transaction.aggregate({
+      _sum: {
+        amount: true
+      },
+      where: {
+        churchId,
+        direction: "IN"
+      }
+    }),
+    prisma.transaction.aggregate({
+      _sum: {
+        amount: true
+      },
+      where: {
+        churchId,
+        direction: "OUT"
+      }
+    }),
+    prisma.transaction.count({
+      where: {
+        churchId
+      }
+    })
+  ]);
+
+  const incomeTotal = Number(income._sum.amount ?? 0);
+  const expenseTotal = Number(expenses._sum.amount ?? 0);
+
+  return {
+    balance: incomeTotal - expenseTotal,
+    expenseTotal,
+    incomeTotal,
+    totalTransactions
+  };
 }
 
 async function getAssistantContext(
@@ -320,6 +364,7 @@ function buildEventList(events: EventSummary[]) {
 async function buildLocalAssistantAnswer(
   prisma: PrismaClient,
   churchId: string,
+  userRole: AssistantRole,
   input: AssistantMessageInput,
   context: AssistantContext
 ) {
@@ -424,12 +469,13 @@ async function buildLocalAssistantAnswer(
 export async function answerAssistantMessage(
   prisma: PrismaClient,
   churchId: string,
+  userRole: AssistantRole,
   input: AssistantMessageInput
 ) {
   const context = await getAssistantContext(prisma, churchId);
 
   return {
-    answer: await buildLocalAssistantAnswer(prisma, churchId, input, context),
+    answer: await buildLocalAssistantAnswer(prisma, churchId, userRole, input, context),
     context,
     safety: {
       canExecuteBusinessRules: false,

@@ -12,6 +12,14 @@ function getChurchId(request: FastifyRequest): string {
   return request.churchId;
 }
 
+function getUserRole(request: FastifyRequest) {
+  if (!request.user?.role) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.role;
+}
+
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
   if (!(error instanceof Error)) {
     await reply.code(500).send({
@@ -21,7 +29,7 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
-  if (error.message === "CHURCH_CONTEXT_REQUIRED") {
+  if (error.message === "CHURCH_CONTEXT_REQUIRED" || error.message === "USER_CONTEXT_REQUIRED") {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
       message: "Contexto de autenticação obrigatório."
@@ -43,7 +51,8 @@ export async function registerAssistantRoutes(
     try {
       const churchId = getChurchId(request);
       const input = assistantMessageSchema.parse(request.body);
-      const answer = await answerAssistantMessage(prisma, churchId, input);
+      const userRole = getUserRole(request);
+      const answer = await answerAssistantMessage(prisma, churchId, userRole, input);
 
       await reply.code(200).send(answer);
     } catch (error) {
