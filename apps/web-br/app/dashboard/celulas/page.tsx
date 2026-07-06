@@ -83,6 +83,7 @@ export default function CelulasPage() {
   const [meetTime, setMeetTime] = useState("");
   const [profile, setProfile] = useState("");
   const [regionSearch, setRegionSearch] = useState("");
+  const [profileSearch, setProfileSearch] = useState("");
   const [leaderId, setLeaderId] = useState("");
   const [selectedCellId, setSelectedCellId] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
@@ -94,16 +95,16 @@ export default function CelulasPage() {
   const [isAddingMember, setIsAddingMember] = useState(false);
 
   const filteredCells = useMemo(() => {
-    const search = regionSearch.trim().toLowerCase();
-
-    if (!search) {
-      return cells;
-    }
+    const region = regionSearch.trim().toLowerCase();
+    const selectedProfile = profileSearch.trim().toLowerCase();
 
     return cells.filter((cell) => {
-      return cell.region.toLowerCase().includes(search);
+      const matchesRegion = !region || cell.region.toLowerCase().includes(region);
+      const matchesProfile = !selectedProfile || cell.profile.toLowerCase() === selectedProfile;
+
+      return matchesRegion && matchesProfile;
     });
-  }, [cells, regionSearch]);
+  }, [cells, profileSearch, regionSearch]);
 
   const availableMembers = useMemo(() => {
     if (!selectedCellId) {
@@ -567,6 +568,23 @@ export default function CelulasPage() {
               />
             </label>
 
+            <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              Filtrar por tipo/perfil
+              <select
+                onChange={(event) => setProfileSearch(event.target.value)}
+                style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                value={profileSearch}
+              >
+                <option value="">Todos os perfis</option>
+                <option value="Famílias">Famílias</option>
+                <option value="Jovens">Jovens</option>
+                <option value="Mulheres">Mulheres</option>
+                <option value="Homens">Homens</option>
+                <option value="Adolescentes">Adolescentes</option>
+                <option value="Terceira idade">Terceira idade</option>
+              </select>
+            </label>
+
             {isLoading ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando células...</p>
             ) : null}
@@ -579,7 +597,7 @@ export default function CelulasPage() {
 
             {!isLoading && cells.length > 0 && filteredCells.length === 0 ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhuma célula encontrada para esse bairro ou região.
+                Nenhuma célula encontrada para os filtros selecionados.
               </p>
             ) : null}
 
