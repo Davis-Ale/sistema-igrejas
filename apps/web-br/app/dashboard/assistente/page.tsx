@@ -50,7 +50,6 @@ function getSessionToken() {
 export default function AssistentePage() {
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
-  const [context, setContext] = useState<AssistantResponse["context"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -66,7 +65,6 @@ export default function AssistentePage() {
 
     setError(null);
     setAnswer(null);
-    setContext(null);
     setIsSubmitting(true);
 
     try {
@@ -91,7 +89,6 @@ export default function AssistentePage() {
       const data = (await response.json()) as AssistantResponse;
 
       setAnswer(data.answer);
-      setContext(data.context);
       setMessage("");
     } catch {
       setError("Não foi possível consultar o assistente agora.");
@@ -105,7 +102,7 @@ export default function AssistentePage() {
       <main
         style={{
           background:
-            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
+            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
           color: "#f8fafc",
           minHeight: "100vh",
           padding: "40px"
@@ -119,7 +116,7 @@ export default function AssistentePage() {
             borderRadius: "28px",
             boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
             display: "grid",
-            gap: "22px",
+            gap: "24px",
             margin: "0 auto",
             maxWidth: "1040px",
             padding: "28px"
@@ -138,43 +135,16 @@ export default function AssistentePage() {
             ← Voltar ao painel
           </Link>
 
-          <div>
-            <p
-              style={{
-                color: "#93c5fd",
-                fontSize: "13px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                margin: "0 0 10px",
-                textTransform: "uppercase"
-              }}
-            >
-              Assistente seguro
-            </p>
-
-            <h1
-              style={{
-                color: "#ffffff",
-                fontSize: "32px",
-                lineHeight: 1.1,
-                margin: "0 0 10px"
-              }}
-            >
-              Assistente IA
-            </h1>
-
-            <p
-              style={{
-                color: "#cbd5e1",
-                fontSize: "16px",
-                lineHeight: 1.7,
-                margin: 0,
-                maxWidth: "760px"
-              }}
-            >
-              Consulte informações do sistema sem permitir que a IA execute regras de negócio ou acesse sistemas externos diretamente.
-            </p>
-          </div>
+          <h1
+            style={{
+              color: "#ffffff",
+              fontSize: "34px",
+              lineHeight: 1.1,
+              margin: 0
+            }}
+          >
+            Assistente IA
+          </h1>
 
           <form
             onSubmit={handleSubmit}
@@ -199,7 +169,6 @@ export default function AssistentePage() {
               Pergunta
               <textarea
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Ex.: Quantos membros temos? Como acompanho visitantes? Como vejo eventos?"
                 required
                 rows={5}
                 style={{
@@ -269,40 +238,14 @@ export default function AssistentePage() {
                   color: "#e2e8f0",
                   fontSize: "15px",
                   lineHeight: 1.7,
-                  margin: 0
+                  margin: 0,
+                  whiteSpace: "pre-line"
                 }}
               >
                 {answer}
               </p>
-
-              {context ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "10px",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))"
-                  }}
-                >
-                  <strong style={{ color: "#bfdbfe" }}>Membros: {context.membersCount}</strong>
-                  <strong style={{ color: "#bfdbfe" }}>Visitantes: {context.visitorsCount}</strong>
-                  <strong style={{ color: "#bfdbfe" }}>Células: {context.cellsCount}</strong>
-                  <strong style={{ color: "#bfdbfe" }}>Eventos: {context.eventsCount}</strong>
-                  <strong style={{ color: "#bfdbfe" }}>Voluntários: {context.volunteersCount}</strong>
-                </div>
-              ) : null}
             </section>
           ) : null}
-
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: "13px",
-              lineHeight: 1.6,
-              margin: 0
-            }}
-          >
-            Segurança: o assistente responde com base nos dados da igreja, mas não altera banco, não executa ações administrativas e não acessa sistemas externos diretamente.
-          </p>
         </section>
       </main>
     </DashboardAuthGuard>
