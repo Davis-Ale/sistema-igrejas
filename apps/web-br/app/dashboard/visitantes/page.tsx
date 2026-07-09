@@ -207,7 +207,7 @@ export default function VisitantesPage() {
               maxWidth: "720px"
             }}
           >
-            Cadastre e acompanhe os visitantes da igreja.
+            
           </p>
 
           <form
