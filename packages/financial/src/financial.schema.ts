@@ -13,6 +13,12 @@ export const txDirectionSchema = z.enum([
   "OUT"
 ]);
 
+export const txStatusSchema = z.enum([
+  "ACTIVE",
+  "CANCELLED",
+  "REVERSED"
+]);
+
 export const payMethodSchema = z.enum([
   "PIX",
   "CARD",
@@ -40,6 +46,7 @@ export const updateTransactionSchema = createTransactionSchema.partial();
 export const listTransactionsQuerySchema = z.object({
   type: txTypeSchema.optional(),
   direction: txDirectionSchema.optional(),
+  status: txStatusSchema.optional(),
   method: payMethodSchema.optional(),
   costCenter: z.string().trim().min(1).optional(),
   personId: z.string().trim().min(1).optional(),
@@ -52,6 +59,11 @@ export const transactionParamsSchema = z.object({
   transactionId: z.string().trim().min(1)
 });
 
+export const transactionControlSchema = z.object({
+  reason: z.string().trim().min(3, "Informe o motivo.")
+});
+
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type ListTransactionsQueryInput = z.infer<typeof listTransactionsQuerySchema>;
+export type TransactionControlInput = z.infer<typeof transactionControlSchema>;

@@ -68,6 +68,12 @@ enum TxDirection {
   OUT
 }
 
+enum TxStatus {
+  ACTIVE
+  CANCELLED
+  REVERSED
+}
+
 enum PayMethod {
   PIX
   CARD
@@ -430,8 +436,13 @@ model Transaction {
   amount     Decimal     @db.Decimal(12, 2)
   method     PayMethod
   costCenter String
+  status     TxStatus    @default(ACTIVE)
   asaasId    String?
   nfseId     String?
+  cancelledAt DateTime?
+  cancelledByUserId String?
+  cancelReason String?
+  reversalTransactionId String?
   at         DateTime    @default(now())
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
@@ -451,6 +462,9 @@ model Transaction {
   @@index([churchId, direction])
   @@index([churchId, method])
   @@index([churchId, costCenter])
+  @@index([churchId, status])
+  @@index([churchId, cancelledByUserId])
+  @@index([churchId, reversalTransactionId])
   @@index([churchId, asaasId])
   @@index([churchId, nfseId])
   @@index([churchId, at])

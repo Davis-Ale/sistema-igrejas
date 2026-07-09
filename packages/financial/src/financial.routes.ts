@@ -4,17 +4,20 @@ import type { PrismaClient } from "@prisma/client";
 import {
   createTransactionSchema,
   listTransactionsQuerySchema,
+  transactionControlSchema,
   transactionParamsSchema,
   updateTransactionSchema
 } from "./financial.schema.js";
 import {
+  cancelTransaction,
   createTransaction,
   getFinancialSummary,
   listTransactions,
+  reverseTransaction,
   updateTransaction
 } from "./financial.service.js";
 
-type FinancialRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER";
+type FinancialRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER" | "VISITOR";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -22,6 +25,14 @@ function getChurchId(request: FastifyRequest): string {
   }
 
   return request.churchId;
+}
+
+function getUserId(request: FastifyRequest): string {
+  if (!request.user?.userId) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.userId;
 }
 
 function getUserRole(request: FastifyRequest): FinancialRole {
@@ -61,6 +72,14 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     await reply.code(403).send({
       error: "FINANCIAL_ACCESS_DENIED",
       message: "Você não tem permissão para acessar informações financeiras."
+    });
+    return;
+  }
+
+  if (error.message === "TRANSACTION_NOT_ACTIVE") {
+    await reply.code(409).send({
+      error: "TRANSACTION_NOT_ACTIVE",
+      message: "Apenas lançamentos ativos podem ser corrigidos, cancelados ou estornados."
     });
     return;
   }
@@ -138,6 +157,48 @@ export async function registerFinancialRoutes(
         prisma,
         churchId,
         params.transactionId,
+        input
+      );
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.post("/financial/transactions/:transactionId/cancel", async (request, reply) => {
+    try {
+      ensureCanAccessFinancial(request);
+
+      const churchId = getChurchId(request);
+      const userId = getUserId(request);
+      const params = transactionParamsSchema.parse(request.params);
+      const input = transactionControlSchema.parse(request.body);
+
+      return await cancelTransaction(
+        prisma,
+        churchId,
+        params.transactionId,
+        userId,
+        input
+      );
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.post("/financial/transactions/:transactionId/reverse", async (request, reply) => {
+    try {
+      ensureCanAccessFinancial(request);
+
+      const churchId = getChurchId(request);
+      const userId = getUserId(request);
+      const params = transactionParamsSchema.parse(request.params);
+      const input = transactionControlSchema.parse(request.body);
+
+      return await reverseTransaction(
+        prisma,
+        churchId,
+        params.transactionId,
+        userId,
         input
       );
     } catch (error) {
