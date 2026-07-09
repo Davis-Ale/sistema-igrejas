@@ -14,12 +14,30 @@ import {
   updateTransaction
 } from "./financial.service.js";
 
+type FinancialRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER";
+
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
     throw new Error("CHURCH_CONTEXT_REQUIRED");
   }
 
   return request.churchId;
+}
+
+function getUserRole(request: FastifyRequest): FinancialRole {
+  if (!request.user?.role) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.role;
+}
+
+function ensureCanAccessFinancial(request: FastifyRequest): void {
+  const role = getUserRole(request);
+
+  if (role !== "SUPER_ADMIN" && role !== "PASTOR") {
+    throw new Error("FINANCIAL_ACCESS_DENIED");
+  }
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
@@ -31,10 +49,18 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
-  if (error.message === "CHURCH_CONTEXT_REQUIRED") {
+  if (error.message === "CHURCH_CONTEXT_REQUIRED" || error.message === "USER_CONTEXT_REQUIRED") {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
       message: "Contexto de autenticação obrigatório."
+    });
+    return;
+  }
+
+  if (error.message === "FINANCIAL_ACCESS_DENIED") {
+    await reply.code(403).send({
+      error: "FINANCIAL_ACCESS_DENIED",
+      message: "Você não tem permissão para acessar informações financeiras."
     });
     return;
   }
@@ -75,6 +101,8 @@ export async function registerFinancialRoutes(
 ): Promise<void> {
   app.get("/financial/transactions", async (request, reply) => {
     try {
+      ensureCanAccessFinancial(request);
+
       const churchId = getChurchId(request);
       const query = listTransactionsQuerySchema.parse(request.query);
 
@@ -86,6 +114,8 @@ export async function registerFinancialRoutes(
 
   app.post("/financial/transactions", async (request, reply) => {
     try {
+      ensureCanAccessFinancial(request);
+
       const churchId = getChurchId(request);
       const input = createTransactionSchema.parse(request.body);
       const transaction = await createTransaction(prisma, churchId, input);
@@ -98,6 +128,8 @@ export async function registerFinancialRoutes(
 
   app.patch("/financial/transactions/:transactionId", async (request, reply) => {
     try {
+      ensureCanAccessFinancial(request);
+
       const churchId = getChurchId(request);
       const params = transactionParamsSchema.parse(request.params);
       const input = updateTransactionSchema.parse(request.body);
@@ -115,6 +147,8 @@ export async function registerFinancialRoutes(
 
   app.get("/financial/summary", async (request, reply) => {
     try {
+      ensureCanAccessFinancial(request);
+
       const churchId = getChurchId(request);
       const query = listTransactionsQuerySchema.parse(request.query);
 
