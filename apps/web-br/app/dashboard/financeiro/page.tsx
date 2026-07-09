@@ -10,17 +10,23 @@ type LoginSession = {
 
 type TransactionType = "TITHE" | "OFFERING" | "EVENT" | "EXPENSE" | "OTHER";
 type TransactionDirection = "IN" | "OUT";
+type TransactionStatus = "ACTIVE" | "CANCELLED" | "REVERSED";
 type PaymentMethod = "PIX" | "CARD" | "CASH" | "BOLETO";
 
 type Transaction = {
   id: string;
   type: TransactionType;
   direction: TransactionDirection;
+  status: TransactionStatus;
   amount: number | string;
   method: PaymentMethod;
   costCenter: string;
   asaasId: string | null;
   nfseId: string | null;
+  cancelledAt: string | null;
+  cancelledByUserId: string | null;
+  cancelReason: string | null;
+  reversalTransactionId: string | null;
   at: string;
   createdAt: string;
   updatedAt: string;
@@ -63,6 +69,12 @@ const transactionDirectionLabels: Record<TransactionDirection, string> = {
   OUT: "Saída"
 };
 
+const transactionStatusLabels: Record<TransactionStatus, string> = {
+  ACTIVE: "Ativo",
+  CANCELLED: "Cancelado",
+  REVERSED: "Estornado"
+};
+
 const paymentMethodLabels: Record<PaymentMethod, string> = {
   PIX: "PIX",
   CARD: "Cartão",
@@ -83,12 +95,31 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 function getSummaryBalance(summary: FinancialSummary) {
   return Number(summary.income) - Number(summary.expense);
 }
 
 function formatDateInput(value: string) {
   return value.slice(0, 10);
+}
+
+function getStatusColor(status: TransactionStatus) {
+  if (status === "ACTIVE") {
+    return "#bbf7d0";
+  }
+
+  if (status === "CANCELLED") {
+    return "#fecaca";
+  }
+
+  return "#bfdbfe";
 }
 
 export default function FinanceiroPage() {
@@ -105,6 +136,7 @@ export default function FinanceiroPage() {
   const [at, setAt] = useState("");
   const [filterType, setFilterType] = useState("");
   const [filterDirection, setFilterDirection] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [filterMethod, setFilterMethod] = useState("");
   const [filterCostCenter, setFilterCostCenter] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -113,6 +145,7 @@ export default function FinanceiroPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [processingTransactionId, setProcessingTransactionId] = useState<string | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
 
   function getSessionToken() {
@@ -141,6 +174,10 @@ export default function FinanceiroPage() {
 
     if (filterDirection) {
       params.set("direction", filterDirection);
+    }
+
+    if (filterStatus) {
+      params.set("status", filterStatus);
     }
 
     if (filterMethod) {
@@ -226,6 +263,7 @@ export default function FinanceiroPage() {
   async function clearFinancialFilters() {
     setFilterType("");
     setFilterDirection("");
+    setFilterStatus("");
     setFilterMethod("");
     setFilterCostCenter("");
     setFilterFrom("");
@@ -289,7 +327,69 @@ export default function FinanceiroPage() {
     }
   }
 
+  async function handleTransactionControl(transaction: Transaction, action: "cancel" | "reverse") {
+    if (transaction.status !== "ACTIVE") {
+      setError("Apenas lançamentos ativos podem ser cancelados ou estornados.");
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    const actionLabel = action === "cancel" ? "cancelamento" : "estorno";
+    const reason = window.prompt(`Informe o motivo do ${actionLabel}:`);
+
+    if (!reason?.trim()) {
+      setError("O motivo é obrigatório para cancelar ou estornar um lançamento.");
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setProcessingTransactionId(transaction.id);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/financial/transactions/${transaction.id}/${action}`,
+        {
+          body: JSON.stringify({
+            reason: reason.trim()
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      if (!response.ok) {
+        const data = (await response.json()) as ApiErrorResponse;
+
+        setError(data.message ?? `Não foi possível concluir o ${actionLabel}.`);
+        return;
+      }
+
+      setEditingTransactionId(null);
+      setSuccessMessage(action === "cancel" ? "Lançamento cancelado com sucesso." : "Lançamento estornado com sucesso.");
+      await loadFinancialData();
+    } catch {
+      setError(`Não foi possível concluir o ${actionLabel} agora.`);
+    } finally {
+      setProcessingTransactionId(null);
+    }
+  }
+
   function startEditingTransaction(transaction: Transaction) {
+    if (transaction.status !== "ACTIVE") {
+      setError("Apenas lançamentos ativos podem ser corrigidos.");
+      return;
+    }
+
     setEditingTransactionId(transaction.id);
     setType(transaction.type);
     setDirection(transaction.direction);
@@ -470,6 +570,20 @@ export default function FinanceiroPage() {
                   <option value="">Todas</option>
                   <option value="IN">Entrada</option>
                   <option value="OUT">Saída</option>
+                </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Status
+                <select
+                  onChange={(event) => setFilterStatus(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={filterStatus}
+                >
+                  <option value="">Todos</option>
+                  <option value="ACTIVE">Ativo</option>
+                  <option value="CANCELLED">Cancelado</option>
+                  <option value="REVERSED">Estornado</option>
                 </select>
               </label>
 
@@ -763,12 +877,23 @@ export default function FinanceiroPage() {
                     <div style={{ alignItems: "start", display: "flex", gap: "12px", justifyContent: "space-between" }}>
                       <div>
                         <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
-                          {transactionTypeLabels[transaction.type]} - {transactionDirectionLabels[transaction.direction]}
+                          {transactionTypeLabels[transaction.type]} - {transactionDirectionLabels[transaction.direction]} - {transactionStatusLabels[transaction.status]}
                         </h3>
 
                         <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
                           {paymentMethodLabels[transaction.method]} - {transaction.costCenter} - {formatDate(transaction.at)}
                         </p>
+
+                        <p style={{ color: getStatusColor(transaction.status), fontSize: "13px", fontWeight: 900, margin: "6px 0 0" }}>
+                          Status: {transactionStatusLabels[transaction.status]}
+                          {transaction.cancelledAt ? ` - controle em ${formatDateTime(transaction.cancelledAt)}` : ""}
+                        </p>
+
+                        {transaction.cancelReason ? (
+                          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "4px 0 0" }}>
+                            Motivo: {transaction.cancelReason}
+                          </p>
+                        ) : null}
                       </div>
 
                       <div style={{ alignItems: "end", display: "grid", gap: "8px", justifyItems: "end" }}>
@@ -776,13 +901,36 @@ export default function FinanceiroPage() {
                           {transaction.direction === "IN" ? "+" : "-"} {formatMoney(transaction.amount)}
                         </strong>
 
-                      <button
-                        onClick={() => startEditingTransaction(transaction)}
-                        style={{ background: "rgba(37, 99, 235, 0.16)", border: "1px solid rgba(96, 165, 250, 0.32)", borderRadius: "999px", color: "#bfdbfe", cursor: "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, padding: "8px 12px" }}
-                        type="button"
-                      >
-                        Editar
-                      </button>
+                        {transaction.status === "ACTIVE" ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "end" }}>
+                            <button
+                              disabled={processingTransactionId === transaction.id}
+                              onClick={() => startEditingTransaction(transaction)}
+                              style={{ background: "rgba(37, 99, 235, 0.16)", border: "1px solid rgba(96, 165, 250, 0.32)", borderRadius: "999px", color: "#bfdbfe", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
+                              type="button"
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              disabled={processingTransactionId === transaction.id}
+                              onClick={() => handleTransactionControl(transaction, "cancel")}
+                              style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.32)", borderRadius: "999px", color: "#fecaca", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+
+                            <button
+                              disabled={processingTransactionId === transaction.id}
+                              onClick={() => handleTransactionControl(transaction, "reverse")}
+                              style={{ background: "rgba(14, 165, 233, 0.14)", border: "1px solid rgba(125, 211, 252, 0.32)", borderRadius: "999px", color: "#bae6fd", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
+                              type="button"
+                            >
+                              Estornar
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
