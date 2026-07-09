@@ -207,7 +207,7 @@ export default function VisitantesPage() {
               maxWidth: "720px"
             }}
           >
-            Cadastre e acompanhe visitantes reais conectados à API.
+            Cadastre e acompanhe os visitantes da igreja.
           </p>
 
           <form

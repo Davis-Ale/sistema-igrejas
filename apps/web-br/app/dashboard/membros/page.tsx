@@ -207,7 +207,7 @@ export default function MembrosPage() {
               maxWidth: "720px"
             }}
           >
-            Cadastre e acompanhe membros reais da igreja conectados à API.
+            Cadastre e acompanhe os membros reais da igreja.
           </p>
 
           <form
