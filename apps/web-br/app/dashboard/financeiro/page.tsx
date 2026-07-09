@@ -103,6 +103,12 @@ export default function FinanceiroPage() {
   const [method, setMethod] = useState<PaymentMethod>("PIX");
   const [costCenter, setCostCenter] = useState("Geral");
   const [at, setAt] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterDirection, setFilterDirection] = useState("");
+  const [filterMethod, setFilterMethod] = useState("");
+  const [filterCostCenter, setFilterCostCenter] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -126,7 +132,39 @@ export default function FinanceiroPage() {
     }
   }
 
-  async function loadFinancialData() {
+  function buildFinancialQuery() {
+    const params = new URLSearchParams();
+
+    if (filterType) {
+      params.set("type", filterType);
+    }
+
+    if (filterDirection) {
+      params.set("direction", filterDirection);
+    }
+
+    if (filterMethod) {
+      params.set("method", filterMethod);
+    }
+
+    if (filterCostCenter.trim()) {
+      params.set("costCenter", filterCostCenter.trim());
+    }
+
+    if (filterFrom) {
+      params.set("from", new Date(`${filterFrom}T00:00:00.000Z`).toISOString());
+    }
+
+    if (filterTo) {
+      params.set("to", new Date(`${filterTo}T23:59:59.999Z`).toISOString());
+    }
+
+    const query = params.toString();
+
+    return query ? `?${query}` : "";
+  }
+
+  async function loadFinancialData(queryOverride?: string) {
     const token = getSessionToken();
 
     if (!token) {
@@ -139,13 +177,15 @@ export default function FinanceiroPage() {
     setIsLoading(true);
 
     try {
+      const financialQuery = queryOverride ?? buildFinancialQuery();
+
       const [transactionsResponse, summaryResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/financial/transactions`, {
+        fetch(`${API_BASE_URL}/api/financial/transactions${financialQuery}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         }),
-        fetch(`${API_BASE_URL}/api/financial/summary`, {
+        fetch(`${API_BASE_URL}/api/financial/summary${financialQuery}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -176,6 +216,22 @@ export default function FinanceiroPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loadFinancialData();
+  }
+
+  async function clearFinancialFilters() {
+    setFilterType("");
+    setFilterDirection("");
+    setFilterMethod("");
+    setFilterCostCenter("");
+    setFilterFrom("");
+    setFilterTo("");
+
+    await loadFinancialData("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -359,6 +415,150 @@ export default function FinanceiroPage() {
               </strong>
             </article>
           </section>
+
+
+          <form
+            onSubmit={handleFilterSubmit}
+            style={{
+              background: "rgba(15, 23, 42, 0.72)",
+              border: "1px solid rgba(148, 163, 184, 0.2)",
+              borderRadius: "22px",
+              display: "grid",
+              gap: "16px",
+              padding: "22px"
+            }}
+          >
+            <div>
+              <h2 style={{ color: "#ffffff", fontSize: "20px", margin: "0 0 6px" }}>
+                Filtros financeiros
+              </h2>
+              <p style={{ color: "#94a3b8", fontSize: "14px", margin: 0 }}>
+                Filtre lançamentos e resumo por tipo, direção, método, centro de custo e período.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "14px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))"
+              }}
+            >
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Tipo
+                <select
+                  onChange={(event) => setFilterType(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={filterType}
+                >
+                  <option value="">Todos</option>
+                  <option value="TITHE">Dízimo</option>
+                  <option value="OFFERING">Oferta</option>
+                  <option value="EVENT">Evento</option>
+                  <option value="EXPENSE">Despesa</option>
+                  <option value="OTHER">Outro</option>
+                </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Direção
+                <select
+                  onChange={(event) => setFilterDirection(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={filterDirection}
+                >
+                  <option value="">Todas</option>
+                  <option value="IN">Entrada</option>
+                  <option value="OUT">Saída</option>
+                </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Método
+                <select
+                  onChange={(event) => setFilterMethod(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  value={filterMethod}
+                >
+                  <option value="">Todos</option>
+                  <option value="PIX">PIX</option>
+                  <option value="CARD">Cartão</option>
+                  <option value="CASH">Dinheiro</option>
+                  <option value="BOLETO">Boleto</option>
+                </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Centro de custo
+                <input
+                  onChange={(event) => setFilterCostCenter(event.target.value)}
+                  placeholder="Ex.: Geral, Eventos, Missões"
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  type="text"
+                  value={filterCostCenter}
+                />
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                De
+                <input
+                  onChange={(event) => setFilterFrom(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  type="date"
+                  value={filterFrom}
+                />
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Até
+                <input
+                  onChange={(event) => setFilterTo(event.target.value)}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  type="date"
+                  value={filterTo}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+              <button
+                disabled={isLoading}
+                style={{
+                  background: "#2563eb",
+                  border: 0,
+                  borderRadius: "14px",
+                  color: "#ffffff",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  font: "inherit",
+                  fontWeight: 900,
+                  opacity: isLoading ? 0.72 : 1,
+                  padding: "13px 18px"
+                }}
+                type="submit"
+              >
+                Aplicar filtros
+              </button>
+
+              <button
+                disabled={isLoading}
+                onClick={clearFinancialFilters}
+                style={{
+                  background: "rgba(15, 23, 42, 0.72)",
+                  border: "1px solid rgba(148, 163, 184, 0.32)",
+                  borderRadius: "14px",
+                  color: "#e5e7eb",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  font: "inherit",
+                  fontWeight: 900,
+                  opacity: isLoading ? 0.72 : 1,
+                  padding: "13px 18px"
+                }}
+                type="button"
+              >
+                Limpar filtros
+              </button>
+            </div>
+          </form>
 
           <form
             onSubmit={handleSubmit}
