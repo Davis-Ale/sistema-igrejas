@@ -273,6 +273,44 @@ export default function CelulasPage() {
     }
   }
 
+  async function handleRemoveMember(cellId: string, personId: string) {
+    const token = getSessionToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`/api/cells/members/remove`, {
+        body: JSON.stringify({
+          groupId: cellId,
+          personId
+        }),
+        headers: {
+          Authorization: `Bearer `,
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as ApiErrorResponse;
+
+        setError(data.message ?? "Não foi possível remover o membro da célula.");
+        return;
+      }
+
+      setSuccessMessage("Membro removido da célula com sucesso.");
+      await loadData();
+    } catch {
+      setError("Não foi possível remover o membro da célula agora.");
+    }
+  }
+
   useEffect(() => {
     void loadData();
   }, []);
@@ -638,9 +676,19 @@ export default function CelulasPage() {
                     {cell.people.length > 0 ? (
                       <div style={{ display: "grid", gap: "6px" }}>
                         {cell.people.map((person) => (
-                          <p key={person.id} style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                            {person.name} • {person.phone}
-                          </p>
+                          <div key={person.id} style={{ alignItems: "center", display: "flex", gap: "10px", justifyContent: "space-between" }}>
+                            <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
+                              {person.name} • {person.phone}
+                            </p>
+
+                            <button
+                              onClick={() => void handleRemoveMember(cell.id, person.id)}
+                              style={{ background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(248, 113, 113, 0.24)", borderRadius: "999px", color: "#fecaca", cursor: "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, padding: "6px 10px" }}
+                              type="button"
+                            >
+                              Remover
+                            </button>
+                          </div>
                         ))}
                       </div>
                     ) : (
