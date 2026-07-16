@@ -82,22 +82,22 @@ enum PayMethod {
 }
 
 model Church {
-  id        String   @id @default(cuid())
-  churchId  String   @unique @default(cuid())
-  name      String
-  slug      String   @unique
-  plan      String
+  id                    String       @id @default(cuid())
+  churchId              String       @unique @default(cuid())
+  name                  String
+  slug                  String       @unique
+  plan                  String
   status                ChurchStatus @default(TRIAL)
-  cnpj      String?
-  locale    String   @default("pt-BR")
+  cnpj                  String?
+  locale                String       @default("pt-BR")
   trialStartedAt        DateTime?
   trialEndsAt           DateTime?
   subscriptionStartedAt DateTime?
   subscriptionEndsAt    DateTime?
   blockedAt             DateTime?
   blockReason           String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   campuses      Campus[]
   people        Person[]
@@ -110,8 +110,8 @@ model Church {
   events        Event[]
   registrations Registration[]
   transactions  Transaction[]
-  userAccounts UserAccount[]
-  trialSignups TrialSignup[]
+  userAccounts  UserAccount[]
+  trialSignups  TrialSignup[]
   visitors      Visitor[]
 
   @@index([churchId])
@@ -130,7 +130,7 @@ model Campus {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   pastor Person? @relation("CampusPastor", fields: [pastorId], references: [id], onDelete: SetNull)
 
   people       Person[]
@@ -201,7 +201,7 @@ model Person {
   changedLogs        VolunteerLog[]  @relation("VolunteerLogChangedBy")
   registrations      Registration[]
   transactions       Transaction[]
-  userAccount       UserAccount?
+  userAccount        UserAccount?
 
   @@index([churchId])
   @@index([churchId, campusId])
@@ -248,10 +248,10 @@ model TrailStage {
   progress      TrailProgress[]
   events        Event[]         @relation("EventTrailStage")
 
+  @@unique([trailId, order])
   @@index([churchId])
   @@index([churchId, trailId])
   @@index([churchId, requiresEventId])
-  @@unique([trailId, order])
 }
 
 model TrailProgress {
@@ -270,25 +270,28 @@ model TrailProgress {
   stage    TrailStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
   approver Person?    @relation("TrailProgressApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
 
+  @@unique([personId, stageId])
   @@index([churchId])
   @@index([churchId, personId])
   @@index([churchId, stageId])
   @@index([churchId, approvedBy])
-  @@unique([personId, stageId])
 }
 
 model Celula {
-  id        String   @id @default(cuid())
-  churchId  String
-  campusId  String?
-  leaderId  String
-  name      String
-  region    String
-  meetDay   String
-  meetTime  String   @default("")
-  profile   String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  churchId     String
+  campusId     String?
+  leaderId     String
+  name         String
+  region       String
+  state        String   @default("")
+  city         String   @default("")
+  neighborhood String   @default("")
+  meetDay      String
+  meetTime     String   @default("")
+  profile      String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
@@ -301,6 +304,7 @@ model Celula {
   @@index([churchId, campusId])
   @@index([churchId, leaderId])
   @@index([churchId, region])
+  @@index([churchId, state, city, neighborhood])
 }
 
 model Membership {
@@ -377,6 +381,7 @@ model Event {
   registrations    Registration[]
   transactions     Transaction[]
 
+  @@unique([churchId, slug])
   @@index([churchId])
   @@index([churchId, campusId])
   @@index([churchId, slug])
@@ -385,25 +390,24 @@ model Event {
   @@index([churchId, isPaid])
   @@index([churchId, publicRegistrationEnabled])
   @@index([churchId, trailStageId])
-  @@unique([churchId, slug])
 }
 
 model Registration {
-  id                   String    @id @default(cuid())
-  churchId             String
-  eventId              String
-  personId             String?
-  visitorId            String?
-  status               RegStatus @default(PENDING)
-  paymentStatus        String    @default("NOT_REQUIRED")
-  paymentId            String?
-  checkInToken         String    @unique @default(cuid())
-  checkedInAt          DateTime?
-  confirmedAt          DateTime?
-  waitlistedAt         DateTime?
-  registrationSource   String    @default("ADMIN")
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  churchId           String
+  eventId            String
+  personId           String?
+  visitorId          String?
+  status             RegStatus @default(PENDING)
+  paymentStatus      String    @default("NOT_REQUIRED")
+  paymentId          String?
+  checkInToken       String    @unique @default(cuid())
+  checkedInAt        DateTime?
+  confirmedAt        DateTime?
+  waitlistedAt       DateTime?
+  registrationSource String    @default("ADMIN")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
@@ -411,6 +415,8 @@ model Registration {
   person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
   visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: Cascade)
 
+  @@unique([eventId, personId])
+  @@unique([eventId, visitorId])
   @@index([churchId])
   @@index([churchId, eventId])
   @@index([churchId, personId])
@@ -420,32 +426,30 @@ model Registration {
   @@index([churchId, paymentId])
   @@index([churchId, checkInToken])
   @@index([churchId, registrationSource])
-  @@unique([eventId, personId])
-  @@unique([eventId, visitorId])
 }
 
 model Transaction {
-  id         String      @id @default(cuid())
-  churchId   String
-  campusId   String?
-  cnpj       String?
-  personId   String?
-  eventId    String?
-  type       TxType
-  direction  TxDirection
-  amount     Decimal     @db.Decimal(12, 2)
-  method     PayMethod
-  costCenter String
-  status     TxStatus    @default(ACTIVE)
-  asaasId    String?
-  nfseId     String?
-  cancelledAt DateTime?
-  cancelledByUserId String?
-  cancelReason String?
+  id                    String      @id @default(cuid())
+  churchId              String
+  campusId              String?
+  cnpj                  String?
+  personId              String?
+  eventId               String?
+  type                  TxType
+  direction             TxDirection
+  amount                Decimal     @db.Decimal(12, 2)
+  method                PayMethod
+  costCenter            String
+  status                TxStatus    @default(ACTIVE)
+  asaasId               String?
+  nfseId                String?
+  cancelledAt           DateTime?
+  cancelledByUserId     String?
+  cancelReason          String?
   reversalTransactionId String?
-  at         DateTime    @default(now())
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  at                    DateTime    @default(now())
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)

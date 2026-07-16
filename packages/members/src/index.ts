@@ -1,3 +1,6 @@
+export * from "./cell-location.routes.js";
+export * from "./cell-location.schema.js";
+export * from "./cell-location.service.js";
 export * from "./cell.routes.js";
 export * from "./cell.schema.js";
 export * from "./cell.service.js";

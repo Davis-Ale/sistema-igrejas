@@ -20,13 +20,25 @@ export async function createCell(
     throw new Error("LEADER_NOT_FOUND");
   }
 
+  const state = input.state ?? "";
+  const city = input.city ?? "";
+  const neighborhood = input.neighborhood ?? "";
+  const region =
+    input.region ??
+    [neighborhood, city && state ? city + "/" + state : city || state]
+      .filter(Boolean)
+      .join(" - ");
+
   return prisma.celula.create({
     data: {
       churchId,
       campusId: input.campusId ?? null,
       leaderId: input.leaderId,
-      name: input.name,
-      region: input.region,
+      name: input.name ?? input.profile,
+      region,
+      state,
+      city,
+      neighborhood,
       meetDay: input.meetDay,
       meetTime: input.meetTime,
       profile: input.profile
