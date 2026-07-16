@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
+import { CellLocationFields } from "./cell-location-fields";
+import { useCellLocation } from "./use-cell-location";
 
 type LoginSession = {
   token: string;
@@ -77,8 +79,6 @@ function getSessionToken() {
 export default function CelulasPage() {
   const [cells, setCells] = useState<Cell[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [name, setName] = useState("");
-  const [region, setRegion] = useState("");
   const [meetDay, setMeetDay] = useState("");
   const [meetTime, setMeetTime] = useState("");
   const [profile, setProfile] = useState("");
@@ -93,6 +93,22 @@ export default function CelulasPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
+
+  const {
+    cities,
+    city,
+    handlePostalCodeBlur,
+    handleStateChange,
+    isLoadingLocation,
+    neighborhood,
+    postalCode,
+    resetLocation,
+    setCity,
+    setNeighborhood,
+    setPostalCode,
+    stateCode,
+    states
+  } = useCellLocation(API_BASE_URL, getSessionToken, setError);
 
   const filteredCells = useMemo(() => {
     const region = regionSearch.trim().toLowerCase();
@@ -192,12 +208,14 @@ export default function CelulasPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/cells`, {
         body: JSON.stringify({
+          city,
           leaderId,
           meetDay,
           meetTime,
+          neighborhood,
           profile,
           name: profile,
-          region
+          state: stateCode
         }),
         headers: {
           Authorization: `Bearer ${token}`,
@@ -213,8 +231,7 @@ export default function CelulasPage() {
         return;
       }
 
-      setName("");
-      setRegion("");
+      resetLocation();
       setMeetDay("");
       setMeetTime("");
       setProfile("");
@@ -380,16 +397,20 @@ export default function CelulasPage() {
                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
               }}
             >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Região
-                <input
-                  onChange={(event) => setRegion(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="text"
-                  value={region}
-                />
-              </label>
+              <CellLocationFields
+                cities={cities}
+                city={city}
+                disabled={isLoadingLocation}
+                neighborhood={neighborhood}
+                onCityChange={setCity}
+                onNeighborhoodChange={setNeighborhood}
+                onPostalCodeBlur={() => void handlePostalCodeBlur()}
+                onPostalCodeChange={setPostalCode}
+                onStateChange={(value) => void handleStateChange(value)}
+                postalCode={postalCode}
+                stateCode={stateCode}
+                states={states}
+              />
 
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
                 Dia de encontro
