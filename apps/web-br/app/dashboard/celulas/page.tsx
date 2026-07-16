@@ -285,13 +285,13 @@ export default function CelulasPage() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`/api/cells/members/remove`, {
+      const response = await fetch(`${API_BASE_URL}/api/cells/members/remove`, {
         body: JSON.stringify({
           groupId: cellId,
           personId
         }),
         headers: {
-          Authorization: `Bearer `,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         method: "POST"
