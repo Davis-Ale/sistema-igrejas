@@ -196,7 +196,7 @@ export default function CelulasPage() {
           meetDay,
           meetTime,
           profile,
-          name,
+          name: profile,
           region
         }),
         headers: {
@@ -380,17 +380,6 @@ export default function CelulasPage() {
                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
               }}
             >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Nome da célula
-                <input
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="text"
-                  value={name}
-                />
-              </label>
-
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
                 Região
                 <input
