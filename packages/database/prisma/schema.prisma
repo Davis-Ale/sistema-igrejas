@@ -96,6 +96,7 @@ model Church {
   subscriptionEndsAt    DateTime?
   blockedAt             DateTime?
   blockReason           String?
+  baseCityId            String?
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
@@ -113,9 +114,11 @@ model Church {
   userAccounts  UserAccount[]
   trialSignups  TrialSignup[]
   visitors      Visitor[]
+  baseCity      LocationCity?   @relation("ChurchBaseCity", fields: [baseCityId], references: [id], onDelete: SetNull)
 
   @@index([churchId])
   @@index([cnpj])
+  @@index([baseCityId])
 }
 
 model Campus {
@@ -512,4 +515,36 @@ model TrialSignup {
   @@index([churchId])
   @@index([email])
   @@index([status])
+}
+
+model LocationCity {
+  id             String   @id @default(cuid())
+  countryCode    String   @default("BR")
+  stateCode      String
+  ibgeCode       String   @unique
+  name           String
+  normalizedName String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  neighborhoods LocationNeighborhood[]
+  churches      Church[]               @relation("ChurchBaseCity")
+
+  @@unique([countryCode, stateCode, normalizedName])
+  @@index([stateCode, name])
+}
+
+model LocationNeighborhood {
+  id             String   @id @default(cuid())
+  cityId         String
+  name           String
+  normalizedName String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  city LocationCity @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([cityId, normalizedName])
+  @@index([cityId, name])
 }

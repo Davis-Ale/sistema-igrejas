@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { upsertCuritibaLocationCatalog } from "./location-catalog.seed.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -43,7 +44,7 @@ async function upsertLocalChurch() {
     },
     update: {
       name: LOCAL_CHURCH_NAME,
-      plan: "DEMO",
+      plan: "TRIAL",
       status: "TRIAL",
       locale: "pt-BR",
       trialStartedAt: trialDates.trialStartedAt,
@@ -56,7 +57,7 @@ async function upsertLocalChurch() {
     create: {
       name: LOCAL_CHURCH_NAME,
       slug: LOCAL_CHURCH_SLUG,
-      plan: "DEMO",
+      plan: "TRIAL",
       status: "TRIAL",
       locale: "pt-BR",
       trialStartedAt: trialDates.trialStartedAt,
@@ -178,7 +179,12 @@ async function upsertLocalUserAccount(churchId: string, personId: string) {
 }
 
 async function main(): Promise<void> {
+  const baseCity = await upsertCuritibaLocationCatalog(prisma);
   const church = await upsertLocalChurch();
+  await prisma.church.update({
+    where: { id: church.id },
+    data: { baseCityId: baseCity.id }
+  });
   const campus = await upsertLocalCampus(church.id);
   const pastor = await upsertLocalPastor(church.id, campus.id);
   await upsertLocalUserAccount(church.id, pastor.id);
@@ -186,7 +192,7 @@ async function main(): Promise<void> {
 
   console.log("Seed concluido.");
   console.log(`Igreja: ${LOCAL_CHURCH_NAME}`);
-  console.log("Plano: DEMO");
+  console.log("Plano: TRIAL");
   console.log("Status: TRIAL");
   console.log(`Trial termina em: ${church.trialEndsAt?.toISOString()}`);
   console.log(`Trial signup: ${LOCAL_USER_EMAIL}`);
