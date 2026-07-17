@@ -89,6 +89,7 @@ export async function registerCellRoutes(
       const churchId = getChurchId(request);
       return await listCells(prisma, churchId);
     } catch (error) {
+      request.log.error({ err: error }, "Erro ao listar células");
       await sendRouteError(error, reply);
     }
   });

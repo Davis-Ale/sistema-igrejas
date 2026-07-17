@@ -48,6 +48,7 @@ export async function registerMemberRoutes(
 
       return await listMembers(prisma, churchId, query);
     } catch (error) {
+      request.log.error({ err: error }, "Erro ao listar membros");
       await sendMemberRouteError(error, reply);
     }
   });
