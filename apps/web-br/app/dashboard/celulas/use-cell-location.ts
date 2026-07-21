@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  listBrazilCities,
-  listBrazilStates,
-  lookupBrazilPostalCode,
-  type BrazilCity,
-  type BrazilState
+  getChurchBaseLocation,
+  type ChurchBaseCity
 } from "./cell-location-api";
 
 type GetToken = () => string | null;
@@ -17,12 +14,8 @@ export function useCellLocation(
   getToken: GetToken,
   setError: SetError
 ) {
-  const [states, setStates] = useState<BrazilState[]>([]);
-  const [cities, setCities] = useState<BrazilCity[]>([]);
-  const [stateCode, setStateCode] = useState("");
-  const [city, setCity] = useState("");
+  const [baseCity, setBaseCity] = useState<ChurchBaseCity | null>(null);
   const [neighborhood, setNeighborhood] = useState("");
-  const [postalCode, setPostalCode] = useState("");
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   useEffect(() => {
@@ -33,12 +26,13 @@ export function useCellLocation(
     }
 
     let cancelled = false;
+
     setIsLoadingLocation(true);
 
-    void listBrazilStates(apiBaseUrl, token)
+    void getChurchBaseLocation(apiBaseUrl, token)
       .then((data) => {
         if (!cancelled) {
-          setStates(data);
+          setBaseCity(data.city);
         }
       })
       .catch((error: unknown) => {
@@ -46,7 +40,7 @@ export function useCellLocation(
           setError(
             error instanceof Error
               ? error.message
-              : "Não foi possível carregar os estados."
+              : "Não foi possível carregar os bairros."
           );
         }
       })
@@ -61,104 +55,17 @@ export function useCellLocation(
     };
   }, [apiBaseUrl, getToken, setError]);
 
-  async function handleStateChange(value: string) {
-    setStateCode(value);
-    setCity("");
-    setNeighborhood("");
-    setCities([]);
-
-    if (!value) {
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    setIsLoadingLocation(true);
-
-    try {
-      setCities(await listBrazilCities(apiBaseUrl, token, value));
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar as cidades."
-      );
-    } finally {
-      setIsLoadingLocation(false);
-    }
-  }
-
-  async function handlePostalCodeBlur() {
-    const normalizedPostalCode = postalCode.replace(/\D/g, "");
-
-    if (normalizedPostalCode.length !== 8) {
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    setIsLoadingLocation(true);
-
-    try {
-      const location = await lookupBrazilPostalCode(
-        apiBaseUrl,
-        token,
-        normalizedPostalCode
-      );
-
-      const loadedCities = await listBrazilCities(
-        apiBaseUrl,
-        token,
-        location.state
-      );
-
-      setPostalCode(location.postalCode);
-      setStateCode(location.state);
-      setCities(loadedCities);
-      setCity(location.city);
-      setNeighborhood(location.neighborhood);
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível consultar o CEP."
-      );
-    } finally {
-      setIsLoadingLocation(false);
-    }
-  }
-
   function resetLocation() {
-    setStateCode("");
-    setCity("");
     setNeighborhood("");
-    setPostalCode("");
-    setCities([]);
   }
 
   return {
-    cities,
-    city,
-    handlePostalCodeBlur,
-    handleStateChange,
+    city: baseCity?.name ?? "",
     isLoadingLocation,
     neighborhood,
-    postalCode,
+    neighborhoods: baseCity?.neighborhoods ?? [],
     resetLocation,
-    setCity,
     setNeighborhood,
-    setPostalCode,
-    stateCode,
-    states
+    stateCode: baseCity?.stateCode ?? ""
   };
 }

@@ -95,19 +95,13 @@ export default function CelulasPage() {
   const [isAddingMember, setIsAddingMember] = useState(false);
 
   const {
-    cities,
     city,
-    handlePostalCodeBlur,
-    handleStateChange,
     isLoadingLocation,
     neighborhood,
-    postalCode,
+    neighborhoods,
     resetLocation,
-    setCity,
     setNeighborhood,
-    setPostalCode,
-    stateCode,
-    states
+    stateCode
   } = useCellLocation(API_BASE_URL, getSessionToken, setError);
 
   const filteredCells = useMemo(() => {
@@ -398,20 +392,11 @@ export default function CelulasPage() {
               }}
             >
               <CellLocationFields
-                cities={cities}
-                city={city}
                 disabled={isLoadingLocation}
                 neighborhood={neighborhood}
-                onCityChange={setCity}
+                neighborhoods={neighborhoods}
                 onNeighborhoodChange={setNeighborhood}
-                onPostalCodeBlur={() => void handlePostalCodeBlur()}
-                onPostalCodeChange={setPostalCode}
-                onStateChange={(value) => void handleStateChange(value)}
-                postalCode={postalCode}
-                stateCode={stateCode}
-                states={states}
               />
-
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
                 Dia de encontro
                 <input

@@ -64,7 +64,7 @@ await app.register(
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
     await registerCellRoutes(protectedRoutes, prisma);
-    await registerCellLocationRoutes(protectedRoutes);
+    await registerCellLocationRoutes(protectedRoutes, prisma);
     await registerMemberRoutes(protectedRoutes, prisma);
     await registerVisitorRoutes(protectedRoutes, prisma);
     await registerTrailRoutes(protectedRoutes, prisma);

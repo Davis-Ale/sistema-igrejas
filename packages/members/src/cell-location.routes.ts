@@ -1,14 +1,28 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { PrismaClient } from "@prisma/client";
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest
+} from "fastify";
 import { ZodError } from "zod";
 import {
   listCitiesQuerySchema,
   postalCodeParamsSchema
 } from "./cell-location.schema.js";
 import {
+  getChurchBaseLocation,
   listBrazilCities,
   listBrazilStates,
   lookupBrazilPostalCode
 } from "./cell-location.service.js";
+
+function getChurchId(request: FastifyRequest): string {
+  if (!request.churchId) {
+    throw new Error("CHURCH_CONTEXT_REQUIRED");
+  }
+
+  return request.churchId;
+}
 
 async function sendLocationRouteError(
   error: unknown,
@@ -25,8 +39,35 @@ async function sendLocationRouteError(
 
   if (
     error instanceof Error &&
-    error.message === "POSTAL_CODE_NOT_FOUND"
+    error.message === "CHURCH_CONTEXT_REQUIRED"
   ) {
+    await reply.code(401).send({
+      error: "UNAUTHORIZED",
+      message: "Contexto de igreja obrigatório."
+    });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "CHURCH_NOT_FOUND") {
+    await reply.code(404).send({
+      error: "CHURCH_NOT_FOUND",
+      message: "Igreja não encontrada."
+    });
+    return;
+  }
+
+  if (
+    error instanceof Error &&
+    error.message === "BASE_CITY_NOT_CONFIGURED"
+  ) {
+    await reply.code(409).send({
+      error: "BASE_CITY_NOT_CONFIGURED",
+      message: "Cidade-base não configurada."
+    });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "POSTAL_CODE_NOT_FOUND") {
     await reply.code(404).send({
       error: "POSTAL_CODE_NOT_FOUND",
       message: "CEP não encontrado."
@@ -52,8 +93,20 @@ async function sendLocationRouteError(
 }
 
 export async function registerCellLocationRoutes(
-  app: FastifyInstance
+  app: FastifyInstance,
+  prisma: PrismaClient
 ): Promise<void> {
+  app.get("/locations/base", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+
+      return await getChurchBaseLocation(prisma, churchId);
+    } catch (error) {
+      request.log.error({ err: error }, "Erro ao carregar localização-base");
+      await sendLocationRouteError(error, reply);
+    }
+  });
+
   app.get("/locations/states", async (_request, reply) => {
     try {
       return await listBrazilStates();

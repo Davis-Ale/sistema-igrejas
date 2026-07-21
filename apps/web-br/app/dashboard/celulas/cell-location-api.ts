@@ -1,21 +1,18 @@
-export type BrazilState = {
-  id: number;
-  code: string;
+export type LocationNeighborhood = {
+  id: string;
   name: string;
 };
 
-export type BrazilCity = {
-  id: number;
+export type ChurchBaseCity = {
+  id: string;
+  stateCode: string;
+  ibgeCode: string;
   name: string;
+  neighborhoods: LocationNeighborhood[];
 };
 
-export type PostalCodeLocation = {
-  postalCode: string;
-  state: string;
-  city: string;
-  neighborhood: string;
-  street: string;
-  ibgeCode: string | null;
+export type ChurchBaseLocation = {
+  city: ChurchBaseCity;
 };
 
 type ApiErrorResponse = {
@@ -32,49 +29,15 @@ async function readResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function listBrazilStates(
+export async function getChurchBaseLocation(
   apiBaseUrl: string,
   token: string
-): Promise<BrazilState[]> {
-  const response = await fetch(`${apiBaseUrl}/api/locations/states`, {
+): Promise<ChurchBaseLocation> {
+  const response = await fetch(`${apiBaseUrl}/api/locations/base`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
   });
 
-  return readResponse<BrazilState[]>(response);
-}
-
-export async function listBrazilCities(
-  apiBaseUrl: string,
-  token: string,
-  state: string
-): Promise<BrazilCity[]> {
-  const response = await fetch(
-    `${apiBaseUrl}/api/locations/cities?state=${encodeURIComponent(state)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  return readResponse<BrazilCity[]>(response);
-}
-
-export async function lookupBrazilPostalCode(
-  apiBaseUrl: string,
-  token: string,
-  postalCode: string
-): Promise<PostalCodeLocation> {
-  const response = await fetch(
-    `${apiBaseUrl}/api/locations/postal-codes/${encodeURIComponent(postalCode)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  return readResponse<PostalCodeLocation>(response);
+  return readResponse<ChurchBaseLocation>(response);
 }

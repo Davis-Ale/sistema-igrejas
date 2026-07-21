@@ -1,3 +1,4 @@
+import type { PrismaClient } from "@prisma/client";
 type IbgeState = {
   id: number;
   sigla: string;
@@ -86,5 +87,50 @@ export async function lookupBrazilPostalCode(postalCode: string) {
     neighborhood: location.bairro ?? "",
     street: location.logradouro ?? "",
     ibgeCode: location.ibge ?? null
+  };
+}
+
+export async function getChurchBaseLocation(
+  prisma: PrismaClient,
+  churchId: string
+) {
+  const church = await prisma.church.findUnique({
+    where: {
+      id: churchId
+    },
+    select: {
+      baseCity: {
+        select: {
+          id: true,
+          stateCode: true,
+          ibgeCode: true,
+          name: true,
+          neighborhoods: {
+            where: {
+              active: true
+            },
+            select: {
+              id: true,
+              name: true
+            },
+            orderBy: {
+              name: "asc"
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!church) {
+    throw new Error("CHURCH_NOT_FOUND");
+  }
+
+  if (!church.baseCity) {
+    throw new Error("BASE_CITY_NOT_CONFIGURED");
+  }
+
+  return {
+    city: church.baseCity
   };
 }
