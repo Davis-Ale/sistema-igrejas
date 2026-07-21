@@ -31,6 +31,9 @@ type Cell = {
   leaderId: string;
   name: string;
   region: string;
+  state: string;
+  city: string;
+  neighborhood: string;
   meetDay: string;
   meetTime: string;
   profile: string;
@@ -85,6 +88,7 @@ export default function CelulasPage() {
   const [regionSearch, setRegionSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [leaderId, setLeaderId] = useState("");
+  const [editingCellId, setEditingCellId] = useState<string | null>(null);
   const [selectedCellId, setSelectedCellId] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [canVolunteer, setCanVolunteer] = useState(false);
@@ -185,7 +189,7 @@ export default function CelulasPage() {
     }
   }
 
-  async function handleCreateCell(event: FormEvent<HTMLFormElement>) {
+  async function handleSaveCell(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const token = getSessionToken();
@@ -195,12 +199,17 @@ export default function CelulasPage() {
       return;
     }
 
+    const isEditing = editingCellId !== null;
+    const endpoint = isEditing
+      ? `${API_BASE_URL}/api/cells/${editingCellId}`
+      : `${API_BASE_URL}/api/cells`;
+
     setError(null);
     setSuccessMessage(null);
     setIsCreating(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/cells`, {
+      const response = await fetch(endpoint, {
         body: JSON.stringify({
           city,
           leaderId,
@@ -215,13 +224,18 @@ export default function CelulasPage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        method: "POST"
+        method: isEditing ? "PUT" : "POST"
       });
 
       if (!response.ok) {
         const data = (await response.json()) as ApiErrorResponse;
 
-        setError(data.message ?? "Não foi possível cadastrar a célula.");
+        setError(
+          data.message ??
+            (isEditing
+              ? "Não foi possível atualizar a célula."
+              : "Não foi possível cadastrar a célula.")
+        );
         return;
       }
 
@@ -229,13 +243,47 @@ export default function CelulasPage() {
       setMeetDay("");
       setMeetTime("");
       setProfile("");
-      setSuccessMessage("Célula cadastrada com sucesso.");
+      setEditingCellId(null);
+      setSuccessMessage(
+        isEditing
+          ? "Célula atualizada com sucesso."
+          : "Célula cadastrada com sucesso."
+      );
       await loadData();
     } catch {
-      setError("Não foi possível cadastrar a célula agora.");
+      setError(
+        isEditing
+          ? "Não foi possível atualizar a célula agora."
+          : "Não foi possível cadastrar a célula agora."
+      );
     } finally {
       setIsCreating(false);
     }
+  }
+
+  function handleEditCell(cell: Cell) {
+    setEditingCellId(cell.id);
+    setNeighborhood(
+      cell.neighborhood || cell.region.split(" - ")[0] || ""
+    );
+    setMeetDay(cell.meetDay);
+    setMeetTime(cell.meetTime);
+    setProfile(cell.profile);
+    setLeaderId(cell.leaderId);
+    setError(null);
+    setSuccessMessage(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleCancelEdit() {
+    setEditingCellId(null);
+    resetLocation();
+    setMeetDay("");
+    setMeetTime("");
+    setProfile("");
+    setLeaderId(members[0]?.id ?? "");
+    setError(null);
+    setSuccessMessage(null);
   }
 
   async function handleAddMember(event: FormEvent<HTMLFormElement>) {
@@ -370,7 +418,7 @@ export default function CelulasPage() {
           </div>
 
           <form
-            onSubmit={handleCreateCell}
+            onSubmit={handleSaveCell}
             style={{
               background: "rgba(15, 23, 42, 0.72)",
               border: "1px solid rgba(148, 163, 184, 0.2)",
@@ -381,7 +429,7 @@ export default function CelulasPage() {
             }}
           >
             <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Cadastrar célula
+              {editingCellId ? "Editar célula" : "Cadastrar célula"}
             </h2>
 
             <div
@@ -455,24 +503,51 @@ export default function CelulasPage() {
               </label>
             </div>
 
-            <button
-              disabled={isCreating || members.length === 0}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isCreating || members.length === 0 ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isCreating || members.length === 0 ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isCreating ? "Cadastrando..." : "Cadastrar célula"}
-            </button>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+              <button
+                disabled={isCreating || members.length === 0}
+                style={{
+                  background: "#2563eb",
+                  border: 0,
+                  borderRadius: "14px",
+                  color: "#ffffff",
+                  cursor: isCreating || members.length === 0 ? "not-allowed" : "pointer",
+                  font: "inherit",
+                  fontWeight: 900,
+                  opacity: isCreating || members.length === 0 ? 0.72 : 1,
+                  padding: "13px 18px"
+                }}
+                type="submit"
+              >
+                {isCreating
+                  ? editingCellId
+                    ? "Salvando..."
+                    : "Cadastrando..."
+                  : editingCellId
+                    ? "Salvar alterações"
+                    : "Cadastrar célula"}
+              </button>
+
+              {editingCellId ? (
+                <button
+                  disabled={isCreating}
+                  onClick={handleCancelEdit}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(148, 163, 184, 0.38)",
+                    borderRadius: "14px",
+                    color: "#cbd5e1",
+                    cursor: isCreating ? "not-allowed" : "pointer",
+                    font: "inherit",
+                    fontWeight: 900,
+                    padding: "13px 18px"
+                  }}
+                  type="button"
+                >
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
           </form>
 
           <form
@@ -663,9 +738,29 @@ export default function CelulasPage() {
                         </p>
                       </div>
 
-                      <span style={{ background: "rgba(37, 99, 235, 0.18)", border: "1px solid rgba(96, 165, 250, 0.22)", borderRadius: "999px", color: "#bfdbfe", fontSize: "12px", fontWeight: 900, padding: "6px 10px", whiteSpace: "nowrap" }}>
-                        {cell.people.length} membro{cell.people.length === 1 ? "" : "s"}
-                      </span>
+                      <div style={{ alignItems: "flex-end", display: "grid", gap: "8px", justifyItems: "end" }}>
+                        <span style={{ background: "rgba(37, 99, 235, 0.18)", border: "1px solid rgba(96, 165, 250, 0.22)", borderRadius: "999px", color: "#bfdbfe", fontSize: "12px", fontWeight: 900, padding: "6px 10px", whiteSpace: "nowrap" }}>
+                          {cell.people.length} membro{cell.people.length === 1 ? "" : "s"}
+                        </span>
+
+                        <button
+                          onClick={() => handleEditCell(cell)}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid rgba(96, 165, 250, 0.32)",
+                            borderRadius: "999px",
+                            color: "#bfdbfe",
+                            cursor: "pointer",
+                            font: "inherit",
+                            fontSize: "12px",
+                            fontWeight: 900,
+                            padding: "6px 10px"
+                          }}
+                          type="button"
+                        >
+                          Editar
+                        </button>
+                      </div>
                     </div>
 
                     {cell.people.length > 0 ? (

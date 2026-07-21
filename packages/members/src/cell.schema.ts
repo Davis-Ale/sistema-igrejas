@@ -13,7 +13,7 @@ const optionalTextSchema = z.preprocess(
   z.string().optional()
 );
 
-export const createCellSchema = z
+const cellDataSchema = z
   .object({
     campusId: optionalTextSchema,
     leaderId: z.string().trim().min(1, "Líder é obrigatório."),
@@ -41,6 +41,9 @@ export const createCellSchema = z
     }
   });
 
+export const createCellSchema = cellDataSchema;
+export const updateCellSchema = cellDataSchema;
+
 export const addPersonToCellSchema = z.object({
   personId: z.string().trim().min(1, "Pessoa é obrigatória."),
   groupId: z.string().trim().min(1, "Célula é obrigatória."),
@@ -54,5 +57,8 @@ export const removePersonFromCellSchema = z.object({
 });
 
 export type CreateCellInput = z.infer<typeof createCellSchema>;
+export type UpdateCellInput = z.infer<typeof updateCellSchema>;
 export type AddPersonToCellInput = z.infer<typeof addPersonToCellSchema>;
-export type RemovePersonFromCellInput = z.infer<typeof removePersonFromCellSchema>;
+export type RemovePersonFromCellInput = z.infer<
+  typeof removePersonFromCellSchema
+>;

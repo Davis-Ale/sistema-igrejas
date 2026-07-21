@@ -1,13 +1,26 @@
 import type {} from "@sistema-igrejas/auth";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest
+} from "fastify";
 import {
   addPersonToCellSchema,
   createCellSchema,
-  removePersonFromCellSchema
+  removePersonFromCellSchema,
+  updateCellSchema
 } from "./cell.schema.js";
-import { createCell, getCellById, listCells } from "./cell.service.js";
-import { addPersonToCell, removePersonFromCell } from "./membership.service.js";
+import {
+  createCell,
+  getCellById,
+  listCells,
+  updateCell
+} from "./cell.service.js";
+import {
+  addPersonToCell,
+  removePersonFromCell
+} from "./membership.service.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -25,7 +38,10 @@ function getUserId(request: FastifyRequest): string {
   return request.user.userId;
 }
 
-async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+async function sendRouteError(
+  error: unknown,
+  reply: FastifyReply
+): Promise<void> {
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -34,7 +50,10 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
-  if (error.message === "CHURCH_CONTEXT_REQUIRED" || error.message === "USER_CONTEXT_REQUIRED") {
+  if (
+    error.message === "CHURCH_CONTEXT_REQUIRED" ||
+    error.message === "USER_CONTEXT_REQUIRED"
+  ) {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
       message: "Contexto de autenticação obrigatório."
@@ -87,6 +106,7 @@ export async function registerCellRoutes(
   app.get("/cells", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
+
       return await listCells(prisma, churchId);
     } catch (error) {
       request.log.error({ err: error }, "Erro ao listar células");
@@ -101,6 +121,24 @@ export async function registerCellRoutes(
       const cell = await createCell(prisma, churchId, input);
 
       await reply.code(201).send(cell);
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.put("/cells/:cellId", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = request.params as { cellId: string };
+      const input = updateCellSchema.parse(request.body);
+      const cell = await updateCell(
+        prisma,
+        churchId,
+        params.cellId,
+        input
+      );
+
+      await reply.code(200).send(cell);
     } catch (error) {
       await sendRouteError(error, reply);
     }
@@ -122,7 +160,12 @@ export async function registerCellRoutes(
       const churchId = getChurchId(request);
       const approvedBy = getUserId(request);
       const input = addPersonToCellSchema.parse(request.body);
-      const membership = await addPersonToCell(prisma, churchId, approvedBy, input);
+      const membership = await addPersonToCell(
+        prisma,
+        churchId,
+        approvedBy,
+        input
+      );
 
       await reply.code(201).send(membership);
     } catch (error) {
@@ -134,7 +177,11 @@ export async function registerCellRoutes(
     try {
       const churchId = getChurchId(request);
       const input = removePersonFromCellSchema.parse(request.body);
-      const membership = await removePersonFromCell(prisma, churchId, input);
+      const membership = await removePersonFromCell(
+        prisma,
+        churchId,
+        input
+      );
 
       await reply.code(200).send(membership);
     } catch (error) {

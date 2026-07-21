@@ -1,14 +1,35 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CreateCellInput } from "./cell.schema.js";
+import type {
+  CreateCellInput,
+  UpdateCellInput
+} from "./cell.schema.js";
 
-export async function createCell(
+function buildCellLocation(input: CreateCellInput | UpdateCellInput) {
+  const state = input.state ?? "";
+  const city = input.city ?? "";
+  const neighborhood = input.neighborhood ?? "";
+  const region =
+    input.region ??
+    [neighborhood, city && state ? city + "/" + state : city || state]
+      .filter(Boolean)
+      .join(" - ");
+
+  return {
+    city,
+    neighborhood,
+    region,
+    state
+  };
+}
+
+async function ensureLeaderBelongsToChurch(
   prisma: PrismaClient,
   churchId: string,
-  input: CreateCellInput
-) {
+  leaderId: string
+): Promise<void> {
   const leader = await prisma.person.findFirst({
     where: {
-      id: input.leaderId,
+      id: leaderId,
       churchId
     },
     select: {
@@ -19,15 +40,16 @@ export async function createCell(
   if (!leader) {
     throw new Error("LEADER_NOT_FOUND");
   }
+}
 
-  const state = input.state ?? "";
-  const city = input.city ?? "";
-  const neighborhood = input.neighborhood ?? "";
-  const region =
-    input.region ??
-    [neighborhood, city && state ? city + "/" + state : city || state]
-      .filter(Boolean)
-      .join(" - ");
+export async function createCell(
+  prisma: PrismaClient,
+  churchId: string,
+  input: CreateCellInput
+) {
+  await ensureLeaderBelongsToChurch(prisma, churchId, input.leaderId);
+
+  const location = buildCellLocation(input);
 
   return prisma.celula.create({
     data: {
@@ -35,10 +57,47 @@ export async function createCell(
       campusId: input.campusId ?? null,
       leaderId: input.leaderId,
       name: input.name ?? input.profile,
-      region,
-      state,
-      city,
-      neighborhood,
+      ...location,
+      meetDay: input.meetDay,
+      meetTime: input.meetTime,
+      profile: input.profile
+    }
+  });
+}
+
+export async function updateCell(
+  prisma: PrismaClient,
+  churchId: string,
+  cellId: string,
+  input: UpdateCellInput
+) {
+  const cell = await prisma.celula.findFirst({
+    where: {
+      id: cellId,
+      churchId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!cell) {
+    throw new Error("CELL_NOT_FOUND");
+  }
+
+  await ensureLeaderBelongsToChurch(prisma, churchId, input.leaderId);
+
+  const location = buildCellLocation(input);
+
+  return prisma.celula.update({
+    where: {
+      id: cell.id
+    },
+    data: {
+      campusId: input.campusId ?? null,
+      leaderId: input.leaderId,
+      name: input.name ?? input.profile,
+      ...location,
       meetDay: input.meetDay,
       meetTime: input.meetTime,
       profile: input.profile
