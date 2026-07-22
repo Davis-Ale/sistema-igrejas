@@ -565,197 +565,66 @@ export default function CelulasPage() {
             </h2>
 
             <div style={{ display: "grid", gap: "16px" }}>
-              <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                Selecionar célula
-                <select
-                  onChange={(event) => {
-                    const cellId = event.target.value;
-                    const cell = cells.find(
-                      (item) => item.id === cellId
-                    );
-
-                    setSelectedCellId(cellId);
-                    setSelectedLeaderId(cell?.leaderId ?? "");
-                  }}
-                  required
+              <div
+                style={{
+                  alignItems: "start",
+                  display: "grid",
+                  gap: "14px",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(240px, 1fr))"
+                }}
+              >
+                <label
                   style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                  value={selectedCellId}
+                    color: "#cbd5e1",
+                    display: "grid",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    gap: "8px"
+                  }}
                 >
-                  <option value="">Selecione pelo bairro e horário</option>
-                  {cells.map((cell) => (
-                    <option key={cell.id} value={cell.id}>
-                      {cell.neighborhood || cell.region} — {cell.meetDay} às{" "}
-                      {cell.meetTime}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  Célula
+                  <select
+                    onChange={(event) => {
+                      const cellId = event.target.value;
+                      const cell = cells.find(
+                        (item) => item.id === cellId
+                      );
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: "14px",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(220px, 1fr))"
-                }}
-              >
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                  Bairro
-                  <input
-                    readOnly
+                      setSelectedCellId(cellId);
+                      setSelectedLeaderId(cell?.leaderId ?? "");
+                    }}
+                    required
                     style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                    type="text"
-                    value={
-                      selectedCellForLeaderChange?.neighborhood ||
-                      selectedCellForLeaderChange?.region ||
-                      ""
-                    }
-                  />
+                      border: "1px solid rgba(148, 163, 184, 0.38)",
+                      borderRadius: "14px",
+                      boxSizing: "border-box",
+                      font: "inherit",
+                      height: "48px",
+                      padding: "0 14px",
+                      width: "100%"
+                    }}
+                    value={selectedCellId}
+                  >
+                    <option value="">Selecione uma célula</option>
+                    {cells.map((cell) => (
+                      <option key={cell.id} value={cell.id}>
+                        {cell.neighborhood || cell.region} | {cell.meetDay} às{" "}
+                        {cell.meetTime}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                  Perfil
-                  <input
-                    readOnly
-                    style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                    type="text"
-                    value={selectedCellForLeaderChange?.profile ?? ""}
-                  />
-                </label>
-
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                  Dia e horário
-                  <input
-                    readOnly
-                    style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                    type="text"
-                    value={
-                      selectedCellForLeaderChange
-                        ? `${selectedCellForLeaderChange.meetDay} às ${selectedCellForLeaderChange.meetTime}`
-                        : ""
-                    }
-                  />
-                </label>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: "14px",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(260px, 1fr))"
-                }}
-              >
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                  Líder atual
-                  <input
-                    readOnly
-                    style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                    type="text"
-                    value={
-                      selectedCellForLeaderChange?.leader.name ?? ""
-                    }
-                  />
-                </label>
-
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
-                  Telefone atual
-                  <input
-                    readOnly
-                    style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
-                    type="text"
-                    value={
-                      selectedCellForLeaderChange
-                        ? formatBrazilPhone(
-                            selectedCellForLeaderChange.leader.phone
-                          )
-                        : ""
-                    }
-                  />
-                </label>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: "14px",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(260px, 1fr))"
-                }}
-              >
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
+                <label
+                  style={{
+                    color: "#cbd5e1",
+                    display: "grid",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    gap: "8px"
+                  }}
+                >
                   Novo líder
                   <select
                     onChange={(event) =>
@@ -763,38 +632,46 @@ export default function CelulasPage() {
                     }
                     required
                     style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
+                      border: "1px solid rgba(148, 163, 184, 0.38)",
+                      borderRadius: "14px",
+                      boxSizing: "border-box",
+                      font: "inherit",
+                      height: "48px",
+                      padding: "0 14px",
+                      width: "100%"
+                    }}
                     value={selectedLeaderId}
                   >
                     <option value="">Selecione um novo líder</option>
                     {members.map((member) => (
                       <option key={member.id} value={member.id}>
-                        {member.name}
+                        {member.name} • {formatBrazilPhone(member.phone)}
                       </option>
                     ))}
                   </select>
                 </label>
 
-                <label style={{
-  color: "#cbd5e1",
-  display: "grid",
-  fontSize: "14px",
-  fontWeight: 800,
-  gap: "8px"
-}}>
+                <label
+                  style={{
+                    color: "#cbd5e1",
+                    display: "grid",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    gap: "8px"
+                  }}
+                >
                   Telefone do novo líder
                   <input
                     readOnly
                     style={{
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "13px 14px"
-}}
+                      border: "1px solid rgba(148, 163, 184, 0.38)",
+                      borderRadius: "14px",
+                      boxSizing: "border-box",
+                      font: "inherit",
+                      height: "48px",
+                      padding: "0 14px",
+                      width: "100%"
+                    }}
                     type="text"
                     value={
                       selectedLeaderId
@@ -809,6 +686,8 @@ export default function CelulasPage() {
                   />
                 </label>
               </div>
+
+
             </div>
 
             <button
