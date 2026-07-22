@@ -64,6 +64,30 @@ type ApiErrorResponse = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
+function formatBrazilPhone(phone?: string | null): string {
+  const digits = phone?.replace(/\D/g, "") ?? "";
+  const nationalDigits =
+    digits.length === 13 && digits.startsWith("55")
+      ? digits.slice(2)
+      : digits;
+
+  if (nationalDigits.length === 11) {
+    return `(${nationalDigits.slice(0, 2)}) ${nationalDigits.slice(
+      2,
+      7
+    )}-${nationalDigits.slice(7)}`;
+  }
+
+  if (nationalDigits.length === 10) {
+    return `(${nationalDigits.slice(0, 2)}) ${nationalDigits.slice(
+      2,
+      6
+    )}-${nationalDigits.slice(6)}`;
+  }
+
+  return phone?.trim() || "Não informado";
+}
+
 function getSessionToken() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
 
@@ -107,6 +131,10 @@ export default function CelulasPage() {
     setNeighborhood,
     stateCode
   } = useCellLocation(API_BASE_URL, getSessionToken, setError);
+
+  const selectedCellForLeaderChange = cells.find(
+    (cell) => cell.id === selectedCellId
+  );
 
   async function loadData() {
     const token = getSessionToken();
@@ -457,7 +485,7 @@ export default function CelulasPage() {
                   <option value="">Selecione um líder</option>
                   {members.map((member) => (
                     <option key={member.id} value={member.id}>
-                      {member.name}
+                      {member.name} • {formatBrazilPhone(member.phone)}
                     </option>
                   ))}
                 </select>
@@ -563,14 +591,40 @@ export default function CelulasPage() {
                   <option value="">Selecione uma célula</option>
                   {cells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
-                      {cell.profile} • {cell.neighborhood || cell.region}
+                      {cell.neighborhood || cell.region} | {cell.meetDay} às {cell.meetTime}
                     </option>
                   ))}
                 </select>
-              </label>
+
+
+                {selectedCellForLeaderChange ? (
+                  <div
+                    style={{
+                      color: "#94a3b8",
+                      display: "grid",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      gap: "4px"
+                    }}
+                  >
+                    <span>
+                      Perfil: {selectedCellForLeaderChange.profile}
+                    </span>
+                    <span>
+                      Líder atual:{" "}
+                      {selectedCellForLeaderChange.leader.name}
+                    </span>
+                    <span>
+                      Telefone atual:{" "}
+                      {formatBrazilPhone(
+                        selectedCellForLeaderChange.leader.phone
+                      )}
+                    </span>
+                  </div>
+                ) : null}              </label>
 
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Líder
+                Novo líder
                 <select
                   onChange={(event) =>
                     setSelectedLeaderId(event.target.value)
@@ -586,6 +640,24 @@ export default function CelulasPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+                Telefone do novo líder
+                <input
+                  readOnly
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  type="text"
+                  value={
+                    selectedLeaderId
+                      ? formatBrazilPhone(
+                          members.find(
+                            (member) => member.id === selectedLeaderId
+                          )?.phone
+                        )
+                      : ""
+                  }
+                />
               </label>
             </div>
 

@@ -22,6 +22,30 @@ type StoredSession = {
   jwt?: string;
 };
 
+function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(
+      2,
+      6
+    )}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(
+    2,
+    7
+  )}-${digits.slice(7)}`;
+}
+
 function getApiUrl() {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3333/api";
 }
@@ -115,7 +139,7 @@ export default function MembrosPage() {
         },
         body: JSON.stringify({
           name,
-          phone,
+          phone: phone.replace(/\D/g, ""),
           email
         })
       });
@@ -238,9 +262,14 @@ export default function MembrosPage() {
             <label style={{ display: "grid", gap: "8px" }}>
               <span style={{ color: "#cbd5e1", fontSize: "13px", fontWeight: 800 }}>Telefone</span>
               <input
+                inputMode="tel"
+                maxLength={15}
+                placeholder="(41) 99104-8498"
                 required
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) =>
+                  setPhone(formatPhoneInput(event.target.value))
+                }
                 style={{
                   background: "rgba(15, 23, 42, 0.9)",
                   border: "1px solid rgba(148, 163, 184, 0.28)",
