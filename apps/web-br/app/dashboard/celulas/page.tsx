@@ -636,7 +636,7 @@ export default function CelulasPage() {
                   <option value="">Selecione um líder</option>
                   {members.map((member) => (
                     <option key={member.id} value={member.id}>
-                      {member.name} • {member.phone}
+                      {member.name} • {formatBrazilPhone(member.phone)}
                     </option>
                   ))}
                 </select>
