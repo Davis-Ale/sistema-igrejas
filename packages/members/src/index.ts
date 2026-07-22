@@ -11,3 +11,5 @@ export * from "./member.service.js";
 export * from "./visitor.routes.js";
 export * from "./visitor.schema.js";
 export * from "./visitor.service.js";
+export * from "./cell-list.routes.js";
+export * from "./cell-list.service.js";

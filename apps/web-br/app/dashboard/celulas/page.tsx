@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
+import { CellEditList } from "./cell-edit-list";
+import type { CellListItem } from "./cell-list-api";
 import { CellLocationFields } from "./cell-location-fields";
 import { useCellLocation } from "./use-cell-location";
 
@@ -85,18 +87,16 @@ export default function CelulasPage() {
   const [meetDay, setMeetDay] = useState("");
   const [meetTime, setMeetTime] = useState("");
   const [profile, setProfile] = useState("");
-  const [regionSearch, setRegionSearch] = useState("");
-  const [profileSearch, setProfileSearch] = useState("");
   const [leaderId, setLeaderId] = useState("");
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
+  const [showCellList, setShowCellList] = useState(false);
   const [selectedCellId, setSelectedCellId] = useState("");
-  const [selectedPersonId, setSelectedPersonId] = useState("");
-  const [canVolunteer, setCanVolunteer] = useState(false);
+  const [selectedLeaderId, setSelectedLeaderId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
-  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [isUpdatingLeader, setIsUpdatingLeader] = useState(false);
 
   const {
     city,
@@ -107,29 +107,6 @@ export default function CelulasPage() {
     setNeighborhood,
     stateCode
   } = useCellLocation(API_BASE_URL, getSessionToken, setError);
-
-  const filteredCells = useMemo(() => {
-    const region = regionSearch.trim().toLowerCase();
-    const selectedProfile = profileSearch.trim().toLowerCase();
-
-    return cells.filter((cell) => {
-      const matchesRegion = !region || cell.region.toLowerCase().includes(region);
-      const matchesProfile = !selectedProfile || cell.profile.toLowerCase() === selectedProfile;
-
-      return matchesRegion && matchesProfile;
-    });
-  }, [cells, profileSearch, regionSearch]);
-
-  const availableMembers = useMemo(() => {
-    if (!selectedCellId) {
-      return members;
-    }
-
-    const selectedCell = cells.find((cell) => cell.id === selectedCellId);
-    const memberIdsInCell = new Set(selectedCell?.people.map((person) => person.id) ?? []);
-
-    return members.filter((member) => !memberIdsInCell.has(member.id));
-  }, [cells, members, selectedCellId]);
 
   async function loadData() {
     const token = getSessionToken();
@@ -261,8 +238,9 @@ export default function CelulasPage() {
     }
   }
 
-  function handleEditCell(cell: Cell) {
+  function handleEditCell(cell: CellListItem) {
     setEditingCellId(cell.id);
+    setShowCellList(false);
     setNeighborhood(
       cell.neighborhood || cell.region.split(" - ")[0] || ""
     );
@@ -286,87 +264,70 @@ export default function CelulasPage() {
     setSuccessMessage(null);
   }
 
-  async function handleAddMember(event: FormEvent<HTMLFormElement>) {
+  async function handleChangeLeader(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     const token = getSessionToken();
+    const selectedCell = cells.find(
+      (cell) => cell.id === selectedCellId
+    );
 
     if (!token) {
       setError("Sessão inválida. Entre novamente no sistema.");
       return;
     }
 
+    if (!selectedCell || !selectedLeaderId) {
+      setError("Selecione a célula e o novo líder.");
+      return;
+    }
+
     setError(null);
     setSuccessMessage(null);
-    setIsAddingMember(true);
+    setIsUpdatingLeader(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/cells/members`, {
-        body: JSON.stringify({
-          canVolunteer,
-          groupId: selectedCellId,
-          personId: selectedPersonId
-        }),
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/cells/${selectedCell.id}`,
+        {
+          body: JSON.stringify({
+            city: selectedCell.city,
+            leaderId: selectedLeaderId,
+            meetDay: selectedCell.meetDay,
+            meetTime: selectedCell.meetTime,
+            name: selectedCell.name,
+            neighborhood: selectedCell.neighborhood,
+            profile: selectedCell.profile,
+            region: selectedCell.region,
+            state: selectedCell.state
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PUT"
+        }
+      );
 
       if (!response.ok) {
         const data = (await response.json()) as ApiErrorResponse;
 
-        setError(data.message ?? "Não foi possível vincular o membro à célula.");
+        setError(
+          data.message ?? "Não foi possível alterar o líder da célula."
+        );
         return;
       }
 
-      setSelectedPersonId("");
-      setCanVolunteer(false);
-      setSuccessMessage("Membro vinculado à célula com sucesso.");
+      setSelectedCellId("");
+      setSelectedLeaderId("");
+      setSuccessMessage("Líder da célula alterado com sucesso.");
       await loadData();
     } catch {
-      setError("Não foi possível vincular o membro à célula agora.");
+      setError("Não foi possível alterar o líder da célula agora.");
     } finally {
-      setIsAddingMember(false);
-    }
-  }
-
-  async function handleRemoveMember(cellId: string, personId: string) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/cells/members/remove`, {
-        body: JSON.stringify({
-          groupId: cellId,
-          personId
-        }),
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível remover o membro da célula.");
-        return;
-      }
-
-      setSuccessMessage("Membro removido da célula com sucesso.");
-      await loadData();
-    } catch {
-      setError("Não foi possível remover o membro da célula agora.");
+      setIsUpdatingLeader(false);
     }
   }
 
@@ -528,6 +489,16 @@ export default function CelulasPage() {
                     : "Cadastrar célula"}
               </button>
 
+              {!editingCellId ? (
+                <button
+                  onClick={() => setShowCellList((current) => !current)}
+                  style={{ background: "transparent", border: "1px solid rgba(96, 165, 250, 0.38)", borderRadius: "14px", color: "#bfdbfe", cursor: "pointer", font: "inherit", fontWeight: 900, padding: "13px 18px" }}
+                  type="button"
+                >
+                  {showCellList ? "Fechar lista" : "Editar célula"}
+                </button>
+              ) : null}
+
               {editingCellId ? (
                 <button
                   disabled={isCreating}
@@ -551,7 +522,7 @@ export default function CelulasPage() {
           </form>
 
           <form
-            onSubmit={handleAddMember}
+            onSubmit={handleChangeLeader}
             style={{
               background: "rgba(15, 23, 42, 0.72)",
               border: "1px solid rgba(148, 163, 184, 0.2)",
@@ -562,22 +533,28 @@ export default function CelulasPage() {
             }}
           >
             <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Vincular membro à célula
+              Alterar líder da célula
             </h2>
 
             <div
               style={{
                 display: "grid",
                 gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(220px, 1fr))"
               }}
             >
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
                 Célula
                 <select
                   onChange={(event) => {
-                    setSelectedCellId(event.target.value);
-                    setSelectedPersonId("");
+                    const cellId = event.target.value;
+                    const cell = cells.find(
+                      (item) => item.id === cellId
+                    );
+
+                    setSelectedCellId(cellId);
+                    setSelectedLeaderId(cell?.leaderId ?? "");
                   }}
                   required
                   style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
@@ -586,56 +563,63 @@ export default function CelulasPage() {
                   <option value="">Selecione uma célula</option>
                   {cells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
-                      {cell.name}
+                      {cell.profile} • {cell.neighborhood || cell.region}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Membro
+                Líder
                 <select
-                  onChange={(event) => setSelectedPersonId(event.target.value)}
+                  onChange={(event) =>
+                    setSelectedLeaderId(event.target.value)
+                  }
                   required
                   style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={selectedPersonId}
+                  value={selectedLeaderId}
                 >
-                  <option value="">Selecione um membro</option>
-                  {availableMembers.map((member) => (
+                  <option value="">Selecione um líder</option>
+                  {members.map((member) => (
                     <option key={member.id} value={member.id}>
-                      {member.name}
+                      {member.name} • {member.phone}
                     </option>
                   ))}
                 </select>
               </label>
-
-              <label style={{ alignItems: "center", color: "#cbd5e1", display: "flex", fontSize: "14px", fontWeight: 800, gap: "10px", paddingTop: "28px" }}>
-                <input
-                  checked={canVolunteer}
-                  onChange={(event) => setCanVolunteer(event.target.checked)}
-                  type="checkbox"
-                />
-                Pode servir como voluntário
-              </label>
             </div>
 
             <button
-              disabled={isAddingMember || cells.length === 0 || members.length === 0}
+              disabled={
+                isUpdatingLeader ||
+                cells.length === 0 ||
+                members.length === 0
+              }
               style={{
                 background: "#2563eb",
                 border: 0,
                 borderRadius: "14px",
                 color: "#ffffff",
-                cursor: isAddingMember || cells.length === 0 || members.length === 0 ? "not-allowed" : "pointer",
+                cursor:
+                  isUpdatingLeader ||
+                  cells.length === 0 ||
+                  members.length === 0
+                    ? "not-allowed"
+                    : "pointer",
                 font: "inherit",
                 fontWeight: 900,
                 justifySelf: "start",
-                opacity: isAddingMember || cells.length === 0 || members.length === 0 ? 0.72 : 1,
+                opacity:
+                  isUpdatingLeader ||
+                  cells.length === 0 ||
+                  members.length === 0
+                    ? 0.72
+                    : 1,
                 padding: "13px 18px"
               }}
               type="submit"
             >
-              {isAddingMember ? "Vinculando..." : "Vincular membro"}
+              {isUpdatingLeader ? "Alterando..." : "Alterar líder"}
             </button>
           </form>
 
@@ -651,146 +635,12 @@ export default function CelulasPage() {
             </p>
           ) : null}
 
-          <section
-            style={{
-              background: "rgba(15, 23, 42, 0.58)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "14px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Células cadastradas
-            </h2>
-
-            <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-              Buscar por bairro/região
-              <input
-                onChange={(event) => setRegionSearch(event.target.value)}
-                placeholder="Ex.: Água Verde, Boqueirão, Pinheirinho, Centro"
-                style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                type="search"
-                value={regionSearch}
-              />
-            </label>
-
-            <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-              Filtrar por tipo/perfil
-              <select
-                onChange={(event) => setProfileSearch(event.target.value)}
-                style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                value={profileSearch}
-              >
-                <option value="">Todos os perfis</option>
-                <option value="Famílias">Famílias</option>
-                <option value="Jovens">Jovens</option>
-                <option value="Mulheres">Mulheres</option>
-                <option value="Homens">Homens</option>
-                <option value="Adolescentes">Adolescentes</option>
-                <option value="Sêniores / melhor idade">Sêniores / melhor idade</option>
-              </select>
-            </label>
-
-            {isLoading ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando células...</p>
-            ) : null}
-
-            {!isLoading && cells.length === 0 ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhuma célula cadastrada ainda.
-              </p>
-            ) : null}
-
-            {!isLoading && cells.length > 0 && filteredCells.length === 0 ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhuma célula encontrada para os filtros selecionados.
-              </p>
-            ) : null}
-
-            {!isLoading && filteredCells.length > 0 ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                {filteredCells.map((cell) => (
-                  <article
-                    key={cell.id}
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border: "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "18px",
-                      display: "grid",
-                      gap: "10px",
-                      padding: "16px"
-                    }}
-                  >
-                    <div style={{ alignItems: "start", display: "flex", gap: "12px", justifyContent: "space-between" }}>
-                      <div>
-                        <h3 style={{ color: "#ffffff", fontSize: "17px", margin: "0 0 6px" }}>
-                          {cell.name}
-                        </h3>
-
-                        <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
-                          Bairro/região: {cell.region} • Perfil: {cell.profile} • Dia: {cell.meetDay} • Horário: {cell.meetTime}
-                        </p>
-
-                        <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
-                          Líder: {cell.leader.name}
-                        </p>
-                      </div>
-
-                      <div style={{ alignItems: "flex-end", display: "grid", gap: "8px", justifyItems: "end" }}>
-                        <span style={{ background: "rgba(37, 99, 235, 0.18)", border: "1px solid rgba(96, 165, 250, 0.22)", borderRadius: "999px", color: "#bfdbfe", fontSize: "12px", fontWeight: 900, padding: "6px 10px", whiteSpace: "nowrap" }}>
-                          {cell.people.length} membro{cell.people.length === 1 ? "" : "s"}
-                        </span>
-
-                        <button
-                          onClick={() => handleEditCell(cell)}
-                          style={{
-                            background: "transparent",
-                            border: "1px solid rgba(96, 165, 250, 0.32)",
-                            borderRadius: "999px",
-                            color: "#bfdbfe",
-                            cursor: "pointer",
-                            font: "inherit",
-                            fontSize: "12px",
-                            fontWeight: 900,
-                            padding: "6px 10px"
-                          }}
-                          type="button"
-                        >
-                          Editar
-                        </button>
-                      </div>
-                    </div>
-
-                    {cell.people.length > 0 ? (
-                      <div style={{ display: "grid", gap: "6px" }}>
-                        {cell.people.map((person) => (
-                          <div key={person.id} style={{ alignItems: "center", display: "flex", gap: "10px", justifyContent: "space-between" }}>
-                            <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                              {person.name} • {person.phone}
-                            </p>
-
-                            <button
-                              onClick={() => void handleRemoveMember(cell.id, person.id)}
-                              style={{ background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(248, 113, 113, 0.24)", borderRadius: "999px", color: "#fecaca", cursor: "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, padding: "6px 10px" }}
-                              type="button"
-                            >
-                              Remover
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p style={{ color: "#94a3b8", fontSize: "14px", margin: 0 }}>
-                        Nenhum membro vinculado ainda.
-                      </p>
-                    )}
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
+          <CellEditList
+            apiBaseUrl={API_BASE_URL}
+            getToken={getSessionToken}
+            isOpen={showCellList}
+            onSelectCell={handleEditCell}
+          />
         </section>
       </main>
     </DashboardAuthGuard>

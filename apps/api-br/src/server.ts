@@ -7,7 +7,7 @@ import { registerAssistantRoutes } from "./assistant/assistant.routes.js";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
-import { registerCellLocationRoutes, registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
+import { registerCellListRoutes, registerCellLocationRoutes, registerCellRoutes, registerMemberRoutes, registerVisitorRoutes } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
 import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
 import Fastify from "fastify";
@@ -63,6 +63,7 @@ await app.register(
 
     await registerEventRoutes(protectedRoutes, prisma);
     await registerFinancialRoutes(protectedRoutes, prisma);
+    await registerCellListRoutes(protectedRoutes, prisma);
     await registerCellRoutes(protectedRoutes, prisma);
     await registerCellLocationRoutes(protectedRoutes, prisma);
     await registerMemberRoutes(protectedRoutes, prisma);
