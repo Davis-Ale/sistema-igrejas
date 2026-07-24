@@ -15,3 +15,5 @@ export * from "./cell-list.routes.js";
 export * from "./cell-list.service.js";
 export * from "./cell-status.routes.js";
 export * from "./cell-status.service.js";
+export * from "./cell-delete.routes.js";
+export * from "./cell-delete.service.js";

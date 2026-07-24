@@ -55,6 +55,11 @@ export type CellStatusResponse = {
   updatedAt: string;
 };
 
+export type CellDeleteResponse = {
+  id: string;
+  deleted: true;
+};
+
 type ApiErrorResponse = {
   message?: string;
 };
@@ -152,4 +157,29 @@ export async function reactivateCell(
   cellId: string
 ): Promise<CellStatusResponse> {
   return updateCellStatus(apiBaseUrl, token, cellId, "reactivate");
+}
+
+export async function deleteCell(
+  apiBaseUrl: string,
+  token: string,
+  cellId: string
+): Promise<CellDeleteResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/cells/${encodeURIComponent(cellId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      method: "DELETE"
+    }
+  );
+
+  if (!response.ok) {
+    throw await readApiError(
+      response,
+      "Não foi possível excluir a célula."
+    );
+  }
+
+  return (await response.json()) as CellDeleteResponse;
 }

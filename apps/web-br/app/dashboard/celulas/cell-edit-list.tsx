@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   archiveCell,
+  deleteCell,
   reactivateCell,
   searchCells,
   type CellListItem,
@@ -33,6 +34,28 @@ function formatArchivedAt(archivedAt: string | null): string {
   return new Date(archivedAt).toLocaleString("pt-BR");
 }
 
+function getSessionRole(): string | null {
+  const storedSession = localStorage.getItem(
+    "sistema-igrejas.session"
+  );
+
+  if (!storedSession) {
+    return null;
+  }
+
+  try {
+    const session = JSON.parse(storedSession) as {
+      user?: {
+        role?: string;
+      };
+    };
+
+    return session.user?.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function CellEditList({
   apiBaseUrl,
   getToken,
@@ -55,11 +78,23 @@ export function CellEditList({
   const [changingStatusCellId, setChangingStatusCellId] = useState<
     string | null
   >(null);
+  const [deletingCellId, setDeletingCellId] = useState<
+    string | null
+  >(null);
+  const [canDelete, setCanDelete] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(
     null
   );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setCanDelete(getSessionRole() === "SUPER_ADMIN");
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -165,6 +200,50 @@ export function CellEditList({
       );
     } finally {
       setChangingStatusCellId(null);
+    }
+  }
+
+  async function handleDeleteCell(cell: CellListItem) {
+    const confirmed = window.confirm(
+      "Excluir esta célula definitivamente? Depois será necessário cadastrá-la novamente."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    setDeletingCellId(cell.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      await deleteCell(apiBaseUrl, token, cell.id);
+
+      setSuccessMessage("Célula excluída com sucesso.");
+      setPagination((current) => ({
+        ...current,
+        page:
+          items.length === 1 && current.page > 1
+            ? current.page - 1
+            : current.page
+      }));
+      await onStatusChange();
+      setRefreshVersion((current) => current + 1);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Não foi possível excluir a célula."
+      );
+    } finally {
+      setDeletingCellId(null);
     }
   }
 
@@ -275,8 +354,10 @@ export function CellEditList({
           {items.map((cell) => {
             const isChangingStatus =
               changingStatusCellId === cell.id;
-            const isAnyStatusChanging =
-              changingStatusCellId !== null;
+            const isDeleting = deletingCellId === cell.id;
+            const isAnyActionRunning =
+              changingStatusCellId !== null ||
+              deletingCellId !== null;
 
             return (
               <div
@@ -342,7 +423,7 @@ export function CellEditList({
                   }}
                 >
                   <button
-                    disabled={isAnyStatusChanging}
+                    disabled={isAnyActionRunning}
                     onClick={() => onSelectCell(cell)}
                     style={{
                       background: "transparent",
@@ -350,7 +431,7 @@ export function CellEditList({
                         "1px solid rgba(96, 165, 250, 0.38)",
                       borderRadius: "999px",
                       color: "#bfdbfe",
-                      cursor: isAnyStatusChanging
+                      cursor: isAnyActionRunning
                         ? "not-allowed"
                         : "pointer",
                       font: "inherit",
@@ -364,7 +445,7 @@ export function CellEditList({
                   </button>
 
                   <button
-                    disabled={isAnyStatusChanging}
+                    disabled={isAnyActionRunning}
                     onClick={() => void handleStatusChange(cell)}
                     style={{
                       background: "transparent",
@@ -377,7 +458,7 @@ export function CellEditList({
                         cell.status === "ACTIVE"
                           ? "#fde68a"
                           : "#bbf7d0",
-                      cursor: isAnyStatusChanging
+                      cursor: isAnyActionRunning
                         ? "not-allowed"
                         : "pointer",
                       font: "inherit",
@@ -393,6 +474,30 @@ export function CellEditList({
                         ? "Arquivar"
                         : "Reativar"}
                   </button>
+
+                  {canDelete ? (
+                    <button
+                      disabled={isAnyActionRunning}
+                      onClick={() => void handleDeleteCell(cell)}
+                      style={{
+                        background: "transparent",
+                        border:
+                          "1px solid rgba(248, 113, 113, 0.48)",
+                        borderRadius: "999px",
+                        color: "#fecaca",
+                        cursor: isAnyActionRunning
+                          ? "not-allowed"
+                          : "pointer",
+                        font: "inherit",
+                        fontSize: "12px",
+                        fontWeight: 900,
+                        padding: "7px 11px"
+                      }}
+                      type="button"
+                    >
+                      {isDeleting ? "Excluindo..." : "Excluir"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );

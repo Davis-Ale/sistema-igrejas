@@ -4,12 +4,14 @@ import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   createAuthPreHandler,
-  registerAuthRoutes
+  registerAuthRoutes,
+  requireRole
 } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import { registerEventRoutes } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
 import {
+  registerCellDeleteRoutes,
   registerCellListRoutes,
   registerCellLocationRoutes,
   registerCellRoutes,
@@ -94,6 +96,11 @@ export async function buildApp(): Promise<FastifyInstance> {
       await registerCellListRoutes(protectedRoutes, prisma);
       await registerCellRoutes(protectedRoutes, prisma);
       await registerCellStatusRoutes(protectedRoutes, prisma);
+      await registerCellDeleteRoutes(
+        protectedRoutes,
+        prisma,
+        requireRole(["SUPER_ADMIN"])
+      );
       await registerCellLocationRoutes(protectedRoutes, prisma);
       await registerMemberRoutes(protectedRoutes, prisma);
       await registerVisitorRoutes(protectedRoutes, prisma);
