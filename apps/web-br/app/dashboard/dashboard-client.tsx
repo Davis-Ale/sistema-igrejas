@@ -3,17 +3,21 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DashboardShell } from "./dashboard-shell";
-import { DashboardSession } from "./dashboard-types";
+import type { DashboardSession } from "./dashboard-types";
 
 function parseDashboardSession() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
+  const storedSession = localStorage.getItem(
+    "sistema-igrejas.session"
+  );
 
   if (!storedSession) {
     return null;
   }
 
   try {
-    const parsedSession = JSON.parse(storedSession) as DashboardSession;
+    const parsedSession = JSON.parse(
+      storedSession
+    ) as DashboardSession;
 
     if (
       !parsedSession.church?.name ||
@@ -34,7 +38,8 @@ function parseDashboardSession() {
 
 export function DashboardClient() {
   const router = useRouter();
-  const [session, setSession] = useState<DashboardSession | null>(null);
+  const [session, setSession] =
+    useState<DashboardSession | null>(null);
 
   useEffect(() => {
     const parsedSession = parseDashboardSession();
@@ -47,9 +52,21 @@ export function DashboardClient() {
     setSession(parsedSession);
   }, [router]);
 
+  function handleLogout() {
+    localStorage.removeItem("sistema-igrejas.session");
+    setSession(null);
+    router.replace("/login");
+    router.refresh();
+  }
+
   if (!session) {
     return null;
   }
 
-  return <DashboardShell session={session} />;
+  return (
+    <DashboardShell
+      onLogout={handleLogout}
+      session={session}
+    />
+  );
 }

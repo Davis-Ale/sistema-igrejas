@@ -35,177 +35,203 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  "http://localhost:3333";
 
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("pastor@sistemaigrejas.local");
-  const [password, setPassword] = useState("12345678");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        body: JSON.stringify({
-          email,
-          password
-        }),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/auth/login`,
+        {
+          body: JSON.stringify({
+            email,
+            password
+          }),
+          headers: {
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
 
       if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
+        const data =
+          (await response.json()) as ApiErrorResponse;
 
-        setError(data.message ?? "Não foi possível entrar no sistema.");
+        setError(
+          data.message ??
+            "Não foi possível entrar no sistema."
+        );
         return;
       }
 
-      const loginSession = (await response.json()) as LoginSession;
+      const loginSession =
+        (await response.json()) as LoginSession;
 
-      localStorage.setItem("sistema-igrejas.session", JSON.stringify(loginSession));
-      router.push("/dashboard");
+      localStorage.setItem(
+        "sistema-igrejas.session",
+        JSON.stringify(loginSession)
+      );
+
+      router.replace("/dashboard");
+      router.refresh();
     } catch {
-      setError("Não foi possível entrar no sistema agora. Tente novamente em alguns instantes.");
+      setError(
+        "Não foi possível entrar no sistema agora."
+      );
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div
+    <form
+      onSubmit={handleSubmit}
       style={{
+        background:
+          "linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.88))",
+        border: "1px solid rgba(148, 163, 184, 0.2)",
+        borderRadius: "28px",
+        boxShadow: "0 32px 100px rgba(2, 6, 23, 0.5)",
         display: "grid",
-        gap: "24px"
+        gap: "20px",
+        padding: "32px"
       }}
     >
-      <form
-        onSubmit={handleSubmit}
+      <div>
+        <p
+          style={{
+            color: "#60a5fa",
+            fontSize: "13px",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            margin: "0 0 12px",
+            textTransform: "uppercase"
+          }}
+        >
+          Sistema Igrejas
+        </p>
+
+        <h1
+          style={{
+            color: "#ffffff",
+            fontSize: "32px",
+            letterSpacing: "-0.04em",
+            lineHeight: 1.1,
+            margin: 0
+          }}
+        >
+          Entrar
+        </h1>
+      </div>
+
+      <label
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "24px",
-          boxShadow: "0 24px 80px rgba(15, 23, 42, 0.08)",
+          color: "#cbd5e1",
           display: "grid",
-          gap: "18px",
-          padding: "32px"
+          fontSize: "14px",
+          fontWeight: 800,
+          gap: "8px"
         }}
       >
-        <div>
-          <p
-            style={{
-              color: "#2563eb",
-              fontSize: "13px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              margin: "0 0 12px",
-              textTransform: "uppercase"
-            }}
-          >
-            Acesso da igreja
-          </p>
-
-          <h1
-            style={{
-              color: "#0f172a",
-              fontSize: "32px",
-              lineHeight: 1.1,
-              margin: 0
-            }}
-          >
-            Entrar no Sistema Igrejas
-          </h1>
-        </div>
-
-        <label
+        E-mail
+        <input
+          autoComplete="email"
+          onChange={(event) => setEmail(event.target.value)}
+          required
           style={{
-            color: "#334155",
-            display: "grid",
-            fontSize: "14px",
-            fontWeight: 700,
-            gap: "8px"
-          }}
-        >
-          E-mail
-          <input
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: "14px",
-              font: "inherit",
-              padding: "14px 16px"
-            }}
-            type="email"
-            value={email}
-          />
-        </label>
-
-        <label
-          style={{
-            color: "#334155",
-            display: "grid",
-            fontSize: "14px",
-            fontWeight: 700,
-            gap: "8px"
-          }}
-        >
-          Senha
-          <input
-            minLength={8}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: "14px",
-              font: "inherit",
-              padding: "14px 16px"
-            }}
-            type="password"
-            value={password}
-          />
-        </label>
-
-        {error ? (
-          <p
-            style={{
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "14px",
-              color: "#991b1b",
-              margin: 0,
-              padding: "12px 14px"
-            }}
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <button
-          disabled={isSubmitting}
-          style={{
-            background: isSubmitting ? "#94a3b8" : "#2563eb",
-            border: 0,
-            borderRadius: "999px",
-            color: "#ffffff",
-            cursor: isSubmitting ? "not-allowed" : "pointer",
+            background: "#ffffff",
+            border: "1px solid rgba(148, 163, 184, 0.38)",
+            borderRadius: "14px",
+            color: "#0f172a",
             font: "inherit",
-            fontWeight: 700,
-            padding: "14px 22px"
+            padding: "14px 16px"
           }}
-          type="submit"
+          type="email"
+          value={email}
+        />
+      </label>
+
+      <label
+        style={{
+          color: "#cbd5e1",
+          display: "grid",
+          fontSize: "14px",
+          fontWeight: 800,
+          gap: "8px"
+        }}
+      >
+        Senha
+        <input
+          autoComplete="current-password"
+          minLength={8}
+          onChange={(event) =>
+            setPassword(event.target.value)
+          }
+          required
+          style={{
+            background: "#ffffff",
+            border: "1px solid rgba(148, 163, 184, 0.38)",
+            borderRadius: "14px",
+            color: "#0f172a",
+            font: "inherit",
+            padding: "14px 16px"
+          }}
+          type="password"
+          value={password}
+        />
+      </label>
+
+      {error ? (
+        <p
+          style={{
+            background: "rgba(239, 68, 68, 0.14)",
+            border: "1px solid rgba(248, 113, 113, 0.28)",
+            borderRadius: "14px",
+            color: "#fecaca",
+            margin: 0,
+            padding: "12px 14px"
+          }}
         >
-          {isSubmitting ? "Entrando..." : "Entrar"}
-        </button>
-      </form>
-    </div>
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        disabled={isSubmitting}
+        style={{
+          background: isSubmitting
+            ? "#475569"
+            : "linear-gradient(135deg, #2563eb, #0ea5e9)",
+          border: 0,
+          borderRadius: "14px",
+          color: "#ffffff",
+          cursor: isSubmitting
+            ? "not-allowed"
+            : "pointer",
+          font: "inherit",
+          fontWeight: 900,
+          padding: "14px 22px"
+        }}
+        type="submit"
+      >
+        {isSubmitting ? "Entrando..." : "Entrar"}
+      </button>
+    </form>
   );
 }
