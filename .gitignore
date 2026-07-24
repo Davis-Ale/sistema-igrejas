@@ -22,3 +22,9 @@ yarn-debug.log*
 
 .vscode/*
 !.vscode/extensions.json
+
+# Local project rules
+docs/*regras*.md
+docs/**/*regras*.md
+docs/*rules*.md
+docs/**/*rules*.md
