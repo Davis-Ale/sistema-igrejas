@@ -8,6 +8,11 @@ export async function listPaginatedCells(
 ) {
   const where: Prisma.CelulaWhereInput = {
     churchId,
+    ...(query.status === "ALL"
+      ? {}
+      : {
+          status: query.status
+        }),
     ...(query.neighborhood
       ? {
           neighborhood: {
@@ -56,6 +61,8 @@ export async function listPaginatedCells(
         meetDay: true,
         meetTime: true,
         profile: true,
+        status: true,
+        archivedAt: true,
         createdAt: true,
         updatedAt: true,
         leader: {

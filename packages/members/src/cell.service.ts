@@ -108,7 +108,8 @@ export async function updateCell(
 export async function listCells(prisma: PrismaClient, churchId: string) {
   return prisma.celula.findMany({
     where: {
-      churchId
+      churchId,
+      status: "ACTIVE"
     },
     include: {
       leader: {

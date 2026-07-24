@@ -1,3 +1,6 @@
+export type CellStatus = "ACTIVE" | "ARCHIVED";
+export type CellStatusFilter = CellStatus | "ALL";
+
 export type CellListItem = {
   id: string;
   churchId: string;
@@ -11,6 +14,8 @@ export type CellListItem = {
   meetDay: string;
   meetTime: string;
   profile: string;
+  status: CellStatus;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   memberCount: number;
@@ -37,14 +42,31 @@ export type CellListResponse = {
 export type CellListFilters = {
   page: number;
   pageSize: number;
+  status: CellStatusFilter;
   neighborhood?: string;
   profile?: string;
   leader?: string;
 };
 
+export type CellStatusResponse = {
+  id: string;
+  status: CellStatus;
+  archivedAt: string | null;
+  updatedAt: string;
+};
+
 type ApiErrorResponse = {
   message?: string;
 };
+
+async function readApiError(
+  response: Response,
+  fallbackMessage: string
+): Promise<Error> {
+  const error = (await response.json()) as ApiErrorResponse;
+
+  return new Error(error.message ?? fallbackMessage);
+}
 
 export async function searchCells(
   apiBaseUrl: string,
@@ -53,7 +75,8 @@ export async function searchCells(
 ): Promise<CellListResponse> {
   const params = new URLSearchParams({
     page: String(filters.page),
-    pageSize: String(filters.pageSize)
+    pageSize: String(filters.pageSize),
+    status: filters.status
   });
 
   if (filters.neighborhood?.trim()) {
@@ -78,12 +101,55 @@ export async function searchCells(
   );
 
   if (!response.ok) {
-    const error = (await response.json()) as ApiErrorResponse;
-
-    throw new Error(
-      error.message ?? "Não foi possível pesquisar as células."
+    throw await readApiError(
+      response,
+      "Não foi possível pesquisar as células."
     );
   }
 
   return (await response.json()) as CellListResponse;
+}
+
+async function updateCellStatus(
+  apiBaseUrl: string,
+  token: string,
+  cellId: string,
+  action: "archive" | "reactivate"
+): Promise<CellStatusResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/cells/${encodeURIComponent(cellId)}/${action}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      method: "PATCH"
+    }
+  );
+
+  if (!response.ok) {
+    throw await readApiError(
+      response,
+      action === "archive"
+        ? "Não foi possível arquivar a célula."
+        : "Não foi possível reativar a célula."
+    );
+  }
+
+  return (await response.json()) as CellStatusResponse;
+}
+
+export async function archiveCell(
+  apiBaseUrl: string,
+  token: string,
+  cellId: string
+): Promise<CellStatusResponse> {
+  return updateCellStatus(apiBaseUrl, token, cellId, "archive");
+}
+
+export async function reactivateCell(
+  apiBaseUrl: string,
+  token: string,
+  cellId: string
+): Promise<CellStatusResponse> {
+  return updateCellStatus(apiBaseUrl, token, cellId, "reactivate");
 }

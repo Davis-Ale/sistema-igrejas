@@ -47,6 +47,7 @@ export const updateCellSchema = cellDataSchema;
 export const listCellsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.enum(["ACTIVE", "ARCHIVED", "ALL"]).default("ACTIVE"),
   neighborhood: optionalTextSchema,
   profile: optionalTextSchema,
   leader: optionalTextSchema

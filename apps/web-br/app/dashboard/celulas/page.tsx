@@ -523,7 +523,7 @@ export default function CelulasPage() {
                   style={{ background: "transparent", border: "1px solid rgba(96, 165, 250, 0.38)", borderRadius: "14px", color: "#bfdbfe", cursor: "pointer", font: "inherit", fontWeight: 900, padding: "13px 18px" }}
                   type="button"
                 >
-                  {showCellList ? "Fechar lista" : "Editar célula"}
+                  {showCellList ? "Fechar lista" : "Gerenciar células"}
                 </button>
               ) : null}
 
@@ -740,6 +740,7 @@ export default function CelulasPage() {
             apiBaseUrl={API_BASE_URL}
             getToken={getSessionToken}
             isOpen={showCellList}
+            onStatusChange={loadData}
             onSelectCell={handleEditCell}
           />
         </section>

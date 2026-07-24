@@ -53,7 +53,26 @@ describe("Cell status E2E", () => {
     });
   });
 
-  it("archives and reactivates a cell", async () => {
+  it("returns only active cells by default with lifecycle fields", async () => {
+    const response = await request(app.server)
+      .get("/api/cells/search?page=1&pageSize=100")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.items.length).toBeGreaterThan(0);
+    expect(
+      response.body.items.every(
+        (cell: { status: string }) => cell.status === "ACTIVE"
+      )
+    ).toBe(true);
+
+    for (const cell of response.body.items) {
+      expect(cell).toHaveProperty("status");
+      expect(cell).toHaveProperty("archivedAt");
+    }
+  });
+
+  it("archives, filters and reactivates a cell", async () => {
     const archiveResponse = await request(app.server)
       .patch(`/api/cells/${cellId}/archive`)
       .set("Authorization", `Bearer ${token}`);
@@ -65,16 +84,66 @@ describe("Cell status E2E", () => {
     });
     expect(archiveResponse.body.archivedAt).not.toBeNull();
 
-    const reactivateResponse = await request(app.server)
-      .patch(`/api/cells/${cellId}/reactivate`)
-      .set("Authorization", `Bearer ${token}`);
+    try {
+      const defaultResponse = await request(app.server)
+        .get("/api/cells/search?page=1&pageSize=100")
+        .set("Authorization", `Bearer ${token}`);
 
-    expect(reactivateResponse.status).toBe(200);
-    expect(reactivateResponse.body).toMatchObject({
-      id: cellId,
-      status: "ACTIVE",
-      archivedAt: null
-    });
+      expect(defaultResponse.status).toBe(200);
+      expect(
+        defaultResponse.body.items.some(
+          (cell: { id: string }) => cell.id === cellId
+        )
+      ).toBe(false);
+
+      const archivedResponse = await request(app.server)
+        .get(
+          "/api/cells/search?page=1&pageSize=100&status=ARCHIVED"
+        )
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(archivedResponse.status).toBe(200);
+      expect(
+        archivedResponse.body.items.every(
+          (cell: { status: string }) =>
+            cell.status === "ARCHIVED"
+        )
+      ).toBe(true);
+      expect(
+        archivedResponse.body.items.some(
+          (cell: { id: string }) => cell.id === cellId
+        )
+      ).toBe(true);
+
+      const allResponse = await request(app.server)
+        .get("/api/cells/search?page=1&pageSize=100&status=ALL")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(allResponse.status).toBe(200);
+      expect(
+        allResponse.body.items.some(
+          (cell: { id: string }) => cell.id === cellId
+        )
+      ).toBe(true);
+      expect(
+        allResponse.body.items.every(
+          (cell: { status: string }) =>
+            cell.status === "ACTIVE" ||
+            cell.status === "ARCHIVED"
+        )
+      ).toBe(true);
+    } finally {
+      const reactivateResponse = await request(app.server)
+        .patch(`/api/cells/${cellId}/reactivate`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(reactivateResponse.status).toBe(200);
+      expect(reactivateResponse.body).toMatchObject({
+        id: cellId,
+        status: "ACTIVE",
+        archivedAt: null
+      });
+    }
   });
 
   it("returns 404 for a nonexistent cell", async () => {
