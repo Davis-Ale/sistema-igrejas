@@ -8,7 +8,10 @@ import {
   requireRole
 } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
-import { registerEventRoutes } from "@sistema-igrejas/events";
+import {
+  registerEventRoutes,
+  registerPublicEventRoutes
+} from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
 import {
   registerCellDeleteRoutes,
@@ -82,6 +85,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await registerAuthRoutes(app, prisma);
+  await registerPublicEventRoutes(app, prisma);
 
   await app.register(
     async (protectedRoutes) => {
