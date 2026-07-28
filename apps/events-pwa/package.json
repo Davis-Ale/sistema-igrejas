@@ -10,14 +10,15 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "next": "latest",
+    "next": "16.2.12",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "typescript": "latest"
+    "typescript": "6.0.2"
   }
 }

@@ -860,6 +860,22 @@ export default function EventosPage() {
                         Check-ins: {stats.checkedIn} - Visitantes inscritos: {stats.visitors} - Lista de espera: {stats.waitlisted} - Pagamento pendente: {stats.pendingPayment}
                       </p>
 
+                      <Link
+                        href={"/dashboard/eventos/" + event.id}
+                        style={{
+                          background: "#2563eb",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          fontSize: "14px",
+                          fontWeight: 900,
+                          justifySelf: "start",
+                          padding: "10px 14px",
+                          textDecoration: "none"
+                        }}
+                      >
+                        Gerenciar evento
+                      </Link>
+
                       {event.isPublic && event.publicRegistrationEnabled ? (
                         <div style={{ background: "rgba(37, 99, 235, 0.12)", border: "1px solid rgba(96, 165, 250, 0.2)", borderRadius: "14px", display: "grid", gap: "8px", padding: "12px" }}>
                           <p style={{ color: "#bfdbfe", fontSize: "13px", fontWeight: 900, margin: 0 }}>

@@ -1,0 +1,309 @@
+.page {
+  min-height: 100vh;
+  padding: 20px;
+  color: #f8fafc;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(37, 99, 235, 0.34),
+      transparent 34%
+    ),
+    linear-gradient(
+      160deg,
+      #020617 0%,
+      #0f172a 58%,
+      #111827 100%
+    );
+}
+
+.container {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 2px;
+}
+
+.eyebrow,
+.credentialLabel {
+  margin: 0 0 5px;
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.churchName {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.appBadge {
+  padding: 7px 11px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 999px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.2);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.eventCard {
+  display: grid;
+  gap: 20px;
+  padding: 26px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 28px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(30, 64, 175, 0.46),
+      rgba(15, 23, 42, 0.94)
+    );
+  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.42);
+}
+
+.eventDate {
+  margin: 0 0 10px;
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.eventTitle {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(31px, 8vw, 42px);
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+
+.eventStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.statCard {
+  padding: 15px;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.statCard span,
+.tokenCard span,
+.credentialDetails span {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.statCard strong {
+  display: block;
+  margin-top: 7px;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.eventSummary,
+.panelText,
+.loadingText,
+.credentialHelp {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.panel,
+.credential {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 26px;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.panelTitle,
+.participantName {
+  margin: 0 0 7px;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.label {
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 14px;
+  color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+}
+
+.input:focus {
+  border-color: #60a5fa;
+  outline: 3px solid rgba(59, 130, 246, 0.2);
+}
+
+.primaryButton,
+.secondaryButton {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 15px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 0;
+  color: #ffffff;
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #0ea5e9
+    );
+}
+
+.primaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #cbd5e1;
+  background: transparent;
+}
+
+.error,
+.warning {
+  padding: 13px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.error {
+  border: 1px solid rgba(248, 113, 113, 0.26);
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.warning {
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.13);
+}
+
+.credential {
+  border-color: rgba(74, 222, 128, 0.28);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(21, 128, 61, 0.24),
+      rgba(15, 23, 42, 0.95)
+    );
+}
+
+.credentialLabel {
+  color: #86efac;
+}
+
+.credentialStatus {
+  margin: 0;
+  color: #bbf7d0;
+  line-height: 1.6;
+}
+
+.existingMessage {
+  margin: 8px 0 0;
+  color: #93c5fd;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.qrContainer {
+  justify-self: center;
+  padding: 16px;
+  border-radius: 22px;
+  background: #ffffff;
+}
+
+.tokenCard {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.tokenCard strong {
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-family: monospace;
+  font-size: 17px;
+}
+
+.credentialDetails {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.credentialDetails div {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.credentialDetails strong {
+  display: block;
+  margin-top: 6px;
+  color: #ffffff;
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 14px;
+  }
+
+  .eventCard,
+  .panel,
+  .credential {
+    padding: 20px;
+  }
+
+  .eventStats,
+  .credentialDetails {
+    grid-template-columns: 1fr;
+  }
+}

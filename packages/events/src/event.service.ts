@@ -163,6 +163,12 @@ export async function getEventById(
           createdAt: "asc"
         }
       },
+      church: {
+        select: {
+          name: true,
+          slug: true
+        }
+      },
       trailStage: {
         select: {
           id: true,

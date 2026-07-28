@@ -372,6 +372,7 @@ model Event {
   campusId                  String?
   title                     String
   slug                      String
+  publicSlug                String?  @unique
   date                      DateTime
   capacity                  Int
   price                     Decimal  @default(0) @db.Decimal(12, 2)

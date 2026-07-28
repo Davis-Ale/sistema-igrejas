@@ -1,18 +1,18 @@
 import {
   ParticipantEventApp
-} from "./participant-event-app";
+} from "../[churchSlug]/[eventSlug]/participant-event-app";
 
-type EventAppPageProps = {
+type PublicEventPageProps = {
   params: Promise<{
-    churchSlug: string;
-    eventSlug: string;
+    publicSlug: string;
   }>;
 };
 
-export type PublicEvent = {
+type PublicEvent = {
   id: string;
   title: string;
   slug: string;
+  publicSlug: string | null;
   date: string;
   capacity: number;
   price: string | number;
@@ -39,12 +39,11 @@ const API_BASE_URL =
   "http://localhost:3333";
 
 async function getPublicEvent(
-  churchSlug: string,
-  eventSlug: string
+  publicSlug: string
 ): Promise<PublicEvent | null> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/public/churches/${encodeURIComponent(churchSlug)}/events/${encodeURIComponent(eventSlug)}`,
+      `${API_BASE_URL}/public/event-pages/${encodeURIComponent(publicSlug)}`,
       {
         cache: "no-store"
       }
@@ -60,18 +59,14 @@ async function getPublicEvent(
   }
 }
 
-export default async function EventAppPage({
+export default async function PublicEventPage({
   params
-}: EventAppPageProps) {
+}: PublicEventPageProps) {
   const {
-    churchSlug,
-    eventSlug
+    publicSlug
   } = await params;
 
-  const event = await getPublicEvent(
-    churchSlug,
-    eventSlug
-  );
+  const event = await getPublicEvent(publicSlug);
 
   if (!event) {
     return (
@@ -107,7 +102,7 @@ export default async function EventAppPage({
               textTransform: "uppercase"
             }}
           >
-            Aplicativo do Evento
+            Evento
           </p>
 
           <h1>Evento indisponível</h1>
@@ -118,8 +113,8 @@ export default async function EventAppPage({
               lineHeight: 1.6
             }}
           >
-            Este evento não foi encontrado ou ainda não
-            está disponível para o público.
+            Este endereço não corresponde a um evento
+            público disponível.
           </p>
         </section>
       </main>
@@ -128,9 +123,9 @@ export default async function EventAppPage({
 
   return (
     <ParticipantEventApp
-      churchSlug={churchSlug}
+      churchSlug={event.church.slug}
       event={event}
-      eventSlug={eventSlug}
+      eventSlug={event.slug}
     />
   );
 }
