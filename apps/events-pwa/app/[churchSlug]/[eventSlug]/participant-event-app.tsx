@@ -1,17 +1,9 @@
 "use client";
 
-import type {
-  FormEvent
-} from "react";
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRCode from "react-qr-code";
-import type {
-  PublicEvent
-} from "./page";
+import type { PublicEvent } from "./page";
 import styles from "./participant-event-app.module.css";
 
 type Participant = {
@@ -96,7 +88,7 @@ function getRegistrationMessage(
   }
 
   if (registration.waitlistedAt) {
-    return "Você está na lista de espera.";
+    return "Sua inscrição está na lista de espera.";
   }
 
   if (
@@ -107,6 +99,42 @@ function getRegistrationMessage(
   }
 
   return "Sua inscrição está confirmada.";
+}
+
+function getRegistrationStatus(
+  registration: PublicRegistration
+) {
+  if (registration.status === "CHECKED_IN") {
+    return "Check-in realizado";
+  }
+
+  if (registration.waitlistedAt) {
+    return "Lista de espera";
+  }
+
+  if (registration.status === "CONFIRMED") {
+    return "Confirmada";
+  }
+
+  return "Pendente";
+}
+
+function getPaymentStatus(
+  registration: PublicRegistration
+) {
+  if (!registration.event.isPaid) {
+    return "Não necessário";
+  }
+
+  if (registration.paymentStatus === "PAID") {
+    return "Pago";
+  }
+
+  if (registration.paymentStatus === "CANCELLED") {
+    return "Cancelado";
+  }
+
+  return "Pendente";
 }
 
 export function ParticipantEventApp({
@@ -124,16 +152,6 @@ export function ParticipantEventApp({
     [event.registrations]
   );
 
-  const initialWaitlistedRegistrations = useMemo(
-    () =>
-      event.registrations.filter(
-        (registration) =>
-          registration.status !== "CANCELLED" &&
-          Boolean(registration.waitlistedAt)
-      ).length,
-    [event.registrations]
-  );
-
   const storageKey =
     `event-app:${churchSlug}:${eventSlug}:check-in-token`;
 
@@ -143,19 +161,19 @@ export function ParticipantEventApp({
   ] = useState(initialActiveRegistrations);
 
   const [
-    waitlistedRegistrations,
-    setWaitlistedRegistrations
-  ] = useState(initialWaitlistedRegistrations);
-
-  const [
     registration,
     setRegistration
   ] = useState<PublicRegistration | null>(null);
 
   const [
-    error,
-    setError
-  ] = useState<string | null>(null);
+    isParticipantAppOpen,
+    setIsParticipantAppOpen
+  ] = useState(false);
+
+  const [
+    isRestoringCredential,
+    setIsRestoringCredential
+  ] = useState(true);
 
   const [
     isRegistering,
@@ -163,9 +181,9 @@ export function ParticipantEventApp({
   ] = useState(false);
 
   const [
-    isRestoringCredential,
-    setIsRestoringCredential
-  ] = useState(true);
+    error,
+    setError
+  ] = useState<string | null>(null);
 
   const availableSpots = Math.max(
     event.capacity - activeRegistrations,
@@ -218,9 +236,13 @@ export function ParticipantEventApp({
           await response.json() as PublicRegistration;
 
         setRegistration(data);
+
+        if (window.location.hash === "#aplicativo") {
+          setIsParticipantAppOpen(true);
+        }
       } catch {
         setError(
-          "Não foi possível recuperar sua credencial agora."
+          "Não foi possível recuperar sua inscrição agora."
         );
       } finally {
         setIsRestoringCredential(false);
@@ -298,17 +320,15 @@ export function ParticipantEventApp({
       );
 
       setRegistration(createdRegistration);
+      setIsParticipantAppOpen(false);
 
-      if (!createdRegistration.wasExisting) {
-        if (createdRegistration.waitlistedAt) {
-          setWaitlistedRegistrations(
-            (current) => current + 1
-          );
-        } else {
-          setActiveRegistrations(
-            (current) => current + 1
-          );
-        }
+      if (
+        !createdRegistration.wasExisting &&
+        !createdRegistration.waitlistedAt
+      ) {
+        setActiveRegistrations(
+          (current) => current + 1
+        );
       }
 
       form.reset();
@@ -321,10 +341,137 @@ export function ParticipantEventApp({
     }
   }
 
-  function handleLeaveCredential() {
+  function handleOpenParticipantApp() {
+    setIsParticipantAppOpen(true);
+
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}#aplicativo`
+    );
+
+    window.scrollTo({
+      behavior: "smooth",
+      top: 0
+    });
+  }
+
+  function handleCloseParticipantApp() {
+    setIsParticipantAppOpen(false);
+
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    );
+  }
+
+  function handleNewRegistration() {
     localStorage.removeItem(storageKey);
+
     setRegistration(null);
+    setIsParticipantAppOpen(false);
     setError(null);
+
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname
+    );
+  }
+
+  if (
+    registration &&
+    participant &&
+    isParticipantAppOpen
+  ) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.container}>
+          <header className={styles.header}>
+            <div>
+              <p className={styles.eyebrow}>
+                Aplicativo do Evento
+              </p>
+
+              <strong className={styles.churchName}>
+                {event.church.name}
+              </strong>
+            </div>
+
+            <span className={styles.appBadge}>
+              PWA
+            </span>
+          </header>
+
+          <section
+            className={styles.participantApp}
+            id="aplicativo"
+          >
+            <div>
+              <p className={styles.credentialLabel}>
+                Área do participante
+              </p>
+
+              <h1 className={styles.participantName}>
+                {participant.name}
+              </h1>
+
+              <p className={styles.credentialStatus}>
+                {getRegistrationMessage(registration)}
+              </p>
+            </div>
+
+            <article className={styles.appEventCard}>
+              <span>Evento</span>
+              <strong>{event.title}</strong>
+              <p>{formatDate(event.date)}</p>
+            </article>
+
+            <div className={styles.qrContainer}>
+              <QRCode
+                bgColor="#ffffff"
+                fgColor="#020617"
+                size={190}
+                value={registration.checkInToken}
+              />
+            </div>
+
+            <div className={styles.tokenCard}>
+              <span>Código de check-in</span>
+
+              <strong>
+                {registration.checkInToken}
+              </strong>
+            </div>
+
+            <div className={styles.credentialDetails}>
+              <div>
+                <span>Inscrição</span>
+                <strong>
+                  {getRegistrationStatus(registration)}
+                </strong>
+              </div>
+
+              <div>
+                <span>Pagamento</span>
+                <strong>
+                  {getPaymentStatus(registration)}
+                </strong>
+              </div>
+            </div>
+
+            <button
+              className={styles.secondaryButton}
+              onClick={handleCloseParticipantApp}
+              type="button"
+            >
+              Voltar para a confirmação
+            </button>
+          </section>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -347,15 +494,13 @@ export function ParticipantEventApp({
         </header>
 
         <article className={styles.eventCard}>
-          <div>
-            <p className={styles.eventDate}>
-              {formatDate(event.date)}
-            </p>
+          <p className={styles.eventDate}>
+            {formatDate(event.date)}
+          </p>
 
-            <h1 className={styles.eventTitle}>
-              {event.title}
-            </h1>
-          </div>
+          <h1 className={styles.eventTitle}>
+            {event.title}
+          </h1>
 
           <div className={styles.eventStats}>
             <div className={styles.statCard}>
@@ -367,33 +512,13 @@ export function ParticipantEventApp({
                   : "Gratuito"}
               </strong>
             </div>
-
-            <div className={styles.statCard}>
-              <span>Vagas</span>
-
-              <strong>
-                {availableSpots > 0
-                  ? `${availableSpots} disponíveis`
-                  : event.waitlistEnabled
-                    ? "Lista de espera"
-                    : "Encerradas"}
-              </strong>
-            </div>
           </div>
-
-          <p className={styles.eventSummary}>
-            {activeRegistrations}/{event.capacity}
-            {" "}inscrições ativas
-            {waitlistedRegistrations > 0
-              ? ` e ${waitlistedRegistrations} na lista de espera.`
-              : "."}
-          </p>
         </article>
 
         {isRestoringCredential ? (
           <section className={styles.panel}>
-            <p className={styles.loadingText}>
-              Recuperando sua credencial...
+            <p className={styles.panelText}>
+              Recuperando sua inscrição...
             </p>
           </section>
         ) : null}
@@ -424,6 +549,7 @@ export function ParticipantEventApp({
               >
                 <label className={styles.label}>
                   Nome completo
+
                   <input
                     className={styles.input}
                     name="name"
@@ -434,6 +560,7 @@ export function ParticipantEventApp({
 
                 <label className={styles.label}>
                   Telefone
+
                   <input
                     className={styles.input}
                     name="phone"
@@ -444,6 +571,7 @@ export function ParticipantEventApp({
 
                 <label className={styles.label}>
                   E-mail
+
                   <input
                     className={styles.input}
                     name="email"
@@ -476,10 +604,10 @@ export function ParticipantEventApp({
         {!isRestoringCredential &&
         registration &&
         participant ? (
-          <section className={styles.credential}>
+          <section className={styles.confirmation}>
             <div>
               <p className={styles.credentialLabel}>
-                Credencial do participante
+                Inscrição recebida
               </p>
 
               <h2 className={styles.participantName}>
@@ -489,12 +617,6 @@ export function ParticipantEventApp({
               <p className={styles.credentialStatus}>
                 {getRegistrationMessage(registration)}
               </p>
-
-              {registration.wasExisting ? (
-                <p className={styles.existingMessage}>
-                  Localizamos sua inscrição já existente.
-                </p>
-              ) : null}
             </div>
 
             <div className={styles.qrContainer}>
@@ -516,42 +638,34 @@ export function ParticipantEventApp({
 
             <div className={styles.credentialDetails}>
               <div>
-                <span>Status</span>
+                <span>Inscrição</span>
                 <strong>
-                  {registration.waitlistedAt
-                    ? "Lista de espera"
-                    : registration.status === "CHECKED_IN"
-                      ? "Check-in realizado"
-                      : registration.status === "CONFIRMED"
-                        ? "Confirmada"
-                        : "Pendente"}
+                  {getRegistrationStatus(registration)}
                 </strong>
               </div>
 
               <div>
                 <span>Pagamento</span>
                 <strong>
-                  {!registration.event.isPaid
-                    ? "Não necessário"
-                    : registration.paymentStatus === "PAID"
-                      ? "Pago"
-                      : "Pendente"}
+                  {getPaymentStatus(registration)}
                 </strong>
               </div>
             </div>
 
-            <p className={styles.credentialHelp}>
-              Apresente este QR Code na entrada do evento.
-              Sua credencial permanecerá salva neste
-              aparelho.
-            </p>
+            <button
+              className={styles.primaryButton}
+              onClick={handleOpenParticipantApp}
+              type="button"
+            >
+              Acessar aplicativo do evento
+            </button>
 
             <button
               className={styles.secondaryButton}
-              onClick={handleLeaveCredential}
+              onClick={handleNewRegistration}
               type="button"
             >
-              Remover credencial deste aparelho
+              Voltar para a inscrição
             </button>
           </section>
         ) : null}

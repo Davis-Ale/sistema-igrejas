@@ -72,7 +72,7 @@
 }
 
 .eventDate {
-  margin: 0 0 10px;
+  margin: 0;
   color: #bfdbfe;
   font-size: 13px;
   font-weight: 900;
@@ -100,7 +100,8 @@
 
 .statCard span,
 .tokenCard span,
-.credentialDetails span {
+.credentialDetails span,
+.appEventCard span {
   display: block;
   color: #94a3b8;
   font-size: 12px;
@@ -114,18 +115,9 @@
   font-size: 16px;
 }
 
-.eventSummary,
-.panelText,
-.loadingText,
-.credentialHelp {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
 .panel,
-.credential {
+.confirmation,
+.participantApp {
   display: grid;
   gap: 18px;
   padding: 24px;
@@ -134,11 +126,38 @@
   background: rgba(15, 23, 42, 0.92);
 }
 
+.confirmation,
+.participantApp {
+  border-color: rgba(74, 222, 128, 0.28);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(21, 128, 61, 0.24),
+      rgba(15, 23, 42, 0.95)
+    );
+}
+
 .panelTitle,
 .participantName {
   margin: 0 0 7px;
   color: #ffffff;
   font-size: 24px;
+}
+
+.panelText,
+.credentialStatus {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.credentialLabel {
+  color: #86efac;
+}
+
+.credentialStatus {
+  color: #bbf7d0;
 }
 
 .form {
@@ -222,33 +241,6 @@
   background: rgba(245, 158, 11, 0.13);
 }
 
-.credential {
-  border-color: rgba(74, 222, 128, 0.28);
-  background:
-    linear-gradient(
-      145deg,
-      rgba(21, 128, 61, 0.24),
-      rgba(15, 23, 42, 0.95)
-    );
-}
-
-.credentialLabel {
-  color: #86efac;
-}
-
-.credentialStatus {
-  margin: 0;
-  color: #bbf7d0;
-  line-height: 1.6;
-}
-
-.existingMessage {
-  margin: 8px 0 0;
-  color: #93c5fd;
-  font-size: 13px;
-  font-weight: 800;
-}
-
 .qrContainer {
   justify-self: center;
   padding: 16px;
@@ -256,7 +248,8 @@
   background: #ffffff;
 }
 
-.tokenCard {
+.tokenCard,
+.appEventCard {
   display: grid;
   gap: 8px;
   padding: 18px;
@@ -270,6 +263,17 @@
   color: #ffffff;
   font-family: monospace;
   font-size: 17px;
+}
+
+.appEventCard strong {
+  color: #ffffff;
+  font-size: 19px;
+}
+
+.appEventCard p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.6;
 }
 
 .credentialDetails {
@@ -298,11 +302,11 @@
 
   .eventCard,
   .panel,
-  .credential {
+  .confirmation,
+  .participantApp {
     padding: 20px;
   }
 
-  .eventStats,
   .credentialDetails {
     grid-template-columns: 1fr;
   }
