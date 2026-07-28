@@ -12,7 +12,8 @@
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
     "@types/node": "latest",

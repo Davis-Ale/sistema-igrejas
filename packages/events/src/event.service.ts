@@ -6,6 +6,7 @@ import type {
   CreateRegistrationInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
+import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
 
 function buildRegistrationStatus(event: { isPaid: boolean }, isWaitlisted: boolean) {
   if (isWaitlisted) {
@@ -354,6 +355,11 @@ export async function createPublicRegistration(
           id: true,
           waitlistedAt: true
         }
+      },
+      church: {
+        select: {
+          slug: true
+        }
       }
     }
   });
@@ -362,10 +368,14 @@ export async function createPublicRegistration(
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
   }
 
-  const activeRegistrations = event.registrations.filter(
-    (registration) => !registration.waitlistedAt
-  );
-  const isWaitlisted = activeRegistrations.length >= event.capacity;
+  const activeRegistrations =
+    event.registrations.filter(
+      (registration) =>
+        !registration.waitlistedAt
+    );
+
+  const isWaitlisted =
+    activeRegistrations.length >= event.capacity;
 
   if (isWaitlisted && !event.waitlistEnabled) {
     throw new Error("EVENT_CAPACITY_REACHED");
@@ -379,7 +389,8 @@ export async function createPublicRegistration(
       phone: input.phone,
       email: input.email ?? null,
       firstVisitAt: new Date(),
-      notes: `Inscrição pública no evento: ${event.title}`
+      notes:
+        `Inscrição pública no evento: ${event.title}`
     }
   });
 
@@ -388,10 +399,20 @@ export async function createPublicRegistration(
       churchId: event.churchId,
       eventId: event.id,
       visitorId: visitor.id,
-      status: buildRegistrationStatus(event, isWaitlisted),
-      paymentStatus: buildPaymentStatus(event, isWaitlisted),
-      confirmedAt: buildConfirmedAt(event, isWaitlisted),
-      waitlistedAt: isWaitlisted ? new Date() : null,
+      status: buildRegistrationStatus(
+        event,
+        isWaitlisted
+      ),
+      paymentStatus: buildPaymentStatus(
+        event,
+        isWaitlisted
+      ),
+      confirmedAt: buildConfirmedAt(
+        event,
+        isWaitlisted
+      ),
+      waitlistedAt:
+        isWaitlisted ? new Date() : null,
       registrationSource: "PUBLIC"
     },
     include: {
@@ -407,53 +428,74 @@ export async function createPublicRegistration(
         select: {
           id: true,
           title: true,
+          slug: true,
+          publicSlug: true,
           date: true,
           price: true,
-          isPaid: true
+          isPaid: true,
+          church: {
+            select: {
+              slug: true
+            }
+          }
         }
       }
     }
   });
 
-  if (!event.isPaid || isWaitlisted) {
-    return registration;
+  let registrationResult = registration;
+
+  if (event.isPaid && !isWaitlisted) {
+    const paymentId =
+      await createEventRegistrationTransaction(
+        prisma,
+        {
+          churchId: event.churchId,
+          campusId: event.campusId,
+          eventId: event.id,
+          personId: null,
+          amount: event.price
+        }
+      );
+
+    registrationResult =
+      await prisma.registration.update({
+        where: {
+          id: registration.id
+        },
+        data: {
+          paymentId
+        },
+        include: {
+          visitor: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true
+            }
+          },
+          event: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              publicSlug: true,
+              date: true,
+              price: true,
+              isPaid: true,
+              church: {
+                select: {
+                  slug: true
+                }
+              }
+            }
+          }
+        }
+      });
   }
 
-  const paymentId = await createEventRegistrationTransaction(prisma, {
-    churchId: event.churchId,
-    campusId: event.campusId,
-    eventId: event.id,
-    personId: null,
-    amount: event.price
-  });
-
-  return prisma.registration.update({
-    where: {
-      id: registration.id
-    },
-    data: {
-      paymentId
-    },
-    include: {
-      visitor: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true
-        }
-      },
-      event: {
-        select: {
-          id: true,
-          title: true,
-          date: true,
-          price: true,
-          isPaid: true
-        }
-      }
-    }
-  });
+  return registrationResult;
 }
 
 export async function updateRegistrationStatus(
@@ -461,54 +503,176 @@ export async function updateRegistrationStatus(
   churchId: string,
   input: UpdateRegistrationStatusInput
 ) {
-  const registration = await prisma.registration.findFirst({
-    where: {
-      id: input.registrationId,
-      churchId
-    },
-    select: {
-      id: true,
-      paymentId: true,
-      paymentStatus: true,
-      event: {
-        select: {
-          isPaid: true
+  const registration =
+    await prisma.registration.findFirst({
+      where: {
+        id: input.registrationId,
+        churchId
+      },
+      select: {
+        id: true,
+        paymentId: true,
+        paymentStatus: true,
+        person: {
+          select: {
+            name: true,
+            email: true
+          }
+        },
+        visitor: {
+          select: {
+            name: true,
+            email: true
+          }
+        },
+        event: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            publicSlug: true,
+            date: true,
+            isPaid: true,
+            church: {
+              select: {
+                slug: true
+              }
+            }
+          }
         }
       }
-    }
-  });
+    });
 
   if (!registration) {
     throw new Error("REGISTRATION_NOT_FOUND");
   }
 
+  const paymentId =
+    input.paymentId ??
+    registration.paymentId;
+
+  const paymentConfirmed =
+    registration.event.isPaid &&
+    Boolean(paymentId);
+
   const registrationUpdateData =
     input.status === "CHECKED_IN"
       ? {
           status: input.status,
-          paymentId: input.paymentId ?? null,
-          paymentStatus: registration.event.isPaid && (input.paymentId ?? registration.paymentId) ? "PAID" : registration.paymentStatus,
+          paymentId,
+          paymentStatus: paymentConfirmed
+            ? "PAID"
+            : registration.paymentStatus,
           checkedInAt: new Date()
         }
       : input.status === "CONFIRMED"
         ? {
             status: input.status,
-            paymentId: input.paymentId ?? null,
-            paymentStatus: registration.event.isPaid && (input.paymentId ?? registration.paymentId) ? "PAID" : registration.paymentStatus,
+            paymentId,
+            paymentStatus: paymentConfirmed
+              ? "PAID"
+              : registration.paymentStatus,
             confirmedAt: new Date()
           }
         : {
             status: input.status,
-            paymentId: input.paymentId ?? null,
-            paymentStatus: input.status === "CANCELLED" ? "CANCELLED" : registration.paymentStatus
+            paymentId,
+            paymentStatus:
+              input.status === "CANCELLED"
+                ? "CANCELLED"
+                : registration.paymentStatus
           };
 
-  return prisma.registration.update({
-    where: {
-      id: registration.id
-    },
-    data: registrationUpdateData
-  });
+  const updatedRegistration =
+    await prisma.registration.update({
+      where: {
+        id: registration.id
+      },
+      data: registrationUpdateData,
+      include: {
+        person: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true
+          }
+        },
+        visitor: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true
+          }
+        },
+        event: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            publicSlug: true,
+            date: true,
+            price: true,
+            isPaid: true,
+            church: {
+              select: {
+                slug: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+  const participant =
+    updatedRegistration.person ??
+    updatedRegistration.visitor;
+
+  const shouldSendEmail =
+    input.status === "CONFIRMED" &&
+    updatedRegistration.event.isPaid &&
+    updatedRegistration.paymentStatus === "PAID" &&
+    Boolean(participant?.email);
+
+  const emailSent =
+    shouldSendEmail && participant?.email
+      ? await sendRegistrationConfirmationEmail({
+          registrationId:
+            updatedRegistration.id,
+          recipientEmail:
+            participant.email,
+          participantName:
+            participant.name,
+          checkInToken:
+            updatedRegistration.checkInToken,
+          registrationStatus:
+            updatedRegistration.status,
+          paymentStatus:
+            updatedRegistration.paymentStatus,
+          waitlistedAt:
+            updatedRegistration.waitlistedAt,
+          event: {
+            title:
+              updatedRegistration.event.title,
+            date:
+              updatedRegistration.event.date,
+            isPaid:
+              updatedRegistration.event.isPaid,
+            slug:
+              updatedRegistration.event.slug,
+            publicSlug:
+              updatedRegistration.event.publicSlug,
+            churchSlug:
+              updatedRegistration.event.church.slug
+          }
+        })
+      : false;
+
+  return {
+    ...updatedRegistration,
+    emailSent
+  };
 }
 
 export async function checkInRegistrationByToken(
