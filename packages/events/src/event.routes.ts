@@ -97,6 +97,24 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
+  if (error.message === "PAYMENT_NOT_CONFIRMED") {
+    await reply.code(409).send({
+      error: "PAYMENT_NOT_CONFIRMED",
+      message:
+        "O pagamento desta inscrição ainda não foi confirmado."
+    });
+    return;
+  }
+
+  if (error.message === "REGISTRATION_WAITLISTED") {
+    await reply.code(409).send({
+      error: "REGISTRATION_WAITLISTED",
+      message:
+        "Esta inscrição ainda está na lista de espera."
+    });
+    return;
+  }
+
   await reply.code(500).send({
     error: "INTERNAL_SERVER_ERROR",
     message: "Erro interno."

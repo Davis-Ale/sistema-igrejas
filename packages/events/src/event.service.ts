@@ -547,6 +547,14 @@ export async function updateRegistrationStatus(
     throw new Error("REGISTRATION_NOT_FOUND");
   }
 
+  if (
+    input.status === "CHECKED_IN" &&
+    registration.event.isPaid &&
+    registration.paymentStatus !== "PAID"
+  ) {
+    throw new Error("PAYMENT_NOT_CONFIRMED");
+  }
+
   const paymentId =
     input.paymentId ??
     registration.paymentId;
@@ -680,17 +688,25 @@ export async function checkInRegistrationByToken(
   churchId: string,
   input: CheckInByTokenInput
 ) {
-  const registration = await prisma.registration.findFirst({
-    where: {
-      checkInToken: input.checkInToken,
-      churchId,
-      eventId: input.eventId
-    },
-    select: {
-      id: true,
-      status: true
-    }
-  });
+  const registration =
+    await prisma.registration.findFirst({
+      where: {
+        checkInToken: input.checkInToken,
+        churchId,
+        eventId: input.eventId
+      },
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        waitlistedAt: true,
+        event: {
+          select: {
+            isPaid: true
+          }
+        }
+      }
+    });
 
   if (!registration) {
     throw new Error("REGISTRATION_NOT_FOUND");
@@ -701,7 +717,20 @@ export async function checkInRegistrationByToken(
   }
 
   if (registration.status === "CHECKED_IN") {
-    throw new Error("REGISTRATION_ALREADY_CHECKED_IN");
+    throw new Error(
+      "REGISTRATION_ALREADY_CHECKED_IN"
+    );
+  }
+
+  if (registration.waitlistedAt) {
+    throw new Error("REGISTRATION_WAITLISTED");
+  }
+
+  if (
+    registration.event.isPaid &&
+    registration.paymentStatus !== "PAID"
+  ) {
+    throw new Error("PAYMENT_NOT_CONFIRMED");
   }
 
   return prisma.registration.update({
