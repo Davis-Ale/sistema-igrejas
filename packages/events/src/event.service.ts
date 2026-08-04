@@ -4,6 +4,7 @@ import type {
   CreateEventInput,
   CreatePublicRegistrationInput,
   CreateRegistrationInput,
+  UpdateEventInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
 import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
@@ -79,6 +80,73 @@ export async function createEvent(
       waitlistEnabled: input.waitlistEnabled,
       trailStageId: input.trailStageId ?? null
     }
+  });
+}
+
+export async function updateEvent(
+  prisma: PrismaClient,
+  churchId: string,
+  eventId: string,
+  input: UpdateEventInput
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      churchId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!event) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
+
+  const data: Prisma.EventUpdateInput = {};
+
+  if (input.title !== undefined) {
+    data.title = input.title;
+  }
+
+  if (input.slug !== undefined) {
+    data.slug = input.slug;
+  }
+
+  if (input.date !== undefined) {
+    data.date = input.date;
+  }
+
+  if (input.capacity !== undefined) {
+    data.capacity = input.capacity;
+  }
+
+  if (input.price !== undefined) {
+    data.price = input.price;
+  }
+
+  if (input.isPublic !== undefined) {
+    data.isPublic = input.isPublic;
+  }
+
+  if (input.isPaid !== undefined) {
+    data.isPaid = input.isPaid;
+  }
+
+  if (input.publicRegistrationEnabled !== undefined) {
+    data.publicRegistrationEnabled =
+      input.publicRegistrationEnabled;
+  }
+
+  if (input.waitlistEnabled !== undefined) {
+    data.waitlistEnabled = input.waitlistEnabled;
+  }
+
+  return prisma.event.update({
+    where: {
+      id: event.id
+    },
+    data
   });
 }
 

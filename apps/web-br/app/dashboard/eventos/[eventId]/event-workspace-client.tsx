@@ -97,6 +97,12 @@ export function EventWorkspaceClient({
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditingInformation, setIsEditingInformation] =
+    useState(false);
+  const [isSavingInformation, setIsSavingInformation] =
+    useState(false);
+  const [informationMessage, setInformationMessage] =
+    useState<string | null>(null);
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -171,6 +177,103 @@ export function EventWorkspaceClient({
   const eventAppUrl = event
     ? `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.church.slug)}/${encodeURIComponent(event.slug)}`
     : "#";
+
+  function formatDateTimeLocal(value: string) {
+    const date = new Date(value);
+    const timezoneOffset = date.getTimezoneOffset() * 60_000;
+
+    return new Date(date.getTime() - timezoneOffset)
+      .toISOString()
+      .slice(0, 16);
+  }
+
+  async function handleSaveInformation(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    if (!event) {
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const formData = new FormData(formEvent.currentTarget);
+    const title = String(formData.get("title") ?? "").trim();
+    const slug = String(formData.get("slug") ?? "").trim();
+    const date = String(formData.get("date") ?? "");
+    const capacity = Number(formData.get("capacity"));
+    const price = Number(formData.get("price"));
+
+    setError(null);
+    setInformationMessage(null);
+    setIsSavingInformation(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${event.id}`,
+        {
+          body: JSON.stringify({
+            title,
+            slug,
+            date,
+            capacity,
+            price,
+            isPaid: price > 0,
+            isPublic: formData.get("isPublic") === "on",
+            publicRegistrationEnabled:
+              formData.get("publicRegistrationEnabled") === "on",
+            waitlistEnabled:
+              formData.get("waitlistEnabled") === "on"
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventDetail
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar o evento."
+        );
+        return;
+      }
+
+      const updatedEvent = data as EventDetail;
+
+      setEvent((current) =>
+        current
+          ? {
+              ...current,
+              ...updatedEvent
+            }
+          : current
+      );
+      setInformationMessage(
+        "Informações do evento atualizadas."
+      );
+      setIsEditingInformation(false);
+    } catch {
+      setError(
+        "Não foi possível atualizar o evento agora."
+      );
+    } finally {
+      setIsSavingInformation(false);
+    }
+  }
 
   return (
     <main
@@ -362,6 +465,20 @@ export function EventWorkspaceClient({
               </a>
 
               <a
+                href="#informacoes"
+                style={{
+                  borderRadius: "12px",
+                  color: "#cbd5e1",
+                  fontSize: "14px",
+                  fontWeight: 900,
+                  padding: "10px 14px",
+                  textDecoration: "none"
+                }}
+              >
+                Informações
+              </a>
+
+              <a
                 href="#aplicativo-do-evento"
                 style={{
                   borderRadius: "12px",
@@ -482,6 +599,396 @@ export function EventWorkspaceClient({
                     : "Gratuito"}
                 </p>
               </article>
+            </section>
+
+            <section
+              id="informacoes"
+              style={{
+                background: "rgba(15, 23, 42, 0.82)",
+                border:
+                  "1px solid rgba(148, 163, 184, 0.18)",
+                borderRadius: "26px",
+                display: "grid",
+                gap: "22px",
+                padding: "26px"
+              }}
+            >
+              <header
+                style={{
+                  alignItems: "center",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "16px",
+                  justifyContent: "space-between"
+                }}
+              >
+                <div>
+                  <p
+                    style={{
+                      color: "#60a5fa",
+                      fontSize: "13px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      margin: "0 0 8px",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Informações do evento
+                  </p>
+
+                  <h2
+                    style={{
+                      color: "#ffffff",
+                      fontSize: "24px",
+                      margin: 0
+                    }}
+                  >
+                    Dados principais e publicação
+                  </h2>
+                </div>
+
+                {!isEditingInformation ? (
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setInformationMessage(null);
+                      setIsEditingInformation(true);
+                    }}
+                    style={{
+                      background: "#2563eb",
+                      border: 0,
+                      borderRadius: "12px",
+                      color: "#ffffff",
+                      cursor: "pointer",
+                      fontWeight: 900,
+                      padding: "11px 16px"
+                    }}
+                    type="button"
+                  >
+                    Editar informações
+                  </button>
+                ) : null}
+              </header>
+
+              {informationMessage ? (
+                <p
+                  style={{
+                    background: "rgba(5, 150, 105, 0.16)",
+                    border:
+                      "1px solid rgba(52, 211, 153, 0.26)",
+                    borderRadius: "14px",
+                    color: "#a7f3d0",
+                    margin: 0,
+                    padding: "14px"
+                  }}
+                >
+                  {informationMessage}
+                </p>
+              ) : null}
+
+              {isEditingInformation ? (
+                <form
+                  onSubmit={handleSaveInformation}
+                  style={{
+                    display: "grid",
+                    gap: "18px"
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "16px",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(240px, 1fr))"
+                    }}
+                  >
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Nome do evento
+
+                      <input
+                        defaultValue={event.title}
+                        name="title"
+                        required
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                      />
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Endereço da página
+
+                      <input
+                        defaultValue={event.slug}
+                        name="slug"
+                        required
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                      />
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Data e horário
+
+                      <input
+                        defaultValue={formatDateTimeLocal(
+                          event.date
+                        )}
+                        name="date"
+                        required
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                        type="datetime-local"
+                      />
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Capacidade
+
+                      <input
+                        defaultValue={event.capacity}
+                        min="1"
+                        name="capacity"
+                        required
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                        type="number"
+                      />
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Valor
+
+                      <input
+                        defaultValue={Number(event.price)}
+                        min="0"
+                        name="price"
+                        required
+                        step="0.01"
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                        type="number"
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "12px"
+                    }}
+                  >
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        gap: "10px"
+                      }}
+                    >
+                      <input
+                        defaultChecked={event.isPublic}
+                        name="isPublic"
+                        type="checkbox"
+                      />
+                      Evento público
+                    </label>
+
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        gap: "10px"
+                      }}
+                    >
+                      <input
+                        defaultChecked={
+                          event.publicRegistrationEnabled
+                        }
+                        name="publicRegistrationEnabled"
+                        type="checkbox"
+                      />
+                      Inscrições públicas abertas
+                    </label>
+
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        gap: "10px"
+                      }}
+                    >
+                      <input
+                        defaultChecked={event.waitlistEnabled}
+                        name="waitlistEnabled"
+                        type="checkbox"
+                      />
+                      Lista de espera habilitada
+                    </label>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "10px"
+                    }}
+                  >
+                    <button
+                      disabled={isSavingInformation}
+                      style={{
+                        background: "#2563eb",
+                        border: 0,
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                        padding: "12px 18px"
+                      }}
+                      type="submit"
+                    >
+                      {isSavingInformation
+                        ? "Salvando..."
+                        : "Salvar informações"}
+                    </button>
+
+                    <button
+                      disabled={isSavingInformation}
+                      onClick={() =>
+                        setIsEditingInformation(false)
+                      }
+                      style={{
+                        background: "transparent",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#e2e8f0",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                        padding: "12px 18px"
+                      }}
+                      type="button"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "14px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(210px, 1fr))"
+                  }}
+                >
+                  <article>
+                    <strong style={{ color: "#94a3b8" }}>
+                      Data e horário
+                    </strong>
+                    <p style={{ marginBottom: 0 }}>
+                      {formatDate(event.date)}
+                    </p>
+                  </article>
+
+                  <article>
+                    <strong style={{ color: "#94a3b8" }}>
+                      Capacidade
+                    </strong>
+                    <p style={{ marginBottom: 0 }}>
+                      {event.capacity}
+                    </p>
+                  </article>
+
+                  <article>
+                    <strong style={{ color: "#94a3b8" }}>
+                      Valor
+                    </strong>
+                    <p style={{ marginBottom: 0 }}>
+                      {event.isPaid
+                        ? formatMoney(event.price)
+                        : "Gratuito"}
+                    </p>
+                  </article>
+
+                  <article>
+                    <strong style={{ color: "#94a3b8" }}>
+                      Publicação
+                    </strong>
+                    <p style={{ marginBottom: 0 }}>
+                      {event.isPublic
+                        ? "Publicado"
+                        : "Não publicado"}
+                    </p>
+                  </article>
+                </div>
+              )}
             </section>
 
             <section

@@ -21,6 +21,19 @@ export const createEventSchema = z.object({
   trailStageId: z.string().trim().min(1).optional()
 });
 
+export const updateEventSchema = createEventSchema
+  .omit({
+    campusId: true,
+    trailStageId: true
+  })
+  .partial()
+  .refine(
+    (input) => Object.keys(input).length > 0,
+    {
+      message: "Informe ao menos um campo para atualizar."
+    }
+  );
+
 export const createRegistrationSchema = z
   .object({
     eventId: z.string().trim().min(1, "Evento é obrigatório."),
@@ -50,6 +63,7 @@ export const checkInByTokenSchema = z.object({
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
 export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;
 export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationStatusSchema>;

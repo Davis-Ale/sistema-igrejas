@@ -1,10 +1,13 @@
 import type {} from "@sistema-igrejas/auth";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
+import { ZodError } from "zod";
 import {
   checkInByTokenSchema,
   createEventSchema,
   createRegistrationSchema,
+  updateEventSchema,
   updateRegistrationStatusSchema
 } from "./event.schema.js";
 import {
@@ -13,6 +16,7 @@ import {
   createRegistration,
   getEventById,
   listEvents,
+  updateEvent,
   updateRegistrationStatus
 } from "./event.service.js";
 
@@ -25,6 +29,27 @@ function getChurchId(request: FastifyRequest): string {
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof ZodError) {
+    await reply.code(400).send({
+      error: "VALIDATION_ERROR",
+      message:
+        error.issues[0]?.message ??
+        "Os dados enviados são inválidos."
+    });
+    return;
+  }
+
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    await reply.code(409).send({
+      error: "EVENT_SLUG_ALREADY_EXISTS",
+      message: "Já existe um evento com este endereço."
+    });
+    return;
+  }
+
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -152,6 +177,24 @@ export async function registerEventRoutes(
       const params = request.params as { eventId: string };
 
       return await getEventById(prisma, churchId, params.eventId);
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.patch("/events/:eventId", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = request.params as { eventId: string };
+      const input = updateEventSchema.parse(request.body);
+      const event = await updateEvent(
+        prisma,
+        churchId,
+        params.eventId,
+        input
+      );
+
+      await reply.code(200).send(event);
     } catch (error) {
       await sendRouteError(error, reply);
     }
