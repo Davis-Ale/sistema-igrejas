@@ -86,6 +86,14 @@ enum PayMethod {
   BOLETO
 }
 
+enum EventFormFieldType {
+  TEXT
+  PARAGRAPH
+  SELECT
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+}
+
 model Church {
   id                    String       @id @default(cuid())
   churchId              String       @unique @default(cuid())
@@ -115,9 +123,11 @@ model Church {
   volunteerLogs VolunteerLog[]
   events        Event[]
   registrations Registration[]
-  eventTickets  EventTicket[]
-  ticketBatches TicketBatch[]
-  transactions  Transaction[]
+  eventTickets     EventTicket[]
+  ticketBatches    TicketBatch[]
+  eventFormFields  EventFormField[]
+  eventFormAnswers EventFormAnswer[]
+  transactions     Transaction[]
   userAccounts  UserAccount[]
   trialSignups  TrialSignup[]
   visitors      Visitor[]
@@ -392,10 +402,12 @@ model Event {
   trailStage TrailStage? @relation("EventTrailStage", fields: [trailStageId], references: [id], onDelete: SetNull)
 
   requiredByStages TrailStage[]   @relation("TrailStageRequiredEvent")
-  registrations    Registration[]
-  ticketTypes      EventTicket[]
-  ticketBatches    TicketBatch[]
-  transactions     Transaction[]
+  registrations Registration[]
+  ticketTypes   EventTicket[]
+  ticketBatches TicketBatch[]
+  formFields    EventFormField[]
+  formAnswers   EventFormAnswer[]
+  transactions  Transaction[]
 
   @@unique([churchId, slug])
   @@index([churchId])
@@ -423,6 +435,7 @@ model EventTicket {
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   batches       TicketBatch[]
   registrations Registration[]
+  formFields     EventFormFieldTicket[]
 
   @@unique([eventId, name])
   @@index([churchId])
@@ -457,6 +470,79 @@ model TicketBatch {
   @@index([churchId, isVisible])
 }
 
+model EventFormField {
+  id          String             @id @default(cuid())
+  churchId    String
+  eventId     String
+  label       String
+  type        EventFormFieldType
+  isRequired  Boolean            @default(false)
+  isSensitive Boolean            @default(false)
+  order       Int
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  church       Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event        Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  options      EventFormFieldOption[]
+  ticketScopes EventFormFieldTicket[]
+  answers      EventFormAnswer[]
+
+  @@unique([eventId, order])
+  @@index([churchId])
+  @@index([churchId, eventId])
+  @@index([churchId, eventId, isActive])
+}
+
+model EventFormFieldOption {
+  id        String   @id @default(cuid())
+  fieldId   String
+  label     String
+  value     String
+  order     Int
+  createdAt DateTime @default(now())
+
+  field EventFormField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldId, value])
+  @@unique([fieldId, order])
+  @@index([fieldId])
+}
+
+model EventFormFieldTicket {
+  fieldId  String
+  ticketId String
+
+  field  EventFormField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  ticket EventTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@id([fieldId, ticketId])
+  @@index([ticketId])
+}
+
+model EventFormAnswer {
+  id             String   @id @default(cuid())
+  churchId       String
+  eventId        String
+  registrationId String
+  fieldId        String
+  value          Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  church       Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registration Registration   @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  field        EventFormField @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  @@unique([registrationId, fieldId])
+  @@index([churchId])
+  @@index([churchId, eventId])
+  @@index([churchId, registrationId])
+  @@index([churchId, fieldId])
+}
+
 model Registration {
   id                 String    @id @default(cuid())
   churchId           String
@@ -483,6 +569,7 @@ model Registration {
   ticketBatch TicketBatch? @relation(fields: [ticketBatchId], references: [id], onDelete: Restrict)
   person      Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
   visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  formAnswers EventFormAnswer[]
 
   @@unique([eventId, personId])
   @@unique([eventId, visitorId])
