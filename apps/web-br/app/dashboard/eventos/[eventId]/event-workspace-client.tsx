@@ -71,6 +71,12 @@ type EventWorkspaceClientProps = {
   eventId: string;
 };
 
+type EventWorkspaceSection =
+  | "overview"
+  | "information"
+  | "tickets"
+  | "event-app";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
@@ -141,6 +147,8 @@ export function EventWorkspaceClient({
     useState("");
   const [ticketIsFree, setTicketIsFree] =
     useState(true);
+  const [activeSection, setActiveSection] =
+    useState<EventWorkspaceSection>("overview");
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -704,76 +712,74 @@ export function EventWorkspaceClient({
               </div>
             </header>
 
-            <nav
+            <div
               style={{
-                background: "rgba(15, 23, 42, 0.72)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "18px",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "10px",
-                padding: "10px"
+                alignItems: "start",
+                display: "grid",
+                gap: "24px",
+                gridTemplateColumns:
+                  "minmax(210px, 250px) minmax(0, 1fr)"
               }}
             >
-              <a
-                href="#visao-geral"
+              <nav
                 style={{
-                  background: "#2563eb",
-                  borderRadius: "12px",
-                  color: "#ffffff",
-                  fontSize: "14px",
-                  fontWeight: 900,
-                  padding: "10px 14px",
-                  textDecoration: "none"
+                  background: "rgba(15, 23, 42, 0.82)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "20px",
+                  display: "grid",
+                  gap: "8px",
+                  padding: "12px",
+                  position: "sticky",
+                  top: "24px"
                 }}
               >
-                Visão geral
-              </a>
+                {[
+                  ["overview", "Visão geral"],
+                  ["information", "Informações"],
+                  ["tickets", "Ingressos"],
+                  ["event-app", "Aplicativo do Evento"]
+                ].map(([section, label]) => (
+                  <button
+                    key={section}
+                    onClick={() =>
+                      setActiveSection(
+                        section as EventWorkspaceSection
+                      )
+                    }
+                    style={{
+                      background:
+                        activeSection === section
+                          ? "#2563eb"
+                          : "transparent",
+                      border: 0,
+                      borderRadius: "12px",
+                      color:
+                        activeSection === section
+                          ? "#ffffff"
+                          : "#cbd5e1",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: 900,
+                      padding: "12px 14px",
+                      textAlign: "left"
+                    }}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
 
-              <a
-                href="#informacoes"
+              <div
                 style={{
-                  borderRadius: "12px",
-                  color: "#cbd5e1",
-                  fontSize: "14px",
-                  fontWeight: 900,
-                  padding: "10px 14px",
-                  textDecoration: "none"
+                  display: "grid",
+                  gap: "20px",
+                  minWidth: 0
                 }}
               >
-                Informações
-              </a>
-
-              <a
-                href="#ingressos"
-                style={{
-                  borderRadius: "12px",
-                  color: "#cbd5e1",
-                  fontSize: "14px",
-                  fontWeight: 900,
-                  padding: "10px 14px",
-                  textDecoration: "none"
-                }}
-              >
-                Ingressos
-              </a>
-
-              <a
-                href="#aplicativo-do-evento"
-                style={{
-                  borderRadius: "12px",
-                  color: "#cbd5e1",
-                  fontSize: "14px",
-                  fontWeight: 900,
-                  padding: "10px 14px",
-                  textDecoration: "none"
-                }}
-              >
-                Aplicativo do Evento
-              </a>
-            </nav>
-
-            <section
+            {activeSection === "overview" ? (
+              <section
               id="visao-geral"
               style={{
                 display: "grid",
@@ -879,9 +885,11 @@ export function EventWorkspaceClient({
                     : "Gratuito"}
                 </p>
               </article>
-            </section>
+              </section>
+            ) : null}
 
-            <section
+            {activeSection === "information" ? (
+              <section
               id="informacoes"
               style={{
                 background: "rgba(15, 23, 42, 0.82)",
@@ -1271,7 +1279,350 @@ export function EventWorkspaceClient({
               )}
             </section>
 
-            <section
+            ) : null}
+
+            {activeSection === "tickets" ? (
+              <section
+                id="ingressos"
+                style={{
+                  background: "rgba(15, 23, 42, 0.82)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "20px",
+                  display: "grid",
+                  gap: "22px",
+                  padding: "24px"
+                }}
+              >
+                <header>
+                  <p
+                    style={{
+                      color: "#60a5fa",
+                      fontSize: "13px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      margin: "0 0 8px",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Ingressos
+                  </p>
+                  <h2
+                    style={{
+                      color: "#ffffff",
+                      fontSize: "24px",
+                      margin: 0
+                    }}
+                  >
+                    Ingressos e lotes
+                  </h2>
+                </header>
+
+                {ticketMessage ? (
+                  <p
+                    style={{
+                      background: "rgba(5, 150, 105, 0.16)",
+                      border:
+                        "1px solid rgba(52, 211, 153, 0.26)",
+                      borderRadius: "12px",
+                      color: "#a7f3d0",
+                      margin: 0,
+                      padding: "12px"
+                    }}
+                  >
+                    {ticketMessage}
+                  </p>
+                ) : null}
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "18px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(280px, 1fr))"
+                  }}
+                >
+                  <form
+                    onSubmit={handleCreateTicket}
+                    style={{
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "16px",
+                      display: "grid",
+                      gap: "12px",
+                      padding: "18px"
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>
+                      Criar ingresso
+                    </h3>
+
+                    <input
+                      name="ticketName"
+                      placeholder="Nome do ingresso"
+                      required
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <textarea
+                      name="ticketDescription"
+                      placeholder="Descrição"
+                      rows={3}
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <select
+                      defaultValue="free"
+                      name="ticketType"
+                      onChange={(event) =>
+                        setTicketIsFree(
+                          event.target.value === "free"
+                        )
+                      }
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    >
+                      <option value="free">Gratuito</option>
+                      <option value="paid">Pago</option>
+                    </select>
+
+                    <label>
+                      <input
+                        defaultChecked
+                        name="ticketVisible"
+                        type="checkbox"
+                      />{" "}
+                      Visível para inscrição
+                    </label>
+
+                    <button
+                      disabled={isCreatingTicket}
+                      style={{
+                        background: "#2563eb",
+                        border: 0,
+                        borderRadius: "10px",
+                        color: "#ffffff",
+                        fontWeight: 900,
+                        padding: "12px"
+                      }}
+                      type="submit"
+                    >
+                      {isCreatingTicket
+                        ? "Criando..."
+                        : ticketIsFree
+                          ? "Criar ingresso gratuito"
+                          : "Criar ingresso pago"}
+                    </button>
+                  </form>
+
+                  <form
+                    onSubmit={handleCreateBatch}
+                    style={{
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "16px",
+                      display: "grid",
+                      gap: "12px",
+                      padding: "18px"
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>Criar lote</h3>
+
+                    <select
+                      onChange={(event) =>
+                        setSelectedTicketId(
+                          event.target.value
+                        )
+                      }
+                      required
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                      value={selectedTicketId}
+                    >
+                      <option value="">Selecione o ingresso</option>
+                      {tickets.map((ticket) => (
+                        <option
+                          key={ticket.id}
+                          value={ticket.id}
+                        >
+                          {ticket.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      name="batchName"
+                      placeholder="Nome do lote"
+                      required
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <input
+                      min="1"
+                      name="batchQuantity"
+                      placeholder="Quantidade"
+                      required
+                      type="number"
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <input
+                      disabled={
+                        tickets.find(
+                          (ticket) =>
+                            ticket.id === selectedTicketId
+                        )?.isFree ?? true
+                      }
+                      min="0"
+                      name="batchPrice"
+                      placeholder="Preço"
+                      required
+                      step="0.01"
+                      type="number"
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <input
+                      name="salesStart"
+                      required
+                      type="datetime-local"
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <input
+                      name="salesEnd"
+                      required
+                      type="datetime-local"
+                      style={{
+                        borderRadius: "10px",
+                        padding: "12px"
+                      }}
+                    />
+
+                    <label>
+                      <input
+                        defaultChecked
+                        name="batchVisible"
+                        type="checkbox"
+                      />{" "}
+                      Lote visível
+                    </label>
+
+                    <button
+                      disabled={
+                        isCreatingBatch ||
+                        !selectedTicketId
+                      }
+                      style={{
+                        background: "#2563eb",
+                        border: 0,
+                        borderRadius: "10px",
+                        color: "#ffffff",
+                        fontWeight: 900,
+                        padding: "12px"
+                      }}
+                      type="submit"
+                    >
+                      {isCreatingBatch
+                        ? "Criando..."
+                        : "Criar lote"}
+                    </button>
+                  </form>
+                </div>
+
+                {isLoadingTickets ? (
+                  <p>Carregando ingressos...</p>
+                ) : null}
+
+                {!isLoadingTickets &&
+                tickets.length === 0 ? (
+                  <p>Nenhum ingresso cadastrado.</p>
+                ) : null}
+
+                {tickets.map((ticket) => (
+                  <article
+                    key={ticket.id}
+                    style={{
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "16px",
+                      padding: "18px"
+                    }}
+                  >
+                    <h3 style={{ marginTop: 0 }}>
+                      {ticket.name}
+                    </h3>
+                    <p>
+                      {ticket.isFree ? "Gratuito" : "Pago"}
+                      {" - "}
+                      {ticket.isVisible
+                        ? "Visível"
+                        : "Oculto"}
+                    </p>
+
+                    {ticket.batches.map((batch) => {
+                      const sold =
+                        batch._count.registrations;
+                      const available = Math.max(
+                        batch.quantity - sold,
+                        0
+                      );
+
+                      return (
+                        <div
+                          key={batch.id}
+                          style={{
+                            background: "#0f172a",
+                            borderRadius: "12px",
+                            marginTop: "10px",
+                            padding: "14px"
+                          }}
+                        >
+                          <strong>{batch.name}</strong>
+                          <p>
+                            {formatMoney(batch.price)}
+                            {" - "}
+                            {sold} vendidos
+                            {" - "}
+                            {available} disponíveis
+                          </p>
+                          <small>
+                            {formatDate(batch.salesStart)}
+                            {" até "}
+                            {formatDate(batch.salesEnd)}
+                          </small>
+                        </div>
+                      );
+                    })}
+                  </article>
+                ))}
+              </section>
+            ) : null}
+
+            {activeSection === "event-app" ? (
+              <section
               id="aplicativo-do-evento"
               style={{
                 background:
@@ -1359,7 +1710,10 @@ export function EventWorkspaceClient({
                   /{event.church.slug}/{event.slug}
                 </code>
               </div>
-            </section>
+              </section>
+            ) : null}
+              </div>
+            </div>
           </>
         ) : null}
       </section>
