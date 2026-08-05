@@ -10,7 +10,8 @@ import {
 import { PrismaClient } from "@sistema-igrejas/database";
 import {
   registerEventRoutes,
-  registerPublicEventRoutes
+  registerPublicEventRoutes,
+  registerTicketRoutes
 } from "@sistema-igrejas/events";
 import { registerFinancialRoutes } from "@sistema-igrejas/financial";
 import {
@@ -96,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
+      await registerTicketRoutes(protectedRoutes, prisma);
       await registerFinancialRoutes(protectedRoutes, prisma);
       await registerCellListRoutes(protectedRoutes, prisma);
       await registerCellRoutes(protectedRoutes, prisma);
