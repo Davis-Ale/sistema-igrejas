@@ -247,10 +247,18 @@ export async function createPublicRegistrationBySlugs(
     );
   }
 
+  const normalizedEmail =
+    normalizeEmail(input.email);
+
   const normalizedInput: CreatePublicRegistrationInput = {
     name: input.name.trim(),
     phone: normalizePhone(input.phone),
-    email: normalizeEmail(input.email)
+    ticketId: input.ticketId,
+    ticketBatchId: input.ticketBatchId,
+    answers: input.answers,
+    ...(normalizedEmail !== undefined
+      ? { email: normalizedEmail }
+      : {})
   };
 
   const existingCheckInToken =

@@ -48,7 +48,20 @@ export const createRegistrationSchema = z
 export const createPublicRegistrationSchema = z.object({
   name: z.string().trim().min(2, "Nome é obrigatório."),
   phone: z.string().trim().min(8, "Telefone é obrigatório."),
-  email: z.string().trim().email("E-mail inválido.").optional()
+  email: z.string().trim().email("E-mail inválido.").optional(),
+  ticketId: z.string().trim().min(1, "Ingresso é obrigatório."),
+  ticketBatchId: z.string().trim().min(1, "Lote é obrigatório."),
+  answers: z
+    .array(
+      z.object({
+        fieldId: z.string().trim().min(1),
+        value: z.union([
+          z.string(),
+          z.array(z.string())
+        ])
+      })
+    )
+    .default([])
 });
 
 export const updateRegistrationStatusSchema = z.object({

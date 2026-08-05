@@ -283,6 +283,51 @@ export async function getPublicEventById(prisma: PrismaClient, eventId: string) 
           status: true,
           waitlistedAt: true
         }
+      },
+      ticketTypes: {
+        where: {
+          isVisible: true
+        },
+        include: {
+          batches: {
+            where: {
+              isVisible: true
+            },
+            include: {
+              _count: {
+                select: {
+                  registrations: true
+                }
+              }
+            },
+            orderBy: {
+              salesStart: "asc"
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "asc"
+        }
+      },
+      formFields: {
+        where: {
+          isActive: true
+        },
+        include: {
+          options: {
+            orderBy: {
+              order: "asc"
+            }
+          },
+          ticketScopes: {
+            select: {
+              ticketId: true
+            }
+          }
+        },
+        orderBy: {
+          order: "asc"
+        }
       }
     }
   });
@@ -424,9 +469,54 @@ export async function createPublicRegistration(
           waitlistedAt: true
         }
       },
-      church: {
-        select: {
-          slug: true
+      ticketTypes: {
+        where: {
+          id: input.ticketId,
+          isVisible: true
+        },
+        include: {
+          batches: {
+            where: {
+              id: input.ticketBatchId,
+              isVisible: true
+            },
+            include: {
+              _count: {
+                select: {
+                  registrations: true
+                }
+              }
+            }
+          }
+        }
+      },
+      formFields: {
+        where: {
+          isActive: true,
+          OR: [
+            {
+              ticketScopes: {
+                none: {}
+              }
+            },
+            {
+              ticketScopes: {
+                some: {
+                  ticketId: input.ticketId
+                }
+              }
+            }
+          ]
+        },
+        include: {
+          options: {
+            orderBy: {
+              order: "asc"
+            }
+          }
+        },
+        orderBy: {
+          order: "asc"
         }
       }
     }
@@ -434,6 +524,121 @@ export async function createPublicRegistration(
 
   if (!event) {
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
+  }
+
+  const ticket = event.ticketTypes[0];
+
+  if (!ticket) {
+    throw new Error("EVENT_TICKET_NOT_FOUND");
+  }
+
+  const batch = ticket.batches[0];
+
+  if (!batch) {
+    throw new Error("TICKET_BATCH_NOT_FOUND");
+  }
+
+  const now = new Date();
+
+  if (
+    batch.salesStart > now ||
+    batch.salesEnd < now
+  ) {
+    throw new Error("TICKET_BATCH_NOT_AVAILABLE");
+  }
+
+  if (
+    batch._count.registrations >=
+    batch.quantity
+  ) {
+    throw new Error("TICKET_BATCH_SOLD_OUT");
+  }
+
+  const applicableFields = new Map(
+    event.formFields.map((field) => [
+      field.id,
+      field
+    ])
+  );
+
+  const receivedAnswers = new Map(
+    input.answers.map((answer) => [
+      answer.fieldId,
+      answer.value
+    ])
+  );
+
+  for (const answer of input.answers) {
+    if (!applicableFields.has(answer.fieldId)) {
+      throw new Error("INVALID_FORM_ANSWER");
+    }
+  }
+
+  for (const field of event.formFields) {
+    const value = receivedAnswers.get(field.id);
+
+    const isEmpty =
+      value === undefined ||
+      value === "" ||
+      (
+        Array.isArray(value) &&
+        value.length === 0
+      );
+
+    if (field.isRequired && isEmpty) {
+      throw new Error(
+        "REQUIRED_FORM_ANSWER_MISSING"
+      );
+    }
+
+    if (isEmpty) {
+      continue;
+    }
+
+    if (
+      field.type === "MULTIPLE_CHOICE" &&
+      !Array.isArray(value)
+    ) {
+      throw new Error("INVALID_FORM_ANSWER");
+    }
+
+    if (
+      field.type !== "MULTIPLE_CHOICE" &&
+      Array.isArray(value)
+    ) {
+      throw new Error("INVALID_FORM_ANSWER");
+    }
+
+    if (
+      field.type === "TEXT" ||
+      field.type === "PARAGRAPH"
+    ) {
+      if (
+        typeof value !== "string" ||
+        !value.trim()
+      ) {
+        throw new Error("INVALID_FORM_ANSWER");
+      }
+
+      continue;
+    }
+
+    const allowedValues = new Set(
+      field.options.map((option) => option.value)
+    );
+
+    const selectedValues = Array.isArray(value)
+      ? value
+      : [value];
+
+    if (
+      selectedValues.some(
+        (selectedValue) =>
+          !allowedValues.has(selectedValue)
+      )
+    ) {
+      throw new Error("INVALID_FORM_ANSWER");
+    }
   }
 
   const activeRegistrations =
@@ -449,39 +654,155 @@ export async function createPublicRegistration(
     throw new Error("EVENT_CAPACITY_REACHED");
   }
 
-  const visitor = await prisma.visitor.create({
-    data: {
-      churchId: event.churchId,
-      campusId: event.campusId,
-      name: input.name,
-      phone: input.phone,
-      email: input.email ?? null,
-      firstVisitAt: new Date(),
-      notes:
-        `Inscrição pública no evento: ${event.title}`
-    }
-  });
+  const isPaid = Number(batch.price) > 0;
 
-  const registration = await prisma.registration.create({
+  const registration =
+    await prisma.$transaction(
+      async (transaction) => {
+        const freshBatch =
+          await transaction.ticketBatch.findFirst({
+            where: {
+              id: batch.id,
+              churchId: event.churchId,
+              eventId: event.id,
+              ticketId: ticket.id,
+              isVisible: true
+            },
+            include: {
+              _count: {
+                select: {
+                  registrations: {
+                    where: {
+                      status: {
+                        not: "CANCELLED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+        if (!freshBatch) {
+          throw new Error(
+            "TICKET_BATCH_NOT_FOUND"
+          );
+        }
+
+        if (
+          freshBatch._count.registrations >=
+          freshBatch.quantity
+        ) {
+          throw new Error("TICKET_BATCH_SOLD_OUT");
+        }
+
+        const visitor =
+          await transaction.visitor.create({
+            data: {
+              churchId: event.churchId,
+              campusId: event.campusId,
+              name: input.name,
+              phone: input.phone,
+              email: input.email ?? null,
+              firstVisitAt: new Date(),
+              notes:
+                `Inscrição pública no evento: ${event.title}`
+            }
+          });
+
+        return transaction.registration.create({
+          data: {
+            churchId: event.churchId,
+            eventId: event.id,
+            ticketId: ticket.id,
+            ticketBatchId: freshBatch.id,
+            visitorId: visitor.id,
+            status: isWaitlisted
+              ? "PENDING"
+              : isPaid
+                ? "PENDING"
+                : "CONFIRMED",
+            paymentStatus: isWaitlisted
+              ? isPaid
+                ? "WAITING_PAYMENT"
+                : "WAITLISTED"
+              : isPaid
+                ? "PENDING"
+                : "NOT_REQUIRED",
+            confirmedAt:
+              !isPaid && !isWaitlisted
+                ? new Date()
+                : null,
+            waitlistedAt:
+              isWaitlisted ? new Date() : null,
+            registrationSource: "PUBLIC",
+            formAnswers: {
+              create: input.answers
+                .filter((answer) =>
+                  applicableFields.has(
+                    answer.fieldId
+                  )
+                )
+                .map((answer) => ({
+                  churchId: event.churchId,
+                  eventId: event.id,
+                  fieldId: answer.fieldId,
+                  value: answer.value
+                }))
+            }
+          },
+          include: {
+            visitor: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true
+              }
+            },
+            event: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                publicSlug: true,
+                date: true,
+                price: true,
+                isPaid: true,
+                church: {
+                  select: {
+                    slug: true
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    );
+
+  if (!isPaid || isWaitlisted) {
+    return registration;
+  }
+
+  const paymentId =
+    await createEventRegistrationTransaction(
+      prisma,
+      {
+        churchId: event.churchId,
+        campusId: event.campusId,
+        eventId: event.id,
+        personId: null,
+        amount: batch.price
+      }
+    );
+
+  return prisma.registration.update({
+    where: {
+      id: registration.id
+    },
     data: {
-      churchId: event.churchId,
-      eventId: event.id,
-      visitorId: visitor.id,
-      status: buildRegistrationStatus(
-        event,
-        isWaitlisted
-      ),
-      paymentStatus: buildPaymentStatus(
-        event,
-        isWaitlisted
-      ),
-      confirmedAt: buildConfirmedAt(
-        event,
-        isWaitlisted
-      ),
-      waitlistedAt:
-        isWaitlisted ? new Date() : null,
-      registrationSource: "PUBLIC"
+      paymentId
     },
     include: {
       visitor: {
@@ -510,60 +831,6 @@ export async function createPublicRegistration(
       }
     }
   });
-
-  let registrationResult = registration;
-
-  if (event.isPaid && !isWaitlisted) {
-    const paymentId =
-      await createEventRegistrationTransaction(
-        prisma,
-        {
-          churchId: event.churchId,
-          campusId: event.campusId,
-          eventId: event.id,
-          personId: null,
-          amount: event.price
-        }
-      );
-
-    registrationResult =
-      await prisma.registration.update({
-        where: {
-          id: registration.id
-        },
-        data: {
-          paymentId
-        },
-        include: {
-          visitor: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true
-            }
-          },
-          event: {
-            select: {
-              id: true,
-              title: true,
-              slug: true,
-              publicSlug: true,
-              date: true,
-              price: true,
-              isPaid: true,
-              church: {
-                select: {
-                  slug: true
-                }
-              }
-            }
-          }
-        }
-      });
-  }
-
-  return registrationResult;
 }
 
 export async function updateRegistrationStatus(

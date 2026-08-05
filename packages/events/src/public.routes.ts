@@ -78,6 +78,56 @@ async function sendPublicRouteError(
     return;
   }
 
+  const publicErrors: Record<
+    string,
+    {
+      status: number;
+      code: string;
+      message: string;
+    }
+  > = {
+    EVENT_TICKET_NOT_FOUND: {
+      status: 404,
+      code: "EVENT_TICKET_NOT_FOUND",
+      message: "Ingresso não encontrado."
+    },
+    TICKET_BATCH_NOT_FOUND: {
+      status: 404,
+      code: "TICKET_BATCH_NOT_FOUND",
+      message: "Lote não encontrado."
+    },
+    TICKET_BATCH_NOT_AVAILABLE: {
+      status: 409,
+      code: "TICKET_BATCH_NOT_AVAILABLE",
+      message: "Este lote não está disponível para venda."
+    },
+    TICKET_BATCH_SOLD_OUT: {
+      status: 409,
+      code: "TICKET_BATCH_SOLD_OUT",
+      message: "As vagas deste lote foram preenchidas."
+    },
+    REQUIRED_FORM_ANSWER_MISSING: {
+      status: 400,
+      code: "REQUIRED_FORM_ANSWER_MISSING",
+      message: "Preencha todos os campos obrigatórios."
+    },
+    INVALID_FORM_ANSWER: {
+      status: 400,
+      code: "INVALID_FORM_ANSWER",
+      message: "Uma ou mais respostas são inválidas."
+    }
+  };
+
+  const publicError = publicErrors[error.message];
+
+  if (publicError) {
+    await reply.code(publicError.status).send({
+      error: publicError.code,
+      message: publicError.message
+    });
+    return;
+  }
+
   if (error.message === "EVENT_CAPACITY_REACHED") {
     await reply.code(409).send({
       error: "EVENT_CAPACITY_REACHED",

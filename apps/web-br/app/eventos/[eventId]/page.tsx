@@ -13,6 +13,47 @@ type ApiErrorResponse = {
   message?: string;
 };
 
+type PublicTicketBatch = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: string | number;
+  salesStart: string;
+  salesEnd: string;
+  _count: {
+    registrations: number;
+  };
+};
+
+type PublicTicket = {
+  id: string;
+  name: string;
+  description: string | null;
+  isFree: boolean;
+  batches: PublicTicketBatch[];
+};
+
+type PublicFormField = {
+  id: string;
+  label: string;
+  type:
+    | "TEXT"
+    | "PARAGRAPH"
+    | "SELECT"
+    | "SINGLE_CHOICE"
+    | "MULTIPLE_CHOICE";
+  isRequired: boolean;
+  isSensitive: boolean;
+  options: Array<{
+    id: string;
+    label: string;
+    value: string;
+  }>;
+  ticketScopes: Array<{
+    ticketId: string;
+  }>;
+};
+
 type PublicEvent = {
   id: string;
   title: string;
@@ -21,9 +62,8 @@ type PublicEvent = {
   date: string;
   price: string | number;
   isPaid: boolean;
-  church: {
-    slug: string;
-  };
+  ticketTypes: PublicTicket[];
+  formFields: PublicFormField[];
 };
 
 type PublicRegistration = {
@@ -97,11 +137,10 @@ function getSuccessMessage(
 function getAppUrl(
   event: PublicEvent
 ) {
-  if (event.publicSlug) {
-    return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.publicSlug)}#aplicativo`;
-  }
+  const publicSlug =
+    event.publicSlug ?? event.slug;
 
-  return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.church.slug)}/${encodeURIComponent(event.slug)}#aplicativo`;
+  return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(publicSlug)}#aplicativo`;
 }
 
 export default function PublicEventPage() {
@@ -153,6 +192,15 @@ export default function PublicEventPage() {
     setIsRegistering
   ] = useState(false);
 
+  const [ticketId, setTicketId] =
+    useState("");
+
+  const [ticketBatchId, setTicketBatchId] =
+    useState("");
+
+  const [answers, setAnswers] =
+    useState<Record<string, string | string[]>>({});
+
   async function loadEvent() {
     setError(null);
     setIsLoading(true);
@@ -181,6 +229,14 @@ export default function PublicEventPage() {
         await response.json() as PublicEvent;
 
       setEvent(data);
+
+      const firstTicket =
+        data.ticketTypes[0] ?? null;
+
+      setTicketId(firstTicket?.id ?? "");
+      setTicketBatchId(
+        firstTicket?.batches[0]?.id ?? ""
+      );
     } catch {
       setError(
         "Não foi possível carregar este evento agora."
@@ -199,6 +255,12 @@ export default function PublicEventPage() {
     setRegistration(null);
     setIsRegistering(true);
 
+    if (!ticketId || !ticketBatchId) {
+      setError("Selecione o ingresso e o lote.");
+      setIsRegistering(false);
+      return;
+    }
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/public/events/${eventId}/register`,
@@ -206,7 +268,15 @@ export default function PublicEventPage() {
           body: JSON.stringify({
             email: email.trim() || undefined,
             name,
-            phone
+            phone,
+            ticketId,
+            ticketBatchId,
+            answers: Object.entries(answers).map(
+              ([fieldId, value]) => ({
+                fieldId,
+                value
+              })
+            )
           }),
           headers: {
             "Content-Type": "application/json"
@@ -233,6 +303,7 @@ export default function PublicEventPage() {
       setRegistration(data);
       setName("");
       setPhone("");
+      setAnswers({});
     } catch {
       setError(
         "Não foi possível realizar a inscrição agora."
@@ -245,6 +316,41 @@ export default function PublicEventPage() {
   useEffect(() => {
     void loadEvent();
   }, [eventId]);
+
+  const selectedTicket =
+    event?.ticketTypes.find(
+      (ticket) => ticket.id === ticketId
+    ) ?? null;
+
+  const availableBatches =
+    selectedTicket?.batches.filter((batch) => {
+      const now = Date.now();
+
+      return (
+        new Date(batch.salesStart).getTime() <= now &&
+        new Date(batch.salesEnd).getTime() >= now &&
+        batch._count.registrations < batch.quantity
+      );
+    }) ?? [];
+
+  const visibleFields =
+    event?.formFields.filter(
+      (field) =>
+        field.ticketScopes.length === 0 ||
+        field.ticketScopes.some(
+          (scope) => scope.ticketId === ticketId
+        )
+    ) ?? [];
+
+  function setAnswer(
+    fieldId: string,
+    value: string | string[]
+  ) {
+    setAnswers((current) => ({
+      ...current,
+      [fieldId]: value
+    }));
+  }
 
   return (
     <main
