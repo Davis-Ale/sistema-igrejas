@@ -75,7 +75,37 @@ type EventWorkspaceSection =
   | "overview"
   | "information"
   | "tickets"
+  | "registration-form"
   | "event-app";
+
+type EventFormFieldType =
+  | "TEXT"
+  | "PARAGRAPH"
+  | "SELECT"
+  | "SINGLE_CHOICE"
+  | "MULTIPLE_CHOICE";
+
+type EventFormField = {
+  id: string;
+  label: string;
+  type: EventFormFieldType;
+  isRequired: boolean;
+  isSensitive: boolean;
+  isActive: boolean;
+  order: number;
+  options: Array<{
+    id: string;
+    label: string;
+    value: string;
+    order: number;
+  }>;
+  ticketScopes: Array<{
+    ticket: {
+      id: string;
+      name: string;
+    };
+  }>;
+};
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
@@ -149,6 +179,16 @@ export function EventWorkspaceClient({
     useState(true);
   const [activeSection, setActiveSection] =
     useState<EventWorkspaceSection>("overview");
+  const [formFields, setFormFields] =
+    useState<EventFormField[]>([]);
+  const [isLoadingFormFields, setIsLoadingFormFields] =
+    useState(true);
+  const [isCreatingFormField, setIsCreatingFormField] =
+    useState(false);
+  const [formFieldMessage, setFormFieldMessage] =
+    useState<string | null>(null);
+  const [formFieldType, setFormFieldType] =
+    useState<EventFormFieldType>("TEXT");
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -267,6 +307,54 @@ export function EventWorkspaceClient({
 
   useEffect(() => {
     void loadTickets();
+  }, [eventId]);
+
+  async function loadFormFields() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsLoadingFormFields(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/form-fields`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = await response.json() as
+        | EventFormField[]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          !Array.isArray(data) && data.message
+            ? data.message
+            : "Não foi possível carregar o formulário."
+        );
+        return;
+      }
+
+      setFormFields(data as EventFormField[]);
+    } catch {
+      setError(
+        "Não foi possível carregar o formulário agora."
+      );
+    } finally {
+      setIsLoadingFormFields(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadFormFields();
   }, [eventId]);
 
   async function handleCreateTicket(
@@ -441,6 +529,222 @@ export function EventWorkspaceClient({
       );
     } finally {
       setIsCreatingBatch(false);
+    }
+  }
+
+  async function handleCreateFormField(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const form = formEvent.currentTarget;
+    const formData = new FormData(form);
+    const options = String(
+      formData.get("fieldOptions") ?? ""
+    )
+      .split("\n")
+      .map((option) => option.trim())
+      .filter(Boolean)
+      .map((option) => ({
+        label: option,
+        value: option
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "")
+      }));
+
+    setError(null);
+    setFormFieldMessage(null);
+    setIsCreatingFormField(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/form-fields`,
+        {
+          body: JSON.stringify({
+            label: String(
+              formData.get("fieldLabel") ?? ""
+            ).trim(),
+            type: formFieldType,
+            isRequired:
+              formData.get("fieldRequired") === "on",
+            isSensitive:
+              formData.get("fieldSensitive") === "on",
+            isActive: true,
+            ticketIds: formData
+              .getAll("fieldTicketIds")
+              .map(String),
+            options
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | EventFormField
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível criar o campo."
+        );
+        return;
+      }
+
+      setFormFields((current) => [
+        ...current,
+        data as EventFormField
+      ]);
+      setFormFieldMessage("Campo criado.");
+      setFormFieldType("TEXT");
+      form.reset();
+    } catch {
+      setError(
+        "Não foi possível criar o campo agora."
+      );
+    } finally {
+      setIsCreatingFormField(false);
+    }
+  }
+
+  async function handleToggleFormField(
+    field: EventFormField
+  ) {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setError(null);
+    setFormFieldMessage(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/form-fields/${field.id}`,
+        {
+          body: JSON.stringify({
+            isActive: !field.isActive
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventFormField
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar o campo."
+        );
+        return;
+      }
+
+      setFormFields((current) =>
+        current.map((currentField) =>
+          currentField.id === field.id
+            ? data as EventFormField
+            : currentField
+        )
+      );
+    } catch {
+      setError(
+        "Não foi possível atualizar o campo agora."
+      );
+    }
+  }
+
+  async function handleMoveFormField(
+    fieldId: string,
+    direction: -1 | 1
+  ) {
+    const currentIndex = formFields.findIndex(
+      (field) => field.id === fieldId
+    );
+    const targetIndex = currentIndex + direction;
+
+    if (
+      currentIndex < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= formFields.length
+    ) {
+      return;
+    }
+
+    const reordered = [...formFields];
+    const [field] = reordered.splice(currentIndex, 1);
+
+    if (!field) {
+      return;
+    }
+
+    reordered.splice(targetIndex, 0, field);
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/form-fields-order`,
+        {
+          body: JSON.stringify({
+            fieldIds: reordered.map(
+              (currentField) => currentField.id
+            )
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventFormField[]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          !Array.isArray(data) && data.message
+            ? data.message
+            : "Não foi possível alterar a ordem."
+        );
+        return;
+      }
+
+      setFormFields(data as EventFormField[]);
+    } catch {
+      setError(
+        "Não foi possível alterar a ordem agora."
+      );
     }
   }
 
@@ -738,6 +1042,7 @@ export function EventWorkspaceClient({
                   ["overview", "Visão geral"],
                   ["information", "Informações"],
                   ["tickets", "Ingressos"],
+                  ["registration-form", "Formulário de inscrição"],
                   ["event-app", "Aplicativo do Evento"]
                 ].map(([section, label]) => (
                   <button
@@ -1621,7 +1926,194 @@ export function EventWorkspaceClient({
               </section>
             ) : null}
 
-            {activeSection === "event-app" ? (
+            {activeSection === "registration-form" ? (
+  <section
+    style={{
+      background: "rgba(15, 23, 42, 0.82)",
+      border: "1px solid rgba(148, 163, 184, 0.18)",
+      borderRadius: "20px",
+      display: "grid",
+      gap: "20px",
+      padding: "24px"
+    }}
+  >
+    <header>
+      <p style={{ color: "#60a5fa", fontWeight: 900 }}>
+        FORMULÁRIO DE INSCRIÇÃO
+      </p>
+      <h2>Campos do participante</h2>
+    </header>
+
+    {formFieldMessage ? <p>{formFieldMessage}</p> : null}
+
+    <form
+      onSubmit={handleCreateFormField}
+      style={{
+        display: "grid",
+        gap: "14px"
+      }}
+    >
+      <input
+        name="fieldLabel"
+        placeholder="Título do campo"
+        required
+        style={{ borderRadius: "10px", padding: "12px" }}
+      />
+
+      <select
+        onChange={(event) =>
+          setFormFieldType(
+            event.target.value as EventFormFieldType
+          )
+        }
+        value={formFieldType}
+        style={{ borderRadius: "10px", padding: "12px" }}
+      >
+        <option value="TEXT">Texto</option>
+        <option value="PARAGRAPH">Parágrafo</option>
+        <option value="SELECT">Lista</option>
+        <option value="SINGLE_CHOICE">
+          Múltipla escolha
+        </option>
+        <option value="MULTIPLE_CHOICE">
+          Várias opções
+        </option>
+      </select>
+
+      {[
+        "SELECT",
+        "SINGLE_CHOICE",
+        "MULTIPLE_CHOICE"
+      ].includes(formFieldType) ? (
+        <textarea
+          name="fieldOptions"
+          placeholder="Uma opção por linha"
+          required
+          rows={5}
+          style={{ borderRadius: "10px", padding: "12px" }}
+        />
+      ) : null}
+
+      <fieldset>
+        <legend>Aplicar aos ingressos</legend>
+        {tickets.length === 0 ? (
+          <p>Todos os ingressos</p>
+        ) : (
+          tickets.map((ticket) => (
+            <label
+              key={ticket.id}
+              style={{ display: "block", margin: "8px 0" }}
+            >
+              <input
+                name="fieldTicketIds"
+                type="checkbox"
+                value={ticket.id}
+              />{" "}
+              {ticket.name}
+            </label>
+          ))
+        )}
+      </fieldset>
+
+      <label>
+        <input name="fieldRequired" type="checkbox" />{" "}
+        Campo obrigatório
+      </label>
+
+      <label>
+        <input name="fieldSensitive" type="checkbox" />{" "}
+        Dado sensível
+      </label>
+
+      <button
+        disabled={isCreatingFormField}
+        style={{
+          background: "#2563eb",
+          border: 0,
+          borderRadius: "10px",
+          color: "#ffffff",
+          fontWeight: 900,
+          padding: "12px"
+        }}
+        type="submit"
+      >
+        {isCreatingFormField
+          ? "Criando..."
+          : "Adicionar campo"}
+      </button>
+    </form>
+
+    {isLoadingFormFields ? (
+      <p>Carregando campos...</p>
+    ) : null}
+
+    {!isLoadingFormFields &&
+    formFields.length === 0 ? (
+      <p>Nenhum campo configurado.</p>
+    ) : null}
+
+    {formFields.map((field, index) => (
+      <article
+        key={field.id}
+        style={{
+          border:
+            "1px solid rgba(148, 163, 184, 0.2)",
+          borderRadius: "14px",
+          padding: "16px"
+        }}
+      >
+        <strong>{field.label}</strong>
+
+        <p>
+          {field.type}
+          {field.isRequired ? " - Obrigatório" : ""}
+          {field.isSensitive ? " - Dado sensível" : ""}
+        </p>
+
+        <p>
+          {field.ticketScopes.length > 0
+            ? field.ticketScopes
+                .map((scope) => scope.ticket.name)
+                .join(", ")
+            : "Todos os ingressos"}
+        </p>
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            disabled={index === 0}
+            onClick={() =>
+              handleMoveFormField(field.id, -1)
+            }
+            type="button"
+          >
+            Subir
+          </button>
+
+          <button
+            disabled={index === formFields.length - 1}
+            onClick={() =>
+              handleMoveFormField(field.id, 1)
+            }
+            type="button"
+          >
+            Descer
+          </button>
+
+          <button
+            onClick={() =>
+              void handleToggleFormField(field)
+            }
+            type="button"
+          >
+            {field.isActive ? "Desativar" : "Ativar"}
+          </button>
+        </div>
+      </article>
+    ))}
+  </section>
+) : null}
+
+{activeSection === "event-app" ? (
               <section
               id="aplicativo-do-evento"
               style={{
