@@ -42,6 +42,31 @@ type ApiErrorResponse = {
   message?: string;
 };
 
+type TicketBatch = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: string | number;
+  salesStart: string;
+  salesEnd: string;
+  isVisible: boolean;
+  _count: {
+    registrations: number;
+  };
+};
+
+type EventTicket = {
+  id: string;
+  name: string;
+  description: string | null;
+  isFree: boolean;
+  isVisible: boolean;
+  batches: TicketBatch[];
+  _count: {
+    registrations: number;
+  };
+};
+
 type EventWorkspaceClientProps = {
   eventId: string;
 };
@@ -103,6 +128,19 @@ export function EventWorkspaceClient({
     useState(false);
   const [informationMessage, setInformationMessage] =
     useState<string | null>(null);
+  const [tickets, setTickets] = useState<EventTicket[]>([]);
+  const [isLoadingTickets, setIsLoadingTickets] =
+    useState(true);
+  const [isCreatingTicket, setIsCreatingTicket] =
+    useState(false);
+  const [isCreatingBatch, setIsCreatingBatch] =
+    useState(false);
+  const [ticketMessage, setTicketMessage] =
+    useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] =
+    useState("");
+  const [ticketIsFree, setTicketIsFree] =
+    useState(true);
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -169,6 +207,234 @@ export function EventWorkspaceClient({
 
     void loadEvent();
   }, [eventId, router]);
+
+  async function loadTickets() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsLoadingTickets(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/tickets`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = await response.json() as
+        | EventTicket[]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          !Array.isArray(data) && data.message
+            ? data.message
+            : "Não foi possível carregar os ingressos."
+        );
+        return;
+      }
+
+      const loadedTickets = data as EventTicket[];
+
+      setTickets(loadedTickets);
+      setSelectedTicketId((current) =>
+        current || loadedTickets[0]?.id || ""
+      );
+    } catch {
+      setError(
+        "Não foi possível carregar os ingressos agora."
+      );
+    } finally {
+      setIsLoadingTickets(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadTickets();
+  }, [eventId]);
+
+  async function handleCreateTicket(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const form = formEvent.currentTarget;
+    const formData = new FormData(form);
+
+    setError(null);
+    setTicketMessage(null);
+    setIsCreatingTicket(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/tickets`,
+        {
+          body: JSON.stringify({
+            name: String(
+              formData.get("ticketName") ?? ""
+            ).trim(),
+            description:
+              String(
+                formData.get("ticketDescription") ?? ""
+              ).trim() || undefined,
+            isFree:
+              String(formData.get("ticketType")) ===
+              "free",
+            isVisible:
+              formData.get("ticketVisible") === "on"
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | EventTicket
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível criar o ingresso."
+        );
+        return;
+      }
+
+      const createdTicket = data as EventTicket;
+
+      setTickets((current) => [
+        ...current,
+        createdTicket
+      ]);
+      setSelectedTicketId(createdTicket.id);
+      setTicketMessage("Ingresso criado.");
+      form.reset();
+      setTicketIsFree(true);
+    } catch {
+      setError(
+        "Não foi possível criar o ingresso agora."
+      );
+    } finally {
+      setIsCreatingTicket(false);
+    }
+  }
+
+  async function handleCreateBatch(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const form = formEvent.currentTarget;
+    const formData = new FormData(form);
+    const selectedTicket = tickets.find(
+      (ticket) => ticket.id === selectedTicketId
+    );
+
+    if (!selectedTicket) {
+      setError("Selecione um ingresso.");
+      return;
+    }
+
+    setError(null);
+    setTicketMessage(null);
+    setIsCreatingBatch(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/ticket-batches`,
+        {
+          body: JSON.stringify({
+            ticketId: selectedTicket.id,
+            name: String(
+              formData.get("batchName") ?? ""
+            ).trim(),
+            quantity: Number(
+              formData.get("batchQuantity")
+            ),
+            price: selectedTicket.isFree
+              ? 0
+              : Number(formData.get("batchPrice")),
+            salesStart: String(
+              formData.get("salesStart") ?? ""
+            ),
+            salesEnd: String(
+              formData.get("salesEnd") ?? ""
+            ),
+            isVisible:
+              formData.get("batchVisible") === "on"
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | TicketBatch
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível criar o lote."
+        );
+        return;
+      }
+
+      const createdBatch = data as TicketBatch;
+
+      setTickets((current) =>
+        current.map((ticket) =>
+          ticket.id === selectedTicket.id
+            ? {
+                ...ticket,
+                batches: [
+                  ...ticket.batches,
+                  createdBatch
+                ]
+              }
+            : ticket
+        )
+      );
+      setTicketMessage("Lote criado.");
+      form.reset();
+    } catch {
+      setError(
+        "Não foi possível criar o lote agora."
+      );
+    } finally {
+      setIsCreatingBatch(false);
+    }
+  }
 
   const publicRegistrationUrl = event
     ? `${WEB_BASE_URL}/eventos/${event.id}`
@@ -476,6 +742,20 @@ export function EventWorkspaceClient({
                 }}
               >
                 Informações
+              </a>
+
+              <a
+                href="#ingressos"
+                style={{
+                  borderRadius: "12px",
+                  color: "#cbd5e1",
+                  fontSize: "14px",
+                  fontWeight: 900,
+                  padding: "10px 14px",
+                  textDecoration: "none"
+                }}
+              >
+                Ingressos
               </a>
 
               <a
