@@ -13,43 +13,63 @@ const fieldOptionSchema = z.object({
   value: z.string().trim().min(1).max(100)
 });
 
-export const createEventFormFieldSchema = z
-  .object({
-    label: z.string().trim().min(1).max(150),
-    type: eventFormFieldTypeSchema,
-    isRequired: z.boolean().default(false),
-    isSensitive: z.boolean().default(false),
-    isActive: z.boolean().default(true),
-    ticketIds: z.array(z.string().trim().min(1)).default([]),
-    options: z.array(fieldOptionSchema).default([])
-  })
-  .superRefine((input, context) => {
-    const acceptsOptions = [
-      "SELECT",
-      "SINGLE_CHOICE",
-      "MULTIPLE_CHOICE"
-    ].includes(input.type);
+const eventFormFieldSchema = z.object({
+  label: z.string().trim().min(1).max(150),
+  type: eventFormFieldTypeSchema,
+  isRequired: z.boolean().default(false),
+  isSensitive: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  ticketIds: z.array(z.string().trim().min(1)).default([]),
+  options: z.array(fieldOptionSchema).default([])
+});
 
-    if (acceptsOptions && input.options.length === 0) {
-      context.addIssue({
-        code: "custom",
-        message: "Informe ao menos uma opção.",
-        path: ["options"]
-      });
-    }
+function validateFieldOptions(
+  input: {
+    type?:
+      | z.infer<typeof eventFormFieldTypeSchema>
+      | undefined;
+    options?:
+      | Array<z.infer<typeof fieldOptionSchema>>
+      | undefined;
+  },
+  context: z.RefinementCtx
+) {
+  if (!input.type || input.options === undefined) {
+    return;
+  }
 
-    if (!acceptsOptions && input.options.length > 0) {
-      context.addIssue({
-        code: "custom",
-        message: "Este tipo de campo não aceita opções.",
-        path: ["options"]
-      });
-    }
-  });
+  const acceptsOptions = [
+    "SELECT",
+    "SINGLE_CHOICE",
+    "MULTIPLE_CHOICE"
+  ].includes(input.type);
+
+  if (acceptsOptions && input.options.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Informe ao menos uma opção.",
+      path: ["options"]
+    });
+  }
+
+  if (!acceptsOptions && input.options.length > 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Este tipo de campo não aceita opções.",
+      path: ["options"]
+    });
+  }
+}
+
+export const createEventFormFieldSchema =
+  eventFormFieldSchema.superRefine(
+    validateFieldOptions
+  );
 
 export const updateEventFormFieldSchema =
-  createEventFormFieldSchema
+  eventFormFieldSchema
     .partial()
+    .superRefine(validateFieldOptions)
     .refine(
       (input) => Object.keys(input).length > 0,
       {
