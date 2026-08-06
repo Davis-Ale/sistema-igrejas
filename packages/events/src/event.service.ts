@@ -226,6 +226,35 @@ export async function getEventById(
               phone: true,
               email: true
             }
+          },
+          ticket: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          ticketBatch: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          formAnswers: {
+            include: {
+              field: {
+                select: {
+                  id: true,
+                  label: true,
+                  isSensitive: true,
+                  order: true
+                }
+              }
+            },
+            orderBy: {
+              field: {
+                order: "asc"
+              }
+            }
           }
         },
         orderBy: {

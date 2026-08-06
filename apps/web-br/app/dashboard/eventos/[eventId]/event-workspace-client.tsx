@@ -33,8 +33,39 @@ type EventDetail = {
     id: string;
     status: RegistrationStatus;
     paymentStatus: string;
+    checkInToken: string;
     checkedInAt: string | null;
     waitlistedAt: string | null;
+    person: {
+      id: string;
+      name: string;
+      phone: string;
+      email: string | null;
+    } | null;
+    visitor: {
+      id: string;
+      name: string;
+      phone: string;
+      email: string | null;
+    } | null;
+    ticket: {
+      id: string;
+      name: string;
+    } | null;
+    ticketBatch: {
+      id: string;
+      name: string;
+    } | null;
+    formAnswers: Array<{
+      id: string;
+      value: unknown;
+      field: {
+        id: string;
+        label: string;
+        isSensitive: boolean;
+        order: number;
+      };
+    }>;
   }>;
 };
 
@@ -76,6 +107,7 @@ type EventWorkspaceSection =
   | "information"
   | "tickets"
   | "registration-form"
+  | "participants"
   | "event-app";
 
 type EventFormFieldType =
@@ -189,6 +221,14 @@ export function EventWorkspaceClient({
     useState<string | null>(null);
   const [formFieldType, setFormFieldType] =
     useState<EventFormFieldType>("TEXT");
+  const [participantSearch, setParticipantSearch] =
+    useState("");
+  const [participantStatus, setParticipantStatus] =
+    useState("ALL");
+  const [participantPayment, setParticipantPayment] =
+    useState("ALL");
+  const [participantTicket, setParticipantTicket] =
+    useState("ALL");
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -748,6 +788,56 @@ export function EventWorkspaceClient({
     }
   }
 
+  const filteredParticipants =
+    event?.registrations.filter((registration) => {
+      const participant =
+        registration.person ?? registration.visitor;
+
+      if (!participant) {
+        return false;
+      }
+
+      const search = participantSearch
+        .trim()
+        .toLowerCase();
+
+      const matchesSearch =
+        !search ||
+        participant.name
+          .toLowerCase()
+          .includes(search) ||
+        participant.phone
+          .toLowerCase()
+          .includes(search) ||
+        participant.email
+          ?.toLowerCase()
+          .includes(search) ||
+        registration.checkInToken
+          .toLowerCase()
+          .includes(search);
+
+      const matchesStatus =
+        participantStatus === "ALL" ||
+        registration.status === participantStatus;
+
+      const matchesPayment =
+        participantPayment === "ALL" ||
+        registration.paymentStatus ===
+          participantPayment;
+
+      const matchesTicket =
+        participantTicket === "ALL" ||
+        registration.ticket?.id ===
+          participantTicket;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPayment &&
+        matchesTicket
+      );
+    }) ?? [];
+
   const publicRegistrationUrl = event
     ? `${WEB_BASE_URL}/eventos/${event.id}`
     : "#";
@@ -1043,6 +1133,7 @@ export function EventWorkspaceClient({
                   ["information", "Informações"],
                   ["tickets", "Ingressos"],
                   ["registration-form", "Formulário de inscrição"],
+                  ["participants", "Participantes"],
                   ["event-app", "Aplicativo do Evento"]
                 ].map(([section, label]) => (
                   <button
@@ -2110,6 +2201,218 @@ export function EventWorkspaceClient({
         </div>
       </article>
     ))}
+  </section>
+) : null}
+
+{activeSection === "participants" ? (
+  <section
+    style={{
+      background: "rgba(15, 23, 42, 0.82)",
+      border: "1px solid rgba(148, 163, 184, 0.18)",
+      borderRadius: "20px",
+      display: "grid",
+      gap: "18px",
+      padding: "24px"
+    }}
+  >
+    <header>
+      <p
+        style={{
+          color: "#60a5fa",
+          fontSize: "13px",
+          fontWeight: 900,
+          margin: "0 0 6px",
+          textTransform: "uppercase"
+        }}
+      >
+        Participantes
+      </p>
+
+      <h2 style={{ margin: 0 }}>
+        Inscrições do evento
+      </h2>
+    </header>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+        gridTemplateColumns:
+          "minmax(220px, 2fr) repeat(3, minmax(145px, 1fr))"
+      }}
+    >
+      <input
+        onChange={(event) =>
+          setParticipantSearch(event.target.value)
+        }
+        placeholder="Buscar por nome, e-mail, telefone ou código"
+        style={{
+          borderRadius: "10px",
+          padding: "11px 12px"
+        }}
+        value={participantSearch}
+      />
+
+      <select
+        onChange={(event) =>
+          setParticipantStatus(event.target.value)
+        }
+        style={{
+          borderRadius: "10px",
+          padding: "11px 12px"
+        }}
+        value={participantStatus}
+      >
+        <option value="ALL">
+          Todas as inscrições
+        </option>
+        <option value="PENDING">Pendentes</option>
+        <option value="CONFIRMED">Confirmadas</option>
+        <option value="CHECKED_IN">
+          Check-in realizado
+        </option>
+        <option value="CANCELLED">Canceladas</option>
+      </select>
+
+      <select
+        onChange={(event) =>
+          setParticipantPayment(event.target.value)
+        }
+        style={{
+          borderRadius: "10px",
+          padding: "11px 12px"
+        }}
+        value={participantPayment}
+      >
+        <option value="ALL">
+          Todos os pagamentos
+        </option>
+        <option value="PAID">Pago</option>
+        <option value="PENDING">Pendente</option>
+        <option value="NOT_REQUIRED">
+          Não necessário
+        </option>
+        <option value="CANCELLED">Cancelado</option>
+      </select>
+
+      <select
+        onChange={(event) =>
+          setParticipantTicket(event.target.value)
+        }
+        style={{
+          borderRadius: "10px",
+          padding: "11px 12px"
+        }}
+        value={participantTicket}
+      >
+        <option value="ALL">
+          Todos os ingressos
+        </option>
+        {tickets.map((ticket) => (
+          <option
+            key={ticket.id}
+            value={ticket.id}
+          >
+            {ticket.name}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <p
+      style={{
+        color: "#94a3b8",
+        margin: 0
+      }}
+    >
+      {filteredParticipants.length} participante(s)
+    </p>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px"
+      }}
+    >
+      {filteredParticipants.map((registration) => {
+        const participant =
+          registration.person ??
+          registration.visitor;
+
+        if (!participant) {
+          return null;
+        }
+
+        return (
+          <details
+            key={registration.id}
+            style={{
+              border:
+                "1px solid rgba(148, 163, 184, 0.18)",
+              borderRadius: "12px",
+              padding: "14px 16px"
+            }}
+          >
+            <summary
+              style={{
+                cursor: "pointer",
+                display: "grid",
+                gap: "10px",
+                gridTemplateColumns:
+                  "minmax(180px, 2fr) repeat(3, minmax(110px, 1fr))",
+                listStyle: "none"
+              }}
+            >
+              <strong>{participant.name}</strong>
+              <span>
+                {registration.ticket?.name ??
+                  "Sem ingresso"}
+              </span>
+              <span>{registration.status}</span>
+              <span>
+                {registration.paymentStatus}
+              </span>
+            </summary>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                marginTop: "14px"
+              }}
+            >
+              <span>{participant.email ?? "Sem e-mail"}</span>
+              <span>{participant.phone}</span>
+              <span>
+                Lote:{" "}
+                {registration.ticketBatch?.name ??
+                  "Não informado"}
+              </span>
+              <span>
+                Código: {registration.checkInToken}
+              </span>
+
+              {registration.formAnswers.map(
+                (answer) => (
+                  <div key={answer.id}>
+                    <strong>
+                      {answer.field.label}
+                    </strong>
+                    <p style={{ margin: "4px 0 0" }}>
+                      {answer.field.isSensitive
+                        ? "Dado protegido"
+                        : Array.isArray(answer.value)
+                          ? answer.value.join(", ")
+                          : String(answer.value)}
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+          </details>
+        );
+      })}
+    </div>
   </section>
 ) : null}
 
