@@ -2057,7 +2057,6 @@ export function EventWorkspaceClient({
 
         <input
           name="fieldLabel"
-          placeholder="Escreva o campo"
           required
           style={{
             borderRadius: "10px",
