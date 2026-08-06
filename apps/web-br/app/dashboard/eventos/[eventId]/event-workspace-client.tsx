@@ -108,6 +108,7 @@ type EventWorkspaceSection =
   | "tickets"
   | "registration-form"
   | "participants"
+  | "check-in"
   | "event-app";
 
 type EventFormFieldType =
@@ -229,6 +230,14 @@ export function EventWorkspaceClient({
     useState("ALL");
   const [participantTicket, setParticipantTicket] =
     useState("ALL");
+  const [checkInCode, setCheckInCode] =
+    useState("");
+  const [checkInSearch, setCheckInSearch] =
+    useState("");
+  const [isCheckingIn, setIsCheckingIn] =
+    useState(false);
+  const [checkInMessage, setCheckInMessage] =
+    useState<string | null>(null);
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -838,6 +847,188 @@ export function EventWorkspaceClient({
       );
     }) ?? [];
 
+  async function handleCheckInByCode(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+    const code = checkInCode.trim();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!code) {
+      setError("Informe o código de check-in.");
+      return;
+    }
+
+    setError(null);
+    setCheckInMessage(null);
+    setIsCheckingIn(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/registrations/check-in-token`,
+        {
+          body: JSON.stringify({
+            eventId,
+            checkInToken: code
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | EventDetail["registrations"][number]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível realizar o check-in."
+        );
+        return;
+      }
+
+      const updatedRegistration =
+        data as EventDetail["registrations"][number];
+
+      setEvent((current) =>
+        current
+          ? {
+              ...current,
+              registrations:
+                current.registrations.map(
+                  (registration) =>
+                    registration.id ===
+                    updatedRegistration.id
+                      ? {
+                          ...registration,
+                          ...updatedRegistration
+                        }
+                      : registration
+                )
+            }
+          : current
+      );
+      setCheckInCode("");
+      setCheckInMessage("Check-in realizado.");
+    } catch {
+      setError(
+        "Não foi possível realizar o check-in agora."
+      );
+    } finally {
+      setIsCheckingIn(false);
+    }
+  }
+
+  async function handleParticipantCheckIn(
+    registrationId: string
+  ) {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setError(null);
+    setCheckInMessage(null);
+    setIsCheckingIn(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/registrations/status`,
+        {
+          body: JSON.stringify({
+            registrationId,
+            status: "CHECKED_IN"
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | EventDetail["registrations"][number]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível realizar o check-in."
+        );
+        return;
+      }
+
+      const updatedRegistration =
+        data as EventDetail["registrations"][number];
+
+      setEvent((current) =>
+        current
+          ? {
+              ...current,
+              registrations:
+                current.registrations.map(
+                  (registration) =>
+                    registration.id ===
+                    updatedRegistration.id
+                      ? {
+                          ...registration,
+                          ...updatedRegistration
+                        }
+                      : registration
+                )
+            }
+          : current
+      );
+      setCheckInMessage("Check-in realizado.");
+    } catch {
+      setError(
+        "Não foi possível realizar o check-in agora."
+      );
+    } finally {
+      setIsCheckingIn(false);
+    }
+  }
+
+  const checkInParticipants =
+    event?.registrations.filter((registration) => {
+      const participant =
+        registration.person ?? registration.visitor;
+      const search =
+        checkInSearch.trim().toLowerCase();
+
+      if (!participant) {
+        return false;
+      }
+
+      return (
+        !search ||
+        participant.name
+          .toLowerCase()
+          .includes(search) ||
+        participant.phone
+          .toLowerCase()
+          .includes(search) ||
+        registration.checkInToken
+          .toLowerCase()
+          .includes(search)
+      );
+    }) ?? [];
+
   const publicRegistrationUrl = event
     ? `${WEB_BASE_URL}/eventos/${event.id}`
     : "#";
@@ -1134,6 +1325,7 @@ export function EventWorkspaceClient({
                   ["tickets", "Ingressos"],
                   ["registration-form", "Formulário de inscrição"],
                   ["participants", "Participantes"],
+                  ["check-in", "Check-in"],
                   ["event-app", "Aplicativo do Evento"]
                 ].map(([section, label]) => (
                   <button
@@ -2398,6 +2590,200 @@ export function EventWorkspaceClient({
           </details>
         );
       })}
+    </div>
+  </section>
+) : null}
+
+{activeSection === "check-in" ? (
+  <section
+    style={{
+      background: "rgba(15, 23, 42, 0.82)",
+      border:
+        "1px solid rgba(148, 163, 184, 0.18)",
+      borderRadius: "20px",
+      display: "grid",
+      gap: "18px",
+      padding: "24px"
+    }}
+  >
+    <header>
+      <p
+        style={{
+          color: "#60a5fa",
+          fontSize: "13px",
+          fontWeight: 900,
+          margin: "0 0 6px",
+          textTransform: "uppercase"
+        }}
+      >
+        Check-in
+      </p>
+
+      <h2 style={{ margin: 0 }}>
+        Credenciamento
+      </h2>
+    </header>
+
+    {checkInMessage ? (
+      <p
+        style={{
+          background: "rgba(5, 150, 105, 0.16)",
+          border:
+            "1px solid rgba(52, 211, 153, 0.26)",
+          borderRadius: "12px",
+          color: "#a7f3d0",
+          margin: 0,
+          padding: "12px"
+        }}
+      >
+        {checkInMessage}
+      </p>
+    ) : null}
+
+    <form
+      onSubmit={handleCheckInByCode}
+      style={{
+        display: "grid",
+        gap: "10px",
+        gridTemplateColumns:
+          "minmax(220px, 1fr) auto"
+      }}
+    >
+      <input
+        onChange={(event) =>
+          setCheckInCode(event.target.value)
+        }
+        placeholder="Código de check-in"
+        style={{
+          borderRadius: "10px",
+          padding: "12px"
+        }}
+        value={checkInCode}
+      />
+
+      <button
+        disabled={isCheckingIn}
+        style={{
+          background: "#2563eb",
+          border: 0,
+          borderRadius: "10px",
+          color: "#ffffff",
+          fontWeight: 900,
+          padding: "12px 18px"
+        }}
+        type="submit"
+      >
+        {isCheckingIn
+          ? "Validando..."
+          : "Fazer check-in"}
+      </button>
+    </form>
+
+    <input
+      onChange={(event) =>
+        setCheckInSearch(event.target.value)
+      }
+      placeholder="Buscar participante"
+      style={{
+        borderRadius: "10px",
+        padding: "12px"
+      }}
+      value={checkInSearch}
+    />
+
+    <div
+      style={{
+        display: "grid",
+        gap: "8px"
+      }}
+    >
+      {checkInParticipants.map(
+        (registration) => {
+          const participant =
+            registration.person ??
+            registration.visitor;
+
+          if (!participant) {
+            return null;
+          }
+
+          const checkedIn =
+            registration.status ===
+            "CHECKED_IN";
+
+          return (
+            <div
+              key={registration.id}
+              style={{
+                alignItems: "center",
+                border:
+                  "1px solid rgba(148, 163, 184, 0.18)",
+                borderRadius: "12px",
+                display: "grid",
+                gap: "12px",
+                gridTemplateColumns:
+                  "minmax(180px, 2fr) minmax(130px, 1fr) auto",
+                padding: "13px 15px"
+              }}
+            >
+              <div>
+                <strong>
+                  {participant.name}
+                </strong>
+
+                <p
+                  style={{
+                    color: "#94a3b8",
+                    margin: "4px 0 0"
+                  }}
+                >
+                  {registration.ticket?.name ??
+                    "Sem ingresso"}
+                  {registration.ticketBatch
+                    ?.name
+                    ? " - " + registration.ticketBatch.name
+                    : ""}
+                </p>
+              </div>
+
+              <span>
+                {checkedIn
+                  ? "Presente"
+                  : "Pendente"}
+              </span>
+
+              <button
+                disabled={
+                  checkedIn ||
+                  isCheckingIn
+                }
+                onClick={() =>
+                  void handleParticipantCheckIn(
+                    registration.id
+                  )
+                }
+                style={{
+                  background: checkedIn
+                    ? "rgba(5, 150, 105, 0.2)"
+                    : "#2563eb",
+                  border: 0,
+                  borderRadius: "9px",
+                  color: checkedIn
+                    ? "#a7f3d0"
+                    : "#ffffff",
+                  fontWeight: 900,
+                  padding: "10px 14px"
+                }}
+                type="button"
+              >
+                {checkedIn
+                  ? "Check-in realizado"
+                  : "Fazer check-in"}
+              </button>
+            </div>
+          );
+        }
+      )}
     </div>
   </section>
 ) : null}
