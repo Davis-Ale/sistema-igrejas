@@ -2038,52 +2038,33 @@ export function EventWorkspaceClient({
     {formFieldMessage ? <p>{formFieldMessage}</p> : null}
 
     <form
-      onSubmit={handleCreateFormField}
+      onSubmit={(event) => {
+        setFormFieldType("TEXT");
+        void handleCreateFormField(event);
+      }}
       style={{
         display: "grid",
         gap: "14px"
       }}
     >
-      <input
-        name="fieldLabel"
-        placeholder="Título do campo"
-        required
-        style={{ borderRadius: "10px", padding: "12px" }}
-      />
-
-      <select
-        onChange={(event) =>
-          setFormFieldType(
-            event.target.value as EventFormFieldType
-          )
-        }
-        value={formFieldType}
-        style={{ borderRadius: "10px", padding: "12px" }}
+      <label
+        style={{
+          display: "grid",
+          gap: "8px"
+        }}
       >
-        <option value="TEXT">Texto</option>
-        <option value="PARAGRAPH">Parágrafo</option>
-        <option value="SELECT">Lista</option>
-        <option value="SINGLE_CHOICE">
-          Múltipla escolha
-        </option>
-        <option value="MULTIPLE_CHOICE">
-          Várias opções
-        </option>
-      </select>
+        Campo do participante
 
-      {[
-        "SELECT",
-        "SINGLE_CHOICE",
-        "MULTIPLE_CHOICE"
-      ].includes(formFieldType) ? (
-        <textarea
-          name="fieldOptions"
-          placeholder="Uma opção por linha"
+        <input
+          name="fieldLabel"
+          placeholder="Escreva o campo"
           required
-          rows={5}
-          style={{ borderRadius: "10px", padding: "12px" }}
+          style={{
+            borderRadius: "10px",
+            padding: "12px"
+          }}
         />
-      ) : null}
+      </label>
 
       <fieldset>
         <legend>Aplicar aos ingressos</legend>
@@ -2107,12 +2088,18 @@ export function EventWorkspaceClient({
       </fieldset>
 
       <label>
-        <input name="fieldRequired" type="checkbox" />{" "}
+        <input
+          name="fieldRequired"
+          type="checkbox"
+        />{" "}
         Campo obrigatório
       </label>
 
       <label>
-        <input name="fieldSensitive" type="checkbox" />{" "}
+        <input
+          name="fieldSensitive"
+          type="checkbox"
+        />{" "}
         Dado sensível
       </label>
 
