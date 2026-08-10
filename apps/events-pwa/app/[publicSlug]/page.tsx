@@ -1,6 +1,6 @@
 import {
   ParticipantEventApp
-} from "../[churchSlug]/[eventSlug]/participant-event-app";
+} from "../_components/participant-event-app";
 
 type PublicEventPageProps = {
   params: Promise<{

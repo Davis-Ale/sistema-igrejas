@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "react-qr-code";
-import type { PublicEvent } from "./page";
+import type { PublicEvent } from "./public-event";
 import styles from "./participant-event-app.module.css";
 
 type Participant = {

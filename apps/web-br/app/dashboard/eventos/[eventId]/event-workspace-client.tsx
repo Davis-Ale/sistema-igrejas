@@ -73,6 +73,23 @@ type ApiErrorResponse = {
   message?: string;
 };
 
+type EventFinancialTransaction = {
+  id: string;
+  amount: string | number;
+  direction: "IN" | "OUT";
+  status: "ACTIVE" | "CANCELLED" | "REVERSED";
+  method: string;
+  costCenter: string | null;
+  at: string;
+  cancelReason: string | null;
+};
+
+type EventFinancialSummary = {
+  totalIn: string | number;
+  totalOut: string | number;
+  balance: string | number;
+};
+
 type TicketBatch = {
   id: string;
   name: string;
@@ -109,6 +126,7 @@ type EventWorkspaceSection =
   | "registration-form"
   | "participants"
   | "check-in"
+  | "financial"
   | "event-app";
 
 type EventFormFieldType =
@@ -238,6 +256,14 @@ export function EventWorkspaceClient({
     useState(false);
   const [checkInMessage, setCheckInMessage] =
     useState<string | null>(null);
+  const [
+    financialTransactions,
+    setFinancialTransactions
+  ] = useState<EventFinancialTransaction[]>([]);
+  const [financialSummary, setFinancialSummary] =
+    useState<EventFinancialSummary | null>(null);
+  const [isLoadingFinancial, setIsLoadingFinancial] =
+    useState(false);
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -1029,6 +1055,89 @@ export function EventWorkspaceClient({
       );
     }) ?? [];
 
+  async function loadEventFinancial() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setError(null);
+    setIsLoadingFinancial(true);
+
+    try {
+      const query =
+        new URLSearchParams({
+          eventId
+        }).toString();
+
+      const [summaryResponse, transactionsResponse] =
+        await Promise.all([
+          fetch(
+            `${API_BASE_URL}/api/financial/summary?${query}`,
+            {
+              cache: "no-store",
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          ),
+          fetch(
+            `${API_BASE_URL}/api/financial/transactions?${query}`,
+            {
+              cache: "no-store",
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          )
+        ]);
+
+      if (
+        !summaryResponse.ok ||
+        !transactionsResponse.ok
+      ) {
+        const failedResponse =
+          !summaryResponse.ok
+            ? summaryResponse
+            : transactionsResponse;
+
+        const data =
+          await failedResponse.json() as
+            ApiErrorResponse;
+
+        setError(
+          data.message ??
+            "Não foi possível carregar o financeiro."
+        );
+        return;
+      }
+
+      setFinancialSummary(
+        await summaryResponse.json() as
+          EventFinancialSummary
+      );
+
+      setFinancialTransactions(
+        await transactionsResponse.json() as
+          EventFinancialTransaction[]
+      );
+    } catch {
+      setError(
+        "Não foi possível carregar o financeiro agora."
+      );
+    } finally {
+      setIsLoadingFinancial(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeSection === "financial") {
+      void loadEventFinancial();
+    }
+  }, [activeSection, eventId]);
+
   const publicRegistrationUrl = event
     ? `${WEB_BASE_URL}/eventos/${event.id}`
     : "#";
@@ -1326,6 +1435,7 @@ export function EventWorkspaceClient({
                   ["registration-form", "Formulário de inscrição"],
                   ["participants", "Participantes"],
                   ["check-in", "Check-in"],
+                  ["financial", "Financeiro"],
                   ["event-app", "Aplicativo do Evento"]
                 ].map(([section, label]) => (
                   <button

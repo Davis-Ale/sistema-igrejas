@@ -28,3 +28,6 @@ docs/*regras*.md
 docs/**/*regras*.md
 docs/*rules*.md
 docs/**/*rules*.md
+
+.cursor/mcp.json
+.cursor/mcp-backups/
