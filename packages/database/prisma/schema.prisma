@@ -127,6 +127,7 @@ model Church {
   ticketBatches    TicketBatch[]
   eventFormFields  EventFormField[]
   eventFormAnswers EventFormAnswer[]
+  eventApiKeys     EventApiKey[]
   transactions     Transaction[]
   userAccounts  UserAccount[]
   trialSignups  TrialSignup[]
@@ -407,6 +408,7 @@ model Event {
   ticketBatches TicketBatch[]
   formFields    EventFormField[]
   formAnswers   EventFormAnswer[]
+  apiKeys       EventApiKey[]
   transactions  Transaction[]
 
   @@unique([churchId, slug])
@@ -541,6 +543,26 @@ model EventFormAnswer {
   @@index([churchId, eventId])
   @@index([churchId, registrationId])
   @@index([churchId, fieldId])
+}
+
+model EventApiKey {
+  id         String    @id @default(cuid())
+  churchId   String
+  eventId    String
+  name       String
+  keyPrefix  String
+  keyHash    String
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, name])
+  @@index([churchId])
+  @@index([churchId, eventId])
+  @@index([keyPrefix])
 }
 
 model Registration {
