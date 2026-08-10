@@ -2898,6 +2898,147 @@ export function EventWorkspaceClient({
   </section>
 ) : null}
 
+{activeSection === "financial" ? (
+  <section
+    style={{
+      background: "rgba(15, 23, 42, 0.82)",
+      border: "1px solid rgba(148, 163, 184, 0.18)",
+      borderRadius: "20px",
+      display: "grid",
+      gap: "18px",
+      padding: "24px"
+    }}
+  >
+    <header>
+      <p
+        style={{
+          color: "#60a5fa",
+          fontSize: "13px",
+          fontWeight: 900,
+          margin: "0 0 6px",
+          textTransform: "uppercase"
+        }}
+      >
+        Financeiro
+      </p>
+
+      <h2 style={{ margin: 0 }}>
+        Movimentações do evento
+      </h2>
+    </header>
+
+    {isLoadingFinancial ? (
+      <p>Carregando financeiro...</p>
+    ) : null}
+
+    {!isLoadingFinancial && financialSummary ? (
+      <div
+        style={{
+          display: "grid",
+          gap: "10px",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(160px, 1fr))"
+        }}
+      >
+        <article
+          style={{
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            borderRadius: "12px",
+            padding: "14px"
+          }}
+        >
+          <strong style={{ color: "#94a3b8" }}>
+            Entradas
+          </strong>
+          <p style={{ margin: "6px 0 0" }}>
+            {formatMoney(financialSummary.totalIn)}
+          </p>
+        </article>
+
+        <article
+          style={{
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            borderRadius: "12px",
+            padding: "14px"
+          }}
+        >
+          <strong style={{ color: "#94a3b8" }}>
+            Saídas
+          </strong>
+          <p style={{ margin: "6px 0 0" }}>
+            {formatMoney(financialSummary.totalOut)}
+          </p>
+        </article>
+
+        <article
+          style={{
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            borderRadius: "12px",
+            padding: "14px"
+          }}
+        >
+          <strong style={{ color: "#94a3b8" }}>
+            Saldo
+          </strong>
+          <p style={{ margin: "6px 0 0" }}>
+            {formatMoney(financialSummary.balance)}
+          </p>
+        </article>
+      </div>
+    ) : null}
+
+    {!isLoadingFinancial &&
+    financialTransactions.length === 0 ? (
+      <p>Nenhuma movimentação encontrada.</p>
+    ) : null}
+
+    <div style={{ display: "grid", gap: "8px" }}>
+      {financialTransactions.map((transaction) => (
+        <div
+          key={transaction.id}
+          style={{
+            alignItems: "center",
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            borderRadius: "12px",
+            display: "grid",
+            gap: "10px",
+            gridTemplateColumns:
+              "minmax(90px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(140px, 1fr)",
+            padding: "12px 15px"
+          }}
+        >
+          <span
+            style={{
+              color:
+                transaction.direction === "IN"
+                  ? "#a7f3d0"
+                  : "#fca5a5",
+              fontWeight: 900
+            }}
+          >
+            {transaction.direction === "IN" ? "+" : "-"}
+            {formatMoney(transaction.amount)}
+          </span>
+
+          <span>{transaction.method}</span>
+
+          <span>
+            {transaction.status === "ACTIVE"
+              ? "Ativa"
+              : transaction.status === "CANCELLED"
+                ? "Cancelada"
+                : "Estornada"}
+          </span>
+
+          <span style={{ color: "#94a3b8" }}>
+            {formatDate(transaction.at)}
+          </span>
+        </div>
+      ))}
+    </div>
+  </section>
+) : null}
+
 {activeSection === "event-app" ? (
               <section
               id="aplicativo-do-evento"
