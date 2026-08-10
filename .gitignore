@@ -31,3 +31,5 @@ docs/**/*rules*.md
 
 .cursor/mcp.json
 .cursor/mcp-backups/
+
+.playwright-mcp/
