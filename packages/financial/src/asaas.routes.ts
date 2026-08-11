@@ -22,6 +22,31 @@ type AsaasWebhookBody = {
   payment?: AsaasWebhookPayment;
 };
 
+type FinancialRole =
+  | "SUPER_ADMIN"
+  | "PASTOR"
+  | "LEADER"
+  | "VOLUNTEER"
+  | "MEMBER"
+  | "VISITOR";
+
+export type PaymentProviderStatus =
+  | "PENDING"
+  | "PAID"
+  | "CANCELLED"
+  | "OVERDUE";
+
+export type PaymentProviderStatusUpdate = {
+  churchId: string;
+  paymentId: string;
+  referenceId: string;
+  status: PaymentProviderStatus;
+};
+
+export type PaymentProviderStatusHandler = (
+  input: PaymentProviderStatusUpdate
+) => Promise<void>;
+
 function getAsaasPaymentMethod(billingType: "BOLETO" | "PIX" | "CREDIT_CARD") {
   if (billingType === "CREDIT_CARD") {
     return "CARD" as const;
@@ -38,7 +63,51 @@ function getChurchId(request: FastifyRequest): string {
   return request.churchId;
 }
 
-function mapAsaasPaymentStatus(status: unknown): string | null {
+function getUserRole(
+  request: FastifyRequest
+): FinancialRole {
+  if (!request.user?.role) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.role;
+}
+
+function ensureCanAccessFinancial(
+  request: FastifyRequest
+): void {
+  const role = getUserRole(request);
+
+  if (
+    role !== "SUPER_ADMIN" &&
+    role !== "PASTOR"
+  ) {
+    throw new Error(
+      "FINANCIAL_ACCESS_DENIED"
+    );
+  }
+}
+
+function getAsaasWebhookToken(
+  request: FastifyRequest
+): string | null {
+  const header =
+    request.headers["asaas-access-token"];
+
+  if (typeof header === "string") {
+    return header;
+  }
+
+  if (Array.isArray(header)) {
+    return header[0] ?? null;
+  }
+
+  return null;
+}
+
+function mapAsaasPaymentStatus(
+  status: unknown
+): PaymentProviderStatus | null {
   if (typeof status !== "string") {
     return null;
   }
@@ -100,10 +169,24 @@ async function sendAsaasRouteError(error: unknown, reply: FastifyReply): Promise
     return;
   }
 
-  if (error.message === "CHURCH_CONTEXT_REQUIRED") {
+  if (
+    error.message === "CHURCH_CONTEXT_REQUIRED" ||
+    error.message === "USER_CONTEXT_REQUIRED"
+  ) {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
       message: "Contexto de autenticação obrigatório."
+    });
+    return;
+  }
+
+  if (
+    error.message === "FINANCIAL_ACCESS_DENIED"
+  ) {
+    await reply.code(403).send({
+      error: "FINANCIAL_ACCESS_DENIED",
+      message:
+        "Você não tem permissão para acessar informações financeiras."
     });
     return;
   }
@@ -124,14 +207,49 @@ async function sendAsaasRouteError(error: unknown, reply: FastifyReply): Promise
 
 export async function registerAsaasWebhookRoutes(
   app: FastifyInstance,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  onPaymentStatusUpdate?: PaymentProviderStatusHandler
 ): Promise<void> {
   app.post("/webhooks/asaas", async (request, reply) => {
-    const body = request.body as AsaasWebhookBody;
-    const payment = body.payment ?? {};
-    const paymentId = typeof payment.id === "string" ? payment.id : null;
-    const paymentStatus = mapAsaasPaymentStatus(payment.status);
-    const reference = parseAsaasExternalReference(payment.externalReference);
+    const expectedWebhookToken =
+      process.env.ASAAS_WEBHOOK_TOKEN;
+
+    if (!expectedWebhookToken) {
+      await reply.code(500).send();
+      return;
+    }
+
+    const receivedWebhookToken =
+      getAsaasWebhookToken(request);
+
+    if (
+      !receivedWebhookToken ||
+      receivedWebhookToken !== expectedWebhookToken
+    ) {
+      await reply.code(401).send();
+      return;
+    }
+
+    const body =
+      request.body as AsaasWebhookBody;
+
+    const payment =
+      body.payment ?? {};
+
+    const paymentId =
+      typeof payment.id === "string"
+        ? payment.id
+        : null;
+
+    const paymentStatus =
+      mapAsaasPaymentStatus(
+        payment.status
+      );
+
+    const reference =
+      parseAsaasExternalReference(
+        payment.externalReference
+      );
 
     if (paymentId && reference) {
       await prisma.transaction.updateMany({
@@ -145,29 +263,17 @@ export async function registerAsaasWebhookRoutes(
       });
     }
 
-    if (paymentStatus && reference) {
-      await prisma.registration.updateMany({
-        where: {
-          churchId: reference.churchId,
-          OR: [
-            {
-              id: reference.referenceId
-            },
-            {
-              paymentId: reference.referenceId
-            },
-            ...(paymentId
-              ? [
-                  {
-                    paymentId
-                  }
-                ]
-              : [])
-          ]
-        },
-        data: {
-          paymentStatus
-        }
+    if (
+      paymentId &&
+      paymentStatus &&
+      reference &&
+      onPaymentStatusUpdate
+    ) {
+      await onPaymentStatusUpdate({
+        churchId: reference.churchId,
+        paymentId,
+        referenceId: reference.referenceId,
+        status: paymentStatus
       });
     }
 
@@ -180,6 +286,8 @@ export async function registerAsaasWebhookRoutes(
 export async function registerAsaasRoutes(app: FastifyInstance, prisma: PrismaClient): Promise<void> {
   app.post("/financial/asaas/charges", async (request, reply) => {
     try {
+      ensureCanAccessFinancial(request);
+
       const churchId = getChurchId(request);
       const input = createAsaasChargeSchema.parse(request.body);
 
@@ -216,7 +324,7 @@ export async function registerAsaasRoutes(app: FastifyInstance, prisma: PrismaCl
         billingType: input.billingType,
         customerId: customer.id,
         dueDate: input.dueDate,
-        externalReference: `::payment`,
+        externalReference: `${churchId}:${input.externalReference}:payment`,
         value: input.value
       };
 

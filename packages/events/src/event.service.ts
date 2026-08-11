@@ -923,27 +923,19 @@ export async function updateRegistrationStatus(
     input.paymentId ??
     registration.paymentId;
 
-  const paymentConfirmed =
-    registration.event.isPaid &&
-    Boolean(paymentId);
-
   const registrationUpdateData =
     input.status === "CHECKED_IN"
       ? {
           status: input.status,
           paymentId,
-          paymentStatus: paymentConfirmed
-            ? "PAID"
-            : registration.paymentStatus,
+          paymentStatus: registration.paymentStatus,
           checkedInAt: new Date()
         }
       : input.status === "CONFIRMED"
         ? {
             status: input.status,
             paymentId,
-            paymentStatus: paymentConfirmed
-              ? "PAID"
-              : registration.paymentStatus,
+            paymentStatus: registration.paymentStatus,
             confirmedAt: new Date()
           }
         : {
@@ -1045,6 +1037,100 @@ export async function updateRegistrationStatus(
     ...updatedRegistration,
     emailSent
   };
+}
+
+type RegistrationPaymentStatus =
+  | "PENDING"
+  | "PAID"
+  | "CANCELLED"
+  | "OVERDUE";
+
+type ApplyRegistrationPaymentStatusInput = {
+  registrationId: string;
+  paymentId: string;
+  paymentStatus: RegistrationPaymentStatus;
+};
+
+export async function applyRegistrationPaymentStatus(
+  prisma: PrismaClient,
+  churchId: string,
+  input: ApplyRegistrationPaymentStatusInput
+): Promise<boolean> {
+  const registration =
+    await prisma.registration.findFirst({
+      where: {
+        id: input.registrationId,
+        churchId
+      },
+      select: {
+        id: true,
+        status: true,
+        paymentId: true,
+        paymentStatus: true,
+        waitlistedAt: true,
+        event: {
+          select: {
+            isPaid: true
+          }
+        }
+      }
+    });
+
+  /*
+    A referência pode pertencer a outra cobrança financeira
+    que não seja inscrição de evento.
+  */
+  if (
+    !registration ||
+    !registration.event.isPaid
+  ) {
+    return false;
+  }
+
+  /*
+    Webhooks podem ser reenviados.
+    Se o mesmo estado do mesmo pagamento já foi processado,
+    não executamos novamente confirmação/e-mail.
+  */
+  if (
+    registration.paymentId === input.paymentId &&
+    registration.paymentStatus === input.paymentStatus
+  ) {
+    return true;
+  }
+
+  await prisma.registration.update({
+    where: {
+      id: registration.id
+    },
+    data: {
+      paymentId: input.paymentId,
+      paymentStatus: input.paymentStatus
+    }
+  });
+
+  /*
+    Apenas pagamento realmente confirmado pelo provedor
+    pode confirmar a inscrição.
+  */
+  if (
+    input.paymentStatus === "PAID" &&
+    !registration.waitlistedAt &&
+    registration.status !== "CANCELLED" &&
+    registration.status !== "CHECKED_IN"
+  ) {
+    await updateRegistrationStatus(
+      prisma,
+      churchId,
+      {
+        registrationId: registration.id,
+        status: "CONFIRMED",
+        paymentId: input.paymentId
+      }
+    );
+  }
+
+  return true;
 }
 
 export async function checkInRegistrationByToken(

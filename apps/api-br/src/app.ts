@@ -9,13 +9,18 @@ import {
 } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import {
-registerEventApiKeyRoutes,
+  applyRegistrationPaymentStatus,
+  registerEventApiKeyRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
   registerRegistrationFormRoutes,
   registerTicketRoutes
 } from "@sistema-igrejas/events";
-import { registerFinancialRoutes } from "@sistema-igrejas/financial";
+import {
+  registerAsaasRoutes,
+  registerAsaasWebhookRoutes,
+  registerFinancialRoutes
+} from "@sistema-igrejas/financial";
 import {
   registerCellDeleteRoutes,
   registerCellListRoutes,
@@ -90,6 +95,27 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAuthRoutes(app, prisma);
   await registerPublicEventRoutes(app, prisma);
 
+  await registerAsaasWebhookRoutes(
+    app,
+    prisma,
+    async ({
+      churchId,
+      paymentId,
+      referenceId,
+      status
+    }) => {
+      await applyRegistrationPaymentStatus(
+        prisma,
+        churchId,
+        {
+          registrationId: referenceId,
+          paymentId,
+          paymentStatus: status
+        }
+      );
+    }
+  );
+
   await app.register(
     async (protectedRoutes) => {
       protectedRoutes.addHook(
@@ -106,6 +132,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         prisma
       );
       await registerFinancialRoutes(protectedRoutes, prisma);
+      await registerAsaasRoutes(protectedRoutes, prisma);
       await registerCellListRoutes(protectedRoutes, prisma);
       await registerCellRoutes(protectedRoutes, prisma);
       await registerCellStatusRoutes(protectedRoutes, prisma);

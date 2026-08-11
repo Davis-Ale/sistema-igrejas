@@ -9,3 +9,7 @@ export * from "./registration-form.service.js";
 export * from "./registration-form.routes.js";
 
 export * from "./api-key.routes.js";
+
+export {
+  applyRegistrationPaymentStatus
+} from "./event.service.js";
