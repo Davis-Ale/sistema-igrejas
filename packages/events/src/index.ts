@@ -7,3 +7,5 @@ export * from "./ticket.routes.js";
 export * from "./registration-form.schema.js";
 export * from "./registration-form.service.js";
 export * from "./registration-form.routes.js";
+
+export * from "./api-key.routes.js";

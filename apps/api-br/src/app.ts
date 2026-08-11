@@ -9,6 +9,7 @@ import {
 } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import {
+registerEventApiKeyRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
   registerRegistrationFormRoutes,
@@ -98,6 +99,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
+  await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerTicketRoutes(protectedRoutes, prisma);
       await registerRegistrationFormRoutes(
         protectedRoutes,
