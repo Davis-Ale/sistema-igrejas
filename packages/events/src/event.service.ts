@@ -33,6 +33,17 @@ function buildConfirmedAt(event: { isPaid: boolean }, isWaitlisted: boolean) {
   return new Date();
 }
 
+function shouldAutoConfirmTestPayment(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
+  return (
+    process.env.EVENTS_TEST_PAYMENT_MODE ===
+    "auto"
+  );
+}
+
 async function createEventRegistrationTransaction(
   prisma: PrismaClient,
   input: {
@@ -465,6 +476,18 @@ export async function createRegistration(
     amount: event.price
   });
 
+  if (shouldAutoConfirmTestPayment()) {
+    await applyRegistrationPaymentStatus(
+      prisma,
+      churchId,
+      {
+        registrationId: registration.id,
+        paymentId,
+        paymentStatus: "PAID"
+      }
+    );
+  }
+
   return prisma.registration.update({
     where: {
       id: registration.id
@@ -825,6 +848,18 @@ export async function createPublicRegistration(
         amount: batch.price
       }
     );
+
+  if (shouldAutoConfirmTestPayment()) {
+    await applyRegistrationPaymentStatus(
+      prisma,
+      event.churchId,
+      {
+        registrationId: registration.id,
+        paymentId,
+        paymentStatus: "PAID"
+      }
+    );
+  }
 
   return prisma.registration.update({
     where: {
