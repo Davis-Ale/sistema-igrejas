@@ -74,8 +74,16 @@ type PublicRegistration = {
     | "CANCELLED"
     | "CHECKED_IN";
   paymentStatus: string;
-  checkInToken: string;
+  checkInToken: string | null;
   waitlistedAt: string | null;
+  paymentCheckout?: {
+    method: "PIX";
+    pix: {
+      encodedImage: string;
+      payload: string;
+      expirationDate: string;
+    };
+  };
   emailSent?: boolean;
   event: {
     title: string;
@@ -689,54 +697,119 @@ export default function PublicEventPage() {
                     {getSuccessMessage(registration)}
                   </p>
 
-                  <div
-                    style={{
-                      background: "#ffffff",
-                      borderRadius: "18px",
-                      justifySelf: "center",
-                      padding: "14px"
-                    }}
-                  >
-                    <QRCode
-                      bgColor="#ffffff"
-                      fgColor="#020617"
-                      size={210}
-                      value={
-                        registration.checkInToken
-                      }
-                    />
-                  </div>
+                  {registration.paymentStatus ===
+                    "PENDING" &&
+                  registration.paymentCheckout ? (
+                    <>
+                      <div
+                        style={{
+                          background: "#ffffff",
+                          borderRadius: "18px",
+                          justifySelf: "center",
+                          padding: "14px"
+                        }}
+                      >
+                        <QRCode
+                          bgColor="#ffffff"
+                          fgColor="#020617"
+                          size={210}
+                          value={
+                            registration
+                              .paymentCheckout
+                              .pix.payload
+                          }
+                        />
+                      </div>
 
-                  <div
-                    style={{
-                      background:
-                        "rgba(2, 6, 23, 0.48)",
-                      borderRadius: "14px",
-                      padding: "14px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#94a3b8",
-                        display: "block",
-                        fontSize: "12px",
-                        marginBottom: "7px"
-                      }}
-                    >
-                      Código de check-in
-                    </span>
+                      <div
+                        style={{
+                          background:
+                            "rgba(2, 6, 23, 0.48)",
+                          borderRadius: "14px",
+                          display: "grid",
+                          gap: "8px",
+                          padding: "14px"
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "12px"
+                          }}
+                        >
+                          Pix Copia e Cola
+                        </span>
 
-                    <strong
-                      style={{
-                        color: "#ffffff",
-                        display: "block",
-                        fontFamily: "monospace",
-                        wordBreak: "break-all"
-                      }}
-                    >
-                      {registration.checkInToken}
-                    </strong>
-                  </div>
+                        <strong
+                          style={{
+                            color: "#ffffff",
+                            fontFamily:
+                              "monospace",
+                            fontSize: "12px",
+                            wordBreak:
+                              "break-all"
+                          }}
+                        >
+                          {
+                            registration
+                              .paymentCheckout
+                              .pix.payload
+                          }
+                        </strong>
+                      </div>
+                    </>
+                  ) : registration.checkInToken ? (
+                    <>
+                        <div
+                          style={{
+                            background: "#ffffff",
+                            borderRadius: "18px",
+                            justifySelf: "center",
+                            padding: "14px"
+                          }}
+                        >
+                          <QRCode
+                            bgColor="#ffffff"
+                            fgColor="#020617"
+                            size={210}
+                            value={
+                              registration.checkInToken
+                            }
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            background:
+                              "rgba(2, 6, 23, 0.48)",
+                            borderRadius: "14px",
+                            padding: "14px"
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#94a3b8",
+                              display: "block",
+                              fontSize: "12px",
+                              marginBottom: "7px"
+                            }}
+                          >
+                            Código de check-in
+                          </span>
+
+                          <strong
+                            style={{
+                              color: "#ffffff",
+                              display: "block",
+                              fontFamily: "monospace",
+                              wordBreak: "break-all"
+                            }}
+                          >
+                            {registration.checkInToken}
+                          </strong>
+                        </div>
+                    </>
+                  ) : null}
 
                   <p
                     style={{
@@ -751,20 +824,26 @@ export default function PublicEventPage() {
                     O QR Code e o acesso ao aplicativo serão enviados para este e-mail após a confirmação do pagamento.
                   </p>
 
-                  <a
-                    href={getAppUrl(event)}
-                    style={{
-                      background: "#2563eb",
-                      borderRadius: "14px",
-                      color: "#ffffff",
-                      fontWeight: 900,
-                      padding: "14px 18px",
-                      textAlign: "center",
-                      textDecoration: "none"
-                    }}
-                  >
-                    Acessar aplicativo do evento
-                  </a>
+                  {(
+                    !registration.event.isPaid ||
+                    registration.paymentStatus ===
+                      "PAID"
+                  ) && (
+                        <a
+                          href={getAppUrl(event)}
+                          style={{
+                            background: "#2563eb",
+                            borderRadius: "14px",
+                            color: "#ffffff",
+                            fontWeight: 900,
+                            padding: "14px 18px",
+                            textAlign: "center",
+                            textDecoration: "none"
+                          }}
+                        >
+                          Acessar aplicativo do evento
+                        </a>
+                  )}
                 </section>
               )}
 

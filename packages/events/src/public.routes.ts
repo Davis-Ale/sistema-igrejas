@@ -143,9 +143,49 @@ async function sendPublicRouteError(
   });
 }
 
+export type PublicRegistrationPaymentCheckout = {
+  method: "PIX";
+  pix: {
+    encodedImage: string;
+    payload: string;
+    expirationDate: string;
+  };
+};
+
 export type PublicRegistrationPaymentHandler = (
   registrationId: string
-) => Promise<void>;
+) => Promise<
+  PublicRegistrationPaymentCheckout | null
+>;
+
+function buildPublicRegistrationResponse<
+  T extends {
+    checkInToken: string;
+    paymentStatus: string;
+    event: {
+      isPaid: boolean;
+    };
+  }
+>(
+  registration: T,
+  paymentCheckout:
+    PublicRegistrationPaymentCheckout | null
+) {
+  const canAccessParticipantArea =
+    !registration.event.isPaid ||
+    registration.paymentStatus === "PAID";
+
+  return {
+    ...registration,
+    checkInToken:
+      canAccessParticipantArea
+        ? registration.checkInToken
+        : null,
+    ...(paymentCheckout
+      ? { paymentCheckout }
+      : {})
+  };
+}
 
 export async function registerPublicEventRoutes(
   app: FastifyInstance,
@@ -212,15 +252,14 @@ export async function registerPublicEventRoutes(
             input
           );
 
-        if (
+        const paymentCheckout =
           registration.paymentId &&
           registration.paymentStatus === "PENDING" &&
           onRegistrationPaymentPending
-        ) {
-          await onRegistrationPaymentPending(
-            registration.id
-          );
-        }
+            ? await onRegistrationPaymentPending(
+                registration.id
+              )
+            : null;
 
         await reply
           .code(
@@ -228,7 +267,12 @@ export async function registerPublicEventRoutes(
               ? 200
               : 201
           )
-          .send(registration);
+          .send(
+            buildPublicRegistrationResponse(
+              registration,
+              paymentCheckout
+            )
+          );
       } catch (error) {
         await sendPublicRouteError(error, reply);
       }
@@ -249,12 +293,27 @@ export async function registerPublicEventRoutes(
             request.body
           );
 
-        return await getPublicRegistrationByTokenBySlugs(
-          prisma,
-          params.churchSlug,
-          params.eventSlug,
-          input.checkInToken
-        );
+        const registration =
+          await getPublicRegistrationByTokenBySlugs(
+            prisma,
+            params.churchSlug,
+            params.eventSlug,
+            input.checkInToken
+          );
+
+        if (
+          registration.event.isPaid &&
+          registration.paymentStatus !== "PAID"
+        ) {
+          await reply.code(403).send({
+            error: "PAYMENT_REQUIRED",
+            message:
+              "O pagamento ainda não foi confirmado."
+          });
+          return;
+        }
+
+        return registration;
       } catch (error) {
         await sendPublicRouteError(error, reply);
       }
@@ -299,19 +358,23 @@ export async function registerPublicEventRoutes(
             input
           );
 
-        if (
+        const paymentCheckout =
           registration.paymentId &&
           registration.paymentStatus === "PENDING" &&
           onRegistrationPaymentPending
-        ) {
-          await onRegistrationPaymentPending(
-            registration.id
-          );
-        }
+            ? await onRegistrationPaymentPending(
+                registration.id
+              )
+            : null;
 
         await reply
           .code(201)
-          .send(registration);
+          .send(
+            buildPublicRegistrationResponse(
+              registration,
+              paymentCheckout
+            )
+          );
       } catch (error) {
         await sendPublicRouteError(error, reply);
       }

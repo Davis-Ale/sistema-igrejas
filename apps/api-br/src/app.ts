@@ -112,7 +112,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         !checkout ||
         checkout.provider === "TEST"
       ) {
-        return;
+        return null;
       }
 
       if (checkout.provider !== "ASAAS") {
@@ -149,6 +149,24 @@ export async function buildApp(): Promise<FastifyInstance> {
         checkout.paymentId,
         charge.paymentId
       );
+
+      if (!charge.pixQrCode) {
+        throw new Error(
+          "EVENT_PIX_QR_CODE_NOT_AVAILABLE"
+        );
+      }
+
+      return {
+        method: "PIX" as const,
+        pix: {
+          encodedImage:
+            charge.pixQrCode.encodedImage,
+          payload:
+            charge.pixQrCode.payload,
+          expirationDate:
+            charge.pixQrCode.expirationDate
+        }
+      };
     }
   );
 

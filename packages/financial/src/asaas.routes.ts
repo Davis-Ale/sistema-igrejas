@@ -112,7 +112,7 @@ function mapAsaasPaymentStatus(
     return null;
   }
 
-  if (status === "RECEIVED" || status === "CONFIRMED") {
+  if (status === "RECEIVED") {
     return "PAID";
   }
 

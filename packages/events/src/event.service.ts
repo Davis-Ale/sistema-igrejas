@@ -1152,6 +1152,7 @@ export type EventRegistrationPaymentCheckout = {
   paymentId: string;
   transactionId: string;
   provider: string;
+  providerPaymentId: string | null;
   amount: number;
   eventTitle: string;
   customer: {
@@ -1229,8 +1230,7 @@ export async function getEventRegistrationPaymentCheckout(
 
   if (
     !payment ||
-    payment.status !== "PENDING" ||
-    payment.providerPaymentId
+    payment.status !== "PENDING"
   ) {
     return null;
   }
@@ -1252,6 +1252,8 @@ export async function getEventRegistrationPaymentCheckout(
     paymentId: payment.id,
     transactionId: payment.transactionId,
     provider: payment.provider,
+    providerPaymentId:
+      payment.providerPaymentId,
     amount: Number(payment.amount),
     eventTitle: registration.event.title,
     customer: {

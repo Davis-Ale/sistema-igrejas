@@ -83,6 +83,24 @@ export async function createAsaasPayment(
 }
 
 
+export type AsaasPixQrCode = {
+  encodedImage: string;
+  payload: string;
+  expirationDate: string;
+};
+
+export async function getAsaasPixQrCode(
+  paymentId: string
+): Promise<AsaasPixQrCode> {
+  const client = createAsaasClient();
+
+  return client.request<AsaasPixQrCode>({
+    method: "GET",
+    path:
+      `/payments/${encodeURIComponent(paymentId)}/pixQrCode`
+  });
+}
+
 export type CreateAsaasChargeForExistingTransactionInput = {
   transactionId: string;
   referenceId: string;
@@ -138,8 +156,16 @@ export async function createAsaasChargeForExistingTransaction(
     Isso impede uma segunda cobrança após retry.
   */
   if (transaction.asaasId) {
+    const pixQrCode =
+      input.billingType === "PIX"
+        ? await getAsaasPixQrCode(
+            transaction.asaasId
+          )
+        : null;
+
     return {
       paymentId: transaction.asaasId,
+      pixQrCode,
       reused: true
     };
   }
@@ -198,10 +224,16 @@ export async function createAsaasChargeForExistingTransaction(
     }
   );
 
+  const pixQrCode =
+    input.billingType === "PIX"
+      ? await getAsaasPixQrCode(payment.id)
+      : null;
+
   return {
     customer,
     payment,
     paymentId: payment.id,
+    pixQrCode,
     reused: false
   };
 }
