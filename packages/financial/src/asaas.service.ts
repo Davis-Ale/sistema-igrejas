@@ -1,4 +1,6 @@
+import type { PrismaClient } from "@prisma/client";
 import { createAsaasClient } from "./asaas.client.js";
+import { updateTransaction } from "./financial.service.js";
 
 type AsaasClient = ReturnType<typeof createAsaasClient>;
 
@@ -78,4 +80,128 @@ export async function createAsaasPayment(
     method: "POST",
     path: "/payments"
   });
+}
+
+
+export type CreateAsaasChargeForExistingTransactionInput = {
+  transactionId: string;
+  referenceId: string;
+  billingType: "BOLETO" | "PIX" | "CREDIT_CARD";
+  customer: {
+    cpfCnpj?: string;
+    email?: string;
+    mobilePhone?: string;
+    name: string;
+  };
+  description?: string;
+  dueDate: string;
+  value: number;
+};
+
+export async function createAsaasChargeForExistingTransaction(
+  prisma: PrismaClient,
+  churchId: string,
+  input: CreateAsaasChargeForExistingTransactionInput
+) {
+  const transaction =
+    await prisma.transaction.findFirst({
+      where: {
+        id: input.transactionId,
+        churchId,
+        status: "ACTIVE"
+      },
+      select: {
+        id: true,
+        amount: true,
+        asaasId: true
+      }
+    });
+
+  if (!transaction) {
+    throw new Error(
+      "TRANSACTION_NOT_FOUND"
+    );
+  }
+
+  if (
+    Number(transaction.amount) !==
+    input.value
+  ) {
+    throw new Error(
+      "TRANSACTION_AMOUNT_MISMATCH"
+    );
+  }
+
+  /*
+    Se uma tentativa anterior criou a cobrança no Asaas
+    e gravou o ID na Transaction, reutilizamos o mesmo ID.
+    Isso impede uma segunda cobrança após retry.
+  */
+  if (transaction.asaasId) {
+    return {
+      paymentId: transaction.asaasId,
+      reused: true
+    };
+  }
+
+  const customerInput: CreateAsaasCustomerInput = {
+    externalReference:
+      `${churchId}:${input.referenceId}:customer`,
+    name: input.customer.name
+  };
+
+  if (input.customer.cpfCnpj) {
+    customerInput.cpfCnpj =
+      input.customer.cpfCnpj;
+  }
+
+  if (input.customer.email) {
+    customerInput.email =
+      input.customer.email;
+  }
+
+  if (input.customer.mobilePhone) {
+    customerInput.mobilePhone =
+      input.customer.mobilePhone;
+  }
+
+  const customer =
+    await createAsaasCustomer(
+      customerInput
+    );
+
+  const paymentInput: CreateAsaasPaymentInput = {
+    billingType: input.billingType,
+    customerId: customer.id,
+    dueDate: input.dueDate,
+    externalReference:
+      `${churchId}:${input.referenceId}:payment`,
+    value: input.value
+  };
+
+  if (input.description) {
+    paymentInput.description =
+      input.description;
+  }
+
+  const payment =
+    await createAsaasPayment(
+      paymentInput
+    );
+
+  await updateTransaction(
+    prisma,
+    churchId,
+    transaction.id,
+    {
+      asaasId: payment.id
+    }
+  );
+
+  return {
+    customer,
+    payment,
+    paymentId: payment.id,
+    reused: false
+  };
 }

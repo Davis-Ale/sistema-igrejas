@@ -9,7 +9,10 @@ import {
 } from "@sistema-igrejas/auth";
 import { PrismaClient } from "@sistema-igrejas/database";
 import {
+  applyEventPaymentProviderStatus,
   applyRegistrationPaymentStatus,
+  attachEventPaymentProviderId,
+  getEventRegistrationPaymentCheckout,
   registerEventApiKeyRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
@@ -17,6 +20,7 @@ import {
   registerTicketRoutes
 } from "@sistema-igrejas/events";
 import {
+  createAsaasChargeForExistingTransaction,
   registerAsaasRoutes,
   registerAsaasWebhookRoutes,
   registerFinancialRoutes
@@ -93,7 +97,60 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await registerAuthRoutes(app, prisma);
-  await registerPublicEventRoutes(app, prisma);
+
+  await registerPublicEventRoutes(
+    app,
+    prisma,
+    async (registrationId) => {
+      const checkout =
+        await getEventRegistrationPaymentCheckout(
+          prisma,
+          registrationId
+        );
+
+      if (
+        !checkout ||
+        checkout.provider === "TEST"
+      ) {
+        return;
+      }
+
+      if (checkout.provider !== "ASAAS") {
+        throw new Error(
+          "EVENT_PAYMENT_PROVIDER_UNSUPPORTED"
+        );
+      }
+
+      const charge =
+        await createAsaasChargeForExistingTransaction(
+          prisma,
+          checkout.churchId,
+          {
+            transactionId:
+              checkout.transactionId,
+            referenceId:
+              checkout.paymentId,
+            billingType: "PIX",
+            customer:
+              checkout.customer,
+            description:
+              `Inscrição - ${checkout.eventTitle}`,
+            dueDate:
+              new Date()
+                .toISOString()
+                .slice(0, 10),
+            value: checkout.amount
+          }
+        );
+
+      await attachEventPaymentProviderId(
+        prisma,
+        checkout.churchId,
+        checkout.paymentId,
+        charge.paymentId
+      );
+    }
+  );
 
   await registerAsaasWebhookRoutes(
     app,
@@ -104,15 +161,32 @@ export async function buildApp(): Promise<FastifyInstance> {
       referenceId,
       status
     }) => {
-      await applyRegistrationPaymentStatus(
-        prisma,
-        churchId,
-        {
-          registrationId: referenceId,
-          paymentId,
-          paymentStatus: status
-        }
-      );
+      const handledStructuredPayment =
+        await applyEventPaymentProviderStatus(
+          prisma,
+          churchId,
+          {
+            eventPaymentId: referenceId,
+            providerPaymentId: paymentId,
+            paymentStatus: status
+          }
+        );
+
+      /*
+        Compatibilidade temporária com referências
+        anteriores ao EventPayment estruturado.
+      */
+      if (!handledStructuredPayment) {
+        await applyRegistrationPaymentStatus(
+          prisma,
+          churchId,
+          {
+            registrationId: referenceId,
+            paymentId,
+            paymentStatus: status
+          }
+        );
+      }
     }
   );
 

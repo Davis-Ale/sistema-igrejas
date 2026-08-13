@@ -45,7 +45,18 @@ function shouldAutoConfirmTestPayment(): boolean {
 }
 
 function getEventPaymentProvider(): string {
-  if (shouldAutoConfirmTestPayment()) {
+  const testPaymentMode =
+    process.env.EVENTS_TEST_PAYMENT_MODE
+      ?.trim()
+      .toLowerCase();
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    (
+      testPaymentMode === "auto" ||
+      testPaymentMode === "pending"
+    )
+  ) {
     return "TEST";
   }
 
@@ -54,7 +65,7 @@ function getEventPaymentProvider(): string {
       ?.trim()
       .toUpperCase();
 
-  return configuredProvider || "UNASSIGNED";
+  return configuredProvider || "ASAAS";
 }
 
 async function createEventRegistrationPayment(
@@ -1132,6 +1143,289 @@ export async function updateRegistrationStatus(
     ...updatedRegistration,
     emailSent
   };
+}
+
+export type EventRegistrationPaymentCheckout = {
+  registrationId: string;
+  churchId: string;
+  eventId: string;
+  paymentId: string;
+  transactionId: string;
+  provider: string;
+  amount: number;
+  eventTitle: string;
+  customer: {
+    name: string;
+    email?: string;
+    mobilePhone?: string;
+  };
+};
+
+export async function getEventRegistrationPaymentCheckout(
+  prisma: PrismaClient,
+  registrationId: string
+): Promise<EventRegistrationPaymentCheckout | null> {
+  const registration =
+    await prisma.registration.findUnique({
+      where: {
+        id: registrationId
+      },
+      select: {
+        id: true,
+        churchId: true,
+        eventId: true,
+        paymentId: true,
+        paymentStatus: true,
+        waitlistedAt: true,
+        person: {
+          select: {
+            name: true,
+            email: true,
+            phone: true
+          }
+        },
+        visitor: {
+          select: {
+            name: true,
+            email: true,
+            phone: true
+          }
+        },
+        event: {
+          select: {
+            title: true,
+            isPaid: true
+          }
+        }
+      }
+    });
+
+  if (
+    !registration ||
+    !registration.event.isPaid ||
+    registration.waitlistedAt ||
+    registration.paymentStatus !== "PENDING" ||
+    !registration.paymentId
+  ) {
+    return null;
+  }
+
+  const payment =
+    await prisma.eventPayment.findFirst({
+      where: {
+        id: registration.paymentId,
+        churchId: registration.churchId,
+        eventId: registration.eventId
+      },
+      select: {
+        id: true,
+        transactionId: true,
+        provider: true,
+        providerPaymentId: true,
+        status: true,
+        amount: true
+      }
+    });
+
+  if (
+    !payment ||
+    payment.status !== "PENDING" ||
+    payment.providerPaymentId
+  ) {
+    return null;
+  }
+
+  const participant =
+    registration.person ??
+    registration.visitor;
+
+  if (!participant) {
+    throw new Error(
+      "REGISTRATION_PARTICIPANT_NOT_FOUND"
+    );
+  }
+
+  return {
+    registrationId: registration.id,
+    churchId: registration.churchId,
+    eventId: registration.eventId,
+    paymentId: payment.id,
+    transactionId: payment.transactionId,
+    provider: payment.provider,
+    amount: Number(payment.amount),
+    eventTitle: registration.event.title,
+    customer: {
+      name: participant.name,
+      ...(participant.email
+        ? { email: participant.email }
+        : {}),
+      ...(participant.phone
+        ? { mobilePhone: participant.phone }
+        : {})
+    }
+  };
+}
+
+export async function attachEventPaymentProviderId(
+  prisma: PrismaClient,
+  churchId: string,
+  eventPaymentId: string,
+  providerPaymentId: string
+): Promise<boolean> {
+  const payment =
+    await prisma.eventPayment.findFirst({
+      where: {
+        id: eventPaymentId,
+        churchId
+      },
+      select: {
+        id: true,
+        providerPaymentId: true
+      }
+    });
+
+  if (!payment) {
+    return false;
+  }
+
+  if (
+    payment.providerPaymentId ===
+    providerPaymentId
+  ) {
+    return true;
+  }
+
+  if (payment.providerPaymentId) {
+    throw new Error(
+      "EVENT_PAYMENT_PROVIDER_ID_CONFLICT"
+    );
+  }
+
+  await prisma.eventPayment.update({
+    where: {
+      id: payment.id
+    },
+    data: {
+      providerPaymentId
+    }
+  });
+
+  return true;
+}
+
+export async function applyEventPaymentProviderStatus(
+  prisma: PrismaClient,
+  churchId: string,
+  input: {
+    eventPaymentId: string;
+    providerPaymentId: string;
+    paymentStatus: RegistrationPaymentStatus;
+  }
+): Promise<boolean> {
+  const payment =
+    await prisma.eventPayment.findFirst({
+      where: {
+        id: input.eventPaymentId,
+        churchId
+      },
+      select: {
+        id: true,
+        orderId: true,
+        status: true,
+        providerPaymentId: true,
+        order: {
+          select: {
+            registrations: {
+              select: {
+                id: true,
+                status: true,
+                waitlistedAt: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+  if (!payment) {
+    return false;
+  }
+
+  if (
+    payment.providerPaymentId &&
+    payment.providerPaymentId !==
+      input.providerPaymentId
+  ) {
+    return false;
+  }
+
+  if (
+    payment.providerPaymentId ===
+      input.providerPaymentId &&
+    payment.status === input.paymentStatus
+  ) {
+    return true;
+  }
+
+  await prisma.$transaction([
+    prisma.eventPayment.update({
+      where: {
+        id: payment.id
+      },
+      data: {
+        providerPaymentId:
+          input.providerPaymentId,
+        status: input.paymentStatus
+      }
+    }),
+    prisma.eventOrder.update({
+      where: {
+        id: payment.orderId
+      },
+      data: {
+        status: input.paymentStatus
+      }
+    }),
+    prisma.registration.updateMany({
+      where: {
+        churchId,
+        orderId: payment.orderId
+      },
+      data: {
+        paymentId: payment.id,
+        paymentStatus:
+          input.paymentStatus
+      }
+    })
+  ]);
+
+  if (input.paymentStatus === "PAID") {
+    for (
+      const registration
+      of payment.order.registrations
+    ) {
+      if (
+        registration.waitlistedAt ||
+        registration.status === "CANCELLED" ||
+        registration.status === "CHECKED_IN"
+      ) {
+        continue;
+      }
+
+      await updateRegistrationStatus(
+        prisma,
+        churchId,
+        {
+          registrationId:
+            registration.id,
+          status: "CONFIRMED",
+          paymentId: payment.id
+        }
+      );
+    }
+  }
+
+  return true;
 }
 
 type RegistrationPaymentStatus =

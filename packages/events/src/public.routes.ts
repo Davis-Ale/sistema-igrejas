@@ -143,9 +143,14 @@ async function sendPublicRouteError(
   });
 }
 
+export type PublicRegistrationPaymentHandler = (
+  registrationId: string
+) => Promise<void>;
+
 export async function registerPublicEventRoutes(
   app: FastifyInstance,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  onRegistrationPaymentPending?: PublicRegistrationPaymentHandler
 ): Promise<void> {
   app.get(
     "/public/event-pages/:publicSlug",
@@ -206,6 +211,16 @@ export async function registerPublicEventRoutes(
             params.eventSlug,
             input
           );
+
+        if (
+          registration.paymentId &&
+          registration.paymentStatus === "PENDING" &&
+          onRegistrationPaymentPending
+        ) {
+          await onRegistrationPaymentPending(
+            registration.id
+          );
+        }
 
         await reply
           .code(
@@ -283,6 +298,16 @@ export async function registerPublicEventRoutes(
             params.eventId,
             input
           );
+
+        if (
+          registration.paymentId &&
+          registration.paymentStatus === "PENDING" &&
+          onRegistrationPaymentPending
+        ) {
+          await onRegistrationPaymentPending(
+            registration.id
+          );
+        }
 
         await reply
           .code(201)

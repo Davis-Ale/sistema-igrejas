@@ -251,18 +251,6 @@ export async function registerAsaasWebhookRoutes(
         payment.externalReference
       );
 
-    if (paymentId && reference) {
-      await prisma.transaction.updateMany({
-        where: {
-          id: reference.referenceId,
-          churchId: reference.churchId
-        },
-        data: {
-          asaasId: paymentId
-        }
-      });
-    }
-
     if (
       paymentId &&
       paymentStatus &&

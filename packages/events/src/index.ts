@@ -11,5 +11,12 @@ export * from "./registration-form.routes.js";
 export * from "./api-key.routes.js";
 
 export {
-  applyRegistrationPaymentStatus
+  applyEventPaymentProviderStatus,
+  applyRegistrationPaymentStatus,
+  attachEventPaymentProviderId,
+  getEventRegistrationPaymentCheckout
+} from "./event.service.js";
+
+export type {
+  EventRegistrationPaymentCheckout
 } from "./event.service.js";
