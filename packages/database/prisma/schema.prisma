@@ -113,26 +113,28 @@ model Church {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
-  campuses      Campus[]
-  people        Person[]
-  trails        Trail[]
-  trailStages   TrailStage[]
-  trailProgress TrailProgress[]
-  celulas       Celula[]
-  memberships   Membership[]
-  volunteerLogs VolunteerLog[]
-  events        Event[]
-  registrations Registration[]
+  campuses         Campus[]
+  people           Person[]
+  trails           Trail[]
+  trailStages      TrailStage[]
+  trailProgress    TrailProgress[]
+  celulas          Celula[]
+  memberships      Membership[]
+  volunteerLogs    VolunteerLog[]
+  events           Event[]
+  registrations    Registration[]
   eventTickets     EventTicket[]
   ticketBatches    TicketBatch[]
   eventFormFields  EventFormField[]
   eventFormAnswers EventFormAnswer[]
   eventApiKeys     EventApiKey[]
+  eventOrders      EventOrder[]
+  eventPayments    EventPayment[]
   transactions     Transaction[]
-  userAccounts  UserAccount[]
-  trialSignups  TrialSignup[]
-  visitors      Visitor[]
-  baseCity      LocationCity?   @relation("ChurchBaseCity", fields: [baseCityId], references: [id], onDelete: SetNull)
+  userAccounts     UserAccount[]
+  trialSignups     TrialSignup[]
+  visitors         Visitor[]
+  baseCity         LocationCity?     @relation("ChurchBaseCity", fields: [baseCityId], references: [id], onDelete: SetNull)
 
   @@index([churchId])
   @@index([cnpj])
@@ -402,14 +404,16 @@ model Event {
 
   trailStage TrailStage? @relation("EventTrailStage", fields: [trailStageId], references: [id], onDelete: SetNull)
 
-  requiredByStages TrailStage[]   @relation("TrailStageRequiredEvent")
-  registrations Registration[]
-  ticketTypes   EventTicket[]
-  ticketBatches TicketBatch[]
-  formFields    EventFormField[]
-  formAnswers   EventFormAnswer[]
-  apiKeys       EventApiKey[]
-  transactions  Transaction[]
+  requiredByStages TrailStage[]      @relation("TrailStageRequiredEvent")
+  registrations    Registration[]
+  ticketTypes      EventTicket[]
+  ticketBatches    TicketBatch[]
+  formFields       EventFormField[]
+  formAnswers      EventFormAnswer[]
+  apiKeys          EventApiKey[]
+  orders           EventOrder[]
+  payments         EventPayment[]
+  transactions     Transaction[]
 
   @@unique([churchId, slug])
   @@index([churchId])
@@ -433,11 +437,11 @@ model EventTicket {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  church        Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  church        Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event         Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   batches       TicketBatch[]
   registrations Registration[]
-  formFields     EventFormFieldTicket[]
+  formFields    EventFormFieldTicket[]
 
   @@unique([eventId, name])
   @@index([churchId])
@@ -446,18 +450,18 @@ model EventTicket {
 }
 
 model TicketBatch {
-  id          String   @id @default(cuid())
-  churchId    String
-  eventId     String
-  ticketId    String
-  name        String
-  quantity    Int
-  price       Decimal  @default(0) @db.Decimal(12, 2)
-  salesStart  DateTime
-  salesEnd    DateTime
-  isVisible   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  churchId   String
+  eventId    String
+  ticketId   String
+  name       String
+  quantity   Int
+  price      Decimal  @default(0) @db.Decimal(12, 2)
+  salesStart DateTime
+  salesEnd   DateTime
+  isVisible  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   church        Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -573,6 +577,7 @@ model Registration {
   ticketBatchId      String?
   personId           String?
   visitorId          String?
+  orderId            String?
   status             RegStatus @default(PENDING)
   paymentStatus      String    @default("NOT_REQUIRED")
   paymentId          String?
@@ -586,11 +591,12 @@ model Registration {
 
   church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
-  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  ticket      EventTicket? @relation(fields: [ticketId], references: [id], onDelete: Restrict)
-  ticketBatch TicketBatch? @relation(fields: [ticketBatchId], references: [id], onDelete: Restrict)
-  person      Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
-  visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticket      EventTicket?      @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  ticketBatch TicketBatch?      @relation(fields: [ticketBatchId], references: [id], onDelete: Restrict)
+  person      Person?           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  visitor     Visitor?          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  order       EventOrder?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
   formAnswers EventFormAnswer[]
 
   @@unique([eventId, personId])
@@ -601,11 +607,59 @@ model Registration {
   @@index([churchId, ticketBatchId])
   @@index([churchId, personId])
   @@index([churchId, visitorId])
+  @@index([churchId, orderId])
   @@index([churchId, status])
   @@index([churchId, paymentStatus])
   @@index([churchId, paymentId])
   @@index([churchId, checkInToken])
   @@index([churchId, registrationSource])
+}
+
+model EventOrder {
+  id          String   @id @default(cuid())
+  churchId    String
+  eventId     String
+  status      String   @default("PENDING")
+  totalAmount Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  registrations Registration[]
+  payments      EventPayment[]
+
+  @@index([churchId])
+  @@index([churchId, eventId])
+  @@index([churchId, status])
+}
+
+model EventPayment {
+  id                String   @id @default(cuid())
+  churchId          String
+  eventId           String
+  orderId           String
+  transactionId     String   @unique
+  provider          String
+  providerPaymentId String?
+  status            String   @default("PENDING")
+  amount            Decimal  @db.Decimal(12, 2)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  church      Church      @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  order       EventOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerPaymentId])
+  @@index([churchId])
+  @@index([churchId, eventId])
+  @@index([churchId, orderId])
+  @@index([churchId, status])
+  @@index([churchId, provider])
+  @@index([churchId, providerPaymentId])
 }
 
 model Transaction {
@@ -634,8 +688,9 @@ model Transaction {
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
 
-  person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
-  event  Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  person       Person?       @relation(fields: [personId], references: [id], onDelete: SetNull)
+  event        Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventPayment EventPayment?
 
   @@index([churchId])
   @@index([churchId, campusId])
