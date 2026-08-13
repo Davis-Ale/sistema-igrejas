@@ -33,3 +33,6 @@ docs/**/*rules*.md
 .cursor/mcp-backups/
 
 .playwright-mcp/
+
+# Internal planning
+docs/planning/
