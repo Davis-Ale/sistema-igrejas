@@ -44,31 +44,85 @@ function shouldAutoConfirmTestPayment(): boolean {
   );
 }
 
-async function createEventRegistrationTransaction(
+function getEventPaymentProvider(): string {
+  if (shouldAutoConfirmTestPayment()) {
+    return "TEST";
+  }
+
+  const configuredProvider =
+    process.env.EVENTS_PAYMENT_PROVIDER
+      ?.trim()
+      .toUpperCase();
+
+  return configuredProvider || "UNASSIGNED";
+}
+
+async function createEventRegistrationPayment(
   prisma: PrismaClient,
   input: {
     churchId: string;
     campusId: string | null;
     eventId: string;
+    registrationId: string;
     personId: string | null;
     amount: Prisma.Decimal | number | string;
   }
 ) {
-  const transaction = await prisma.transaction.create({
-    data: {
-      churchId: input.churchId,
-      campusId: input.campusId,
-      personId: input.personId,
-      eventId: input.eventId,
-      type: "EVENT",
-      direction: "IN",
-      amount: input.amount,
-      method: "PIX",
-      costCenter: "EVENTOS"
-    }
-  });
+  return prisma.$transaction(
+    async (transaction) => {
+      const order =
+        await transaction.eventOrder.create({
+          data: {
+            churchId: input.churchId,
+            eventId: input.eventId,
+            status: "PENDING",
+            totalAmount: input.amount
+          }
+        });
 
-  return transaction.id;
+      const financialTransaction =
+        await transaction.transaction.create({
+          data: {
+            churchId: input.churchId,
+            campusId: input.campusId,
+            personId: input.personId,
+            eventId: input.eventId,
+            type: "EVENT",
+            direction: "IN",
+            amount: input.amount,
+            method: "PIX",
+            costCenter: "EVENTOS"
+          }
+        });
+
+      const payment =
+        await transaction.eventPayment.create({
+          data: {
+            churchId: input.churchId,
+            eventId: input.eventId,
+            orderId: order.id,
+            transactionId:
+              financialTransaction.id,
+            provider:
+              getEventPaymentProvider(),
+            status: "PENDING",
+            amount: input.amount
+          }
+        });
+
+      await transaction.registration.update({
+        where: {
+          id: input.registrationId
+        },
+        data: {
+          orderId: order.id,
+          paymentId: payment.id
+        }
+      });
+
+      return payment.id;
+    }
+  );
 }
 
 export async function createEvent(
@@ -468,13 +522,18 @@ export async function createRegistration(
     return registration;
   }
 
-  const paymentId = await createEventRegistrationTransaction(prisma, {
-    churchId,
-    campusId: event.campusId,
-    eventId: event.id,
-    personId: input.personId ?? null,
-    amount: event.price
-  });
+  const paymentId =
+    await createEventRegistrationPayment(
+      prisma,
+      {
+        churchId,
+        campusId: event.campusId,
+        eventId: event.id,
+        registrationId: registration.id,
+        personId: input.personId ?? null,
+        amount: event.price
+      }
+    );
 
   if (shouldAutoConfirmTestPayment()) {
     await applyRegistrationPaymentStatus(
@@ -838,12 +897,13 @@ export async function createPublicRegistration(
   }
 
   const paymentId =
-    await createEventRegistrationTransaction(
+    await createEventRegistrationPayment(
       prisma,
       {
         churchId: event.churchId,
         campusId: event.campusId,
         eventId: event.id,
+        registrationId: registration.id,
         personId: null,
         amount: batch.price
       }
@@ -1099,22 +1159,20 @@ export async function applyRegistrationPaymentStatus(
       },
       select: {
         id: true,
+        orderId: true,
         status: true,
         paymentId: true,
         paymentStatus: true,
         waitlistedAt: true,
         event: {
           select: {
+            id: true,
             isPaid: true
           }
         }
       }
     });
 
-  /*
-    A referência pode pertencer a outra cobrança financeira
-    que não seja inscrição de evento.
-  */
   if (
     !registration ||
     !registration.event.isPaid
@@ -1122,32 +1180,101 @@ export async function applyRegistrationPaymentStatus(
     return false;
   }
 
-  /*
-    Webhooks podem ser reenviados.
-    Se o mesmo estado do mesmo pagamento já foi processado,
-    não executamos novamente confirmação/e-mail.
-  */
+  const eventPayment =
+    registration.orderId
+      ? await prisma.eventPayment.findFirst({
+          where: {
+            churchId,
+            orderId: registration.orderId,
+            eventId: registration.event.id
+          },
+          select: {
+            id: true,
+            orderId: true,
+            providerPaymentId: true,
+            status: true
+          }
+        })
+      : null;
+
+  const matchesStructuredPayment =
+    Boolean(eventPayment) &&
+    (
+      eventPayment?.id === input.paymentId ||
+      eventPayment?.providerPaymentId ===
+        input.paymentId
+    );
+
   if (
-    registration.paymentId === input.paymentId &&
-    registration.paymentStatus === input.paymentStatus
+    registration.paymentStatus ===
+      input.paymentStatus &&
+    (
+      eventPayment
+        ? eventPayment.status ===
+            input.paymentStatus &&
+          matchesStructuredPayment
+        : registration.paymentId ===
+          input.paymentId
+    )
   ) {
     return true;
   }
 
-  await prisma.registration.update({
-    where: {
-      id: registration.id
-    },
-    data: {
-      paymentId: input.paymentId,
-      paymentStatus: input.paymentStatus
-    }
-  });
+  if (eventPayment) {
+    const providerPaymentData =
+      eventPayment.id === input.paymentId
+        ? {}
+        : {
+            providerPaymentId:
+              input.paymentId
+          };
 
-  /*
-    Apenas pagamento realmente confirmado pelo provedor
-    pode confirmar a inscrição.
-  */
+    await prisma.$transaction([
+      prisma.eventPayment.update({
+        where: {
+          id: eventPayment.id
+        },
+        data: {
+          status: input.paymentStatus,
+          ...providerPaymentData
+        }
+      }),
+      prisma.eventOrder.update({
+        where: {
+          id: eventPayment.orderId
+        },
+        data: {
+          status: input.paymentStatus
+        }
+      }),
+      prisma.registration.update({
+        where: {
+          id: registration.id
+        },
+        data: {
+          paymentId: eventPayment.id,
+          paymentStatus:
+            input.paymentStatus
+        }
+      })
+    ]);
+  } else {
+    /*
+      Compatibilidade temporária com inscrições
+      criadas antes de EventOrder/EventPayment.
+    */
+    await prisma.registration.update({
+      where: {
+        id: registration.id
+      },
+      data: {
+        paymentId: input.paymentId,
+        paymentStatus:
+          input.paymentStatus
+      }
+    });
+  }
+
   if (
     input.paymentStatus === "PAID" &&
     !registration.waitlistedAt &&
@@ -1158,9 +1285,12 @@ export async function applyRegistrationPaymentStatus(
       prisma,
       churchId,
       {
-        registrationId: registration.id,
+        registrationId:
+          registration.id,
         status: "CONFIRMED",
-        paymentId: input.paymentId
+        paymentId:
+          eventPayment?.id ??
+          input.paymentId
       }
     );
   }
