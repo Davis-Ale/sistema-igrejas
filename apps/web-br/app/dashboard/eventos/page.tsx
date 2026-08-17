@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
@@ -190,7 +192,21 @@ function getRegistrationStats(registrations: Array<{
 }
 
 export default function EventosPage() {
-  const [events, setEvents] = useState<EventSummary[]>([]);
+  const router = useRouter();
+const [events, setEvents] = useState<EventSummary[]>([]);
+
+  useEffect(() => {
+    const firstEvent =
+      events[0];
+
+    if (!firstEvent) {
+      return;
+    }
+
+    router.replace(
+      `/dashboard/eventos/${firstEvent.id}`
+    );
+  }, [events, router]);
   const [members, setMembers] = useState<Member[]>([]);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
