@@ -173,7 +173,8 @@ export async function createAsaasChargeForExistingTransaction(
       );
 
     const pixQrCode =
-      payment.billingType === "PIX"
+      payment.billingType === "PIX" &&
+      payment.status !== "RECEIVED"
         ? await getAsaasPixQrCode(
             transaction.asaasId
           )

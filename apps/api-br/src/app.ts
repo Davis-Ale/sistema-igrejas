@@ -174,6 +174,32 @@ export async function buildApp(): Promise<FastifyInstance> {
           charge.paymentId
         );
 
+        if (
+          charge.payment.status ===
+          "RECEIVED"
+        ) {
+          const paymentApplied =
+            await applyEventPaymentProviderStatus(
+              prisma,
+              checkout.churchId,
+              {
+                eventPaymentId:
+                  checkout.paymentId,
+                providerPaymentId:
+                  charge.paymentId,
+                paymentStatus: "PAID"
+              }
+            );
+
+          if (!paymentApplied) {
+            throw new Error(
+              "EVENT_PAYMENT_PROVIDER_STATUS_NOT_APPLIED"
+            );
+          }
+
+          return null;
+        }
+
         const actualBillingType =
           charge.payment.billingType;
 

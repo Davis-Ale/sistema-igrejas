@@ -322,6 +322,17 @@ export async function registerPublicEventRoutes(
               )
             : null;
 
+        const responseRegistration =
+          registration.paymentId &&
+          onRegistrationPaymentPending
+            ? await getPublicRegistrationByTokenBySlugs(
+                prisma,
+                params.churchSlug,
+                params.eventSlug,
+                registration.checkInToken
+              )
+            : registration;
+
         await reply
           .code(
             registration.wasExisting
@@ -330,7 +341,7 @@ export async function registerPublicEventRoutes(
           )
           .send(
             buildPublicRegistrationResponse(
-              registration,
+              responseRegistration,
               paymentCheckout
             )
           );
@@ -460,11 +471,22 @@ export async function registerPublicEventRoutes(
               )
             : null;
 
+        const responseRegistration =
+          registration.paymentId &&
+          onRegistrationPaymentPending
+            ? await getPublicRegistrationByTokenBySlugs(
+                prisma,
+                registration.event.church.slug,
+                registration.event.slug,
+                registration.checkInToken
+              )
+            : registration;
+
         await reply
           .code(201)
           .send(
             buildPublicRegistrationResponse(
-              registration,
+              responseRegistration,
               paymentCheckout
             )
           );
