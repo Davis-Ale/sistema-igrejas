@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -192,7 +191,6 @@ function getRegistrationStats(registrations: Array<{
 }
 
 export default function EventosPage() {
-  const router = useRouter();
 const [events, setEvents] = useState<EventSummary[]>([]);
 
   useEffect(() => {
@@ -203,10 +201,10 @@ const [events, setEvents] = useState<EventSummary[]>([]);
       return;
     }
 
-    router.replace(
+    window.location.replace(
       `/dashboard/eventos/${firstEvent.id}`
     );
-  }, [events, router]);
+  }, [events]);
   const [members, setMembers] = useState<Member[]>([]);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
