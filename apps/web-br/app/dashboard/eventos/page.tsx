@@ -191,7 +191,13 @@ function getRegistrationStats(registrations: Array<{
 }
 
 export default function EventosPage() {
-const [events, setEvents] = useState<EventSummary[]>([]);
+  const [events, setEvents] =
+    useState<EventSummary[]>([]);
+
+  const [
+    eventsResolved,
+    setEventsResolved
+  ] = useState(false);
 
   useEffect(() => {
     const firstEvent =
@@ -553,12 +559,46 @@ const [events, setEvents] = useState<EventSummary[]>([]);
   }
 
   useEffect(() => {
-    void loadEventsMembersAndVisitors();
+    let active = true;
+
+    void loadEventsMembersAndVisitors()
+      .finally(() => {
+        if (active) {
+          setEventsResolved(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     void loadSelectedEvent(selectedEventId);
   }, [selectedEventId]);
+
+  if (
+    !eventsResolved ||
+    events.length > 0
+  ) {
+    return (
+      <DashboardAuthGuard>
+        <main
+          style={{
+            alignItems: "center",
+            background:
+              "linear-gradient(135deg, #0f172a 0%, #020617 100%)",
+            color: "#cbd5e1",
+            display: "flex",
+            justifyContent: "center",
+            minHeight: "100vh"
+          }}
+        >
+          Abrindo Eventos...
+        </main>
+      </DashboardAuthGuard>
+    );
+  }
 
   return (
     <DashboardAuthGuard>
