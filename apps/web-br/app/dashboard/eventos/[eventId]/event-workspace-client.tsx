@@ -1139,7 +1139,7 @@ export function EventWorkspaceClient({
   }, [activeSection, eventId]);
 
   const publicRegistrationUrl = event
-    ? `${WEB_BASE_URL}/eventos/${event.id}`
+    ? `${WEB_BASE_URL}/eventos/${event.id}?returnTo=${encodeURIComponent(`/dashboard/eventos/${event.id}`)}`
     : "#";
 
   const eventAppUrl = event

@@ -152,7 +152,9 @@ function getSuccessMessage(
   }
 
   if (registration.event.isPaid) {
-    return "Sua inscrição foi recebida e ficará pendente até a confirmação do pagamento.";
+    return registration.paymentStatus === "PAID"
+      ? "Sua inscrição foi confirmada."
+      : "Sua inscrição foi recebida e ficará pendente até a confirmação do pagamento.";
   }
 
   return "Sua inscrição foi confirmada.";
@@ -172,6 +174,11 @@ export default function PublicEventPage() {
     useParams<{ eventId: string }>();
 
   const eventId = params.eventId;
+
+  const [
+    returnHref,
+    setReturnHref
+  ] = useState("/");
 
   const [
     event,
@@ -220,6 +227,22 @@ export default function PublicEventPage() {
     error,
     setError
   ] = useState<string | null>(null);
+
+  useEffect(() => {
+    const expectedReturn =
+      `/dashboard/eventos/${eventId}`;
+
+    const requestedReturn =
+      new URLSearchParams(
+        window.location.search
+      ).get("returnTo");
+
+    setReturnHref(
+      requestedReturn === expectedReturn
+        ? expectedReturn
+        : "/"
+    );
+  }, [eventId]);
 
   useEffect(() => {
     setError(null);
@@ -455,11 +478,7 @@ export default function PublicEventPage() {
         }}
       >
         <Link
-          href="#"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      window.history.back();
-                    }}
+          href={returnHref}
           style={{
             color: "#93c5fd",
             fontSize: "14px",
@@ -467,7 +486,10 @@ export default function PublicEventPage() {
             textDecoration: "none"
           }}
         >
-          Voltar para o início
+          {returnHref ===
+          `/dashboard/eventos/${eventId}`
+            ? "Voltar ao evento"
+            : "Voltar para o início"}
         </Link>
 
         {isLoading ? (
