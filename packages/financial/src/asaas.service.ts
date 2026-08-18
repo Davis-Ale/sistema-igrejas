@@ -172,17 +172,8 @@ export async function createAsaasChargeForExistingTransaction(
         transaction.asaasId
       );
 
-    if (
-      payment.billingType !==
-      input.billingType
-    ) {
-      throw new Error(
-        "PAYMENT_METHOD_ALREADY_SELECTED"
-      );
-    }
-
     const pixQrCode =
-      input.billingType === "PIX"
+      payment.billingType === "PIX"
         ? await getAsaasPixQrCode(
             transaction.asaasId
           )

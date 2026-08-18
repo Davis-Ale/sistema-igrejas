@@ -221,6 +221,13 @@ export default function PublicEventPage() {
     setError
   ] = useState<string | null>(null);
 
+  useEffect(() => {
+    setError(null);
+  }, [
+    checkoutStep,
+    paymentMethod
+  ]);
+
   const [
     isLoading,
     setIsLoading

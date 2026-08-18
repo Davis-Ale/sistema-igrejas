@@ -174,7 +174,12 @@ export async function buildApp(): Promise<FastifyInstance> {
           charge.paymentId
         );
 
-        if (paymentMethod === "PIX") {
+        const actualBillingType =
+          charge.payment.billingType;
+
+        if (
+          actualBillingType === "PIX"
+        ) {
           if (!charge.pixQrCode) {
             throw new Error(
               "EVENT_PIX_QR_CODE_NOT_AVAILABLE"
@@ -202,8 +207,14 @@ export async function buildApp(): Promise<FastifyInstance> {
           );
         }
 
+        const cardMethod =
+          paymentMethod ===
+          "DEBIT_CARD"
+            ? "DEBIT_CARD" as const
+            : "CREDIT_CARD" as const;
+
         return {
-          method: paymentMethod,
+          method: cardMethod,
           redirectUrl:
             charge.invoiceUrl
         };
