@@ -49,6 +49,14 @@ export const createPublicRegistrationSchema = z.object({
   name: z.string().trim().min(2, "Nome é obrigatório."),
   phone: z.string().trim().min(8, "Telefone é obrigatório."),
   email: z.string().trim().email("E-mail inválido.").optional(),
+  cpf: z.string().trim().optional(),
+  paymentMethod: z
+    .enum([
+      "PIX",
+      "CREDIT_CARD",
+      "DEBIT_CARD"
+    ])
+    .default("PIX"),
   ticketId: z.string().trim().min(1, "Ingresso é obrigatório."),
   ticketBatchId: z.string().trim().min(1, "Lote é obrigatório."),
   answers: z

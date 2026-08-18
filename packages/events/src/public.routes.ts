@@ -137,23 +137,79 @@ async function sendPublicRouteError(
     return;
   }
 
+  if (
+    error.message ===
+    "PAYMENT_CUSTOMER_CPF_REQUIRED"
+  ) {
+    await reply.code(400).send({
+      error:
+        "PAYMENT_CUSTOMER_CPF_REQUIRED",
+      message:
+        "Informe um CPF válido para continuar com o pagamento."
+    });
+    return;
+  }
+
+  if (
+    error.message ===
+    "PAYMENT_METHOD_ALREADY_SELECTED"
+  ) {
+    await reply.code(409).send({
+      error:
+        "PAYMENT_METHOD_ALREADY_SELECTED",
+      message:
+        "Esta cobrança já foi iniciada com outra forma de pagamento."
+    });
+    return;
+  }
+
+  if (
+    error.message ===
+    "PAYMENT_CHECKOUT_FAILED"
+  ) {
+    await reply.code(502).send({
+      error: "PAYMENT_CHECKOUT_FAILED",
+      message:
+        "Não foi possível iniciar o pagamento agora."
+    });
+    return;
+  }
+
   await reply.code(500).send({
     error: "INTERNAL_SERVER_ERROR",
     message: "Erro interno."
   });
 }
 
-export type PublicRegistrationPaymentCheckout = {
-  method: "PIX";
-  pix: {
-    encodedImage: string;
-    payload: string;
-    expirationDate: string;
-  };
+export type PublicRegistrationPaymentMethod =
+  | "PIX"
+  | "CREDIT_CARD"
+  | "DEBIT_CARD";
+
+export type PublicRegistrationPaymentCheckout =
+  | {
+      method: "PIX";
+      pix: {
+        encodedImage: string;
+        payload: string;
+        expirationDate: string;
+      };
+    }
+  | {
+      method:
+        | "CREDIT_CARD"
+        | "DEBIT_CARD";
+      redirectUrl: string;
+    };
+
+export type PublicRegistrationPaymentRequest = {
+  cpf?: string;
+  paymentMethod: PublicRegistrationPaymentMethod;
 };
 
 export type PublicRegistrationPaymentHandler = (
-  registrationId: string
+  registrationId: string,
+  paymentRequest: PublicRegistrationPaymentRequest
 ) => Promise<
   PublicRegistrationPaymentCheckout | null
 >;
@@ -257,7 +313,12 @@ export async function registerPublicEventRoutes(
           registration.paymentStatus === "PENDING" &&
           onRegistrationPaymentPending
             ? await onRegistrationPaymentPending(
-                registration.id
+                registration.id,
+                {
+                  ...(input.cpf ? { cpf: input.cpf } : {}),
+                  paymentMethod:
+                    input.paymentMethod
+                }
               )
             : null;
 
@@ -328,10 +389,37 @@ export async function registerPublicEventRoutes(
           eventId: string;
         };
 
-        return await getPublicEventById(
-          prisma,
-          params.eventId
-        );
+        const publicEvent =
+          await getPublicEventById(
+            prisma,
+            params.eventId
+          );
+
+        const eventChurch =
+          await prisma.event.findUnique({
+            where: {
+              id: params.eventId
+            },
+            select: {
+              church: {
+                select: {
+                  name: true,
+                  slug: true
+                }
+              }
+            }
+          });
+
+        if (!eventChurch) {
+          throw new Error(
+            "EVENT_NOT_FOUND"
+          );
+        }
+
+        return {
+          ...publicEvent,
+          church: eventChurch.church
+        };
       } catch (error) {
         await sendPublicRouteError(error, reply);
       }
@@ -363,7 +451,12 @@ export async function registerPublicEventRoutes(
           registration.paymentStatus === "PENDING" &&
           onRegistrationPaymentPending
             ? await onRegistrationPaymentPending(
-                registration.id
+                registration.id,
+                {
+                  ...(input.cpf ? { cpf: input.cpf } : {}),
+                  paymentMethod:
+                    input.paymentMethod
+                }
               )
             : null;
 

@@ -83,6 +83,17 @@ export async function createAsaasPayment(
 }
 
 
+export async function getAsaasPayment(
+  paymentId: string,
+  client: AsaasClient = createAsaasClient()
+): Promise<AsaasPaymentResponse> {
+  return client.request<AsaasPaymentResponse>({
+    method: "GET",
+    path:
+      `/payments/${encodeURIComponent(paymentId)}`
+  });
+}
+
 export type AsaasPixQrCode = {
   encodedImage: string;
   payload: string;
@@ -156,6 +167,20 @@ export async function createAsaasChargeForExistingTransaction(
     Isso impede uma segunda cobrança após retry.
   */
   if (transaction.asaasId) {
+    const payment =
+      await getAsaasPayment(
+        transaction.asaasId
+      );
+
+    if (
+      payment.billingType !==
+      input.billingType
+    ) {
+      throw new Error(
+        "PAYMENT_METHOD_ALREADY_SELECTED"
+      );
+    }
+
     const pixQrCode =
       input.billingType === "PIX"
         ? await getAsaasPixQrCode(
@@ -164,11 +189,26 @@ export async function createAsaasChargeForExistingTransaction(
         : null;
 
     return {
+      payment,
       paymentId: transaction.asaasId,
       pixQrCode,
+      invoiceUrl:
+        payment.invoiceUrl ?? null,
       reused: true
     };
   }
+
+  await prisma.transaction.update({
+    where: {
+      id: transaction.id
+    },
+    data: {
+      method:
+        input.billingType === "PIX"
+          ? "PIX"
+          : "CARD"
+    }
+  });
 
   const customerInput: CreateAsaasCustomerInput = {
     externalReference:
@@ -234,6 +274,8 @@ export async function createAsaasChargeForExistingTransaction(
     payment,
     paymentId: payment.id,
     pixQrCode,
+    invoiceUrl:
+      payment.invoiceUrl ?? null,
     reused: false
   };
 }

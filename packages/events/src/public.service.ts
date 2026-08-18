@@ -256,6 +256,10 @@ export async function createPublicRegistrationBySlugs(
     ticketId: input.ticketId,
     ticketBatchId: input.ticketBatchId,
     answers: input.answers,
+    paymentMethod: input.paymentMethod,
+    ...(input.cpf
+      ? { cpf: input.cpf }
+      : {}),
     ...(normalizedEmail !== undefined
       ? { email: normalizedEmail }
       : {})

@@ -101,7 +101,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerPublicEventRoutes(
     app,
     prisma,
-    async (registrationId) => {
+    async (
+      registrationId,
+      paymentRequest
+    ) => {
       const checkout =
         await getEventRegistrationPaymentCheckout(
           prisma,
@@ -121,52 +124,112 @@ export async function buildApp(): Promise<FastifyInstance> {
         );
       }
 
-      const charge =
-        await createAsaasChargeForExistingTransaction(
-          prisma,
-          checkout.churchId,
-          {
-            transactionId:
-              checkout.transactionId,
-            referenceId:
-              checkout.paymentId,
-            billingType: "PIX",
-            customer:
-              checkout.customer,
-            description:
-              `Inscrição - ${checkout.eventTitle}`,
-            dueDate:
-              new Date()
-                .toISOString()
-                .slice(0, 10),
-            value: checkout.amount
-          }
-        );
+      const cpf =
+        paymentRequest.cpf
+          ?.replace(/\D/g, "") ?? "";
 
-      await attachEventPaymentProviderId(
-        prisma,
-        checkout.churchId,
-        checkout.paymentId,
-        charge.paymentId
-      );
-
-      if (!charge.pixQrCode) {
+      if (cpf.length !== 11) {
         throw new Error(
-          "EVENT_PIX_QR_CODE_NOT_AVAILABLE"
+          "PAYMENT_CUSTOMER_CPF_REQUIRED"
         );
       }
 
-      return {
-        method: "PIX" as const,
-        pix: {
-          encodedImage:
-            charge.pixQrCode.encodedImage,
-          payload:
-            charge.pixQrCode.payload,
-          expirationDate:
-            charge.pixQrCode.expirationDate
+      const paymentMethod =
+        paymentRequest.paymentMethod;
+
+      const billingType =
+        paymentMethod === "PIX"
+          ? "PIX" as const
+          : "CREDIT_CARD" as const;
+
+      try {
+        const charge =
+          await createAsaasChargeForExistingTransaction(
+            prisma,
+            checkout.churchId,
+            {
+              transactionId:
+                checkout.transactionId,
+              referenceId:
+                checkout.paymentId,
+              billingType,
+              customer: {
+                ...checkout.customer,
+                cpfCnpj: cpf
+              },
+              description:
+                `Inscrição - ${checkout.eventTitle}`,
+              dueDate:
+                new Date()
+                  .toISOString()
+                  .slice(0, 10),
+              value: checkout.amount
+            }
+          );
+
+        await attachEventPaymentProviderId(
+          prisma,
+          checkout.churchId,
+          checkout.paymentId,
+          charge.paymentId
+        );
+
+        if (paymentMethod === "PIX") {
+          if (!charge.pixQrCode) {
+            throw new Error(
+              "EVENT_PIX_QR_CODE_NOT_AVAILABLE"
+            );
+          }
+
+          return {
+            method: "PIX" as const,
+            pix: {
+              encodedImage:
+                charge.pixQrCode
+                  .encodedImage,
+              payload:
+                charge.pixQrCode.payload,
+              expirationDate:
+                charge.pixQrCode
+                  .expirationDate
+            }
+          };
         }
-      };
+
+        if (!charge.invoiceUrl) {
+          throw new Error(
+            "EVENT_PAYMENT_INVOICE_URL_NOT_AVAILABLE"
+          );
+        }
+
+        return {
+          method: paymentMethod,
+          redirectUrl:
+            charge.invoiceUrl
+        };
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message ===
+            "PAYMENT_METHOD_ALREADY_SELECTED"
+        ) {
+          throw error;
+        }
+
+        app.log.error(
+          {
+            err: error,
+            registrationId,
+            eventPaymentId:
+              checkout.paymentId
+          },
+          "Event payment checkout failed"
+        );
+
+        throw new Error(
+          "PAYMENT_CHECKOUT_FAILED"
+        );
+      }
     }
   );
 
