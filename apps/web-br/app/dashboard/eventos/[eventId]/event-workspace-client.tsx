@@ -1262,7 +1262,7 @@ export function EventWorkspaceClient({
         }}
       >
         <Link
-          href="/dashboard/eventos"
+          href="/dashboard"
           style={{
             color: "#93c5fd",
             fontSize: "14px",
@@ -1270,7 +1270,7 @@ export function EventWorkspaceClient({
             textDecoration: "none"
           }}
         >
-          Voltar para Eventos
+          Voltar ao painel
         </Link>
 
         {isLoading ? (
