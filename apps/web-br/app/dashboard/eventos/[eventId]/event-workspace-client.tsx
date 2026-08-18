@@ -85,9 +85,9 @@ type EventFinancialTransaction = {
 };
 
 type EventFinancialSummary = {
-  totalIn: string | number;
-  totalOut: string | number;
-  balance: string | number;
+  income: string | number;
+  expense: string | number;
+
 };
 
 type TicketBatch = {
@@ -2951,7 +2951,7 @@ export function EventWorkspaceClient({
             Entradas
           </strong>
           <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(financialSummary.totalIn)}
+            {formatMoney(financialSummary.income)}
           </p>
         </article>
 
@@ -2966,7 +2966,7 @@ export function EventWorkspaceClient({
             Saídas
           </strong>
           <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(financialSummary.totalOut)}
+            {formatMoney(financialSummary.expense)}
           </p>
         </article>
 
@@ -2981,7 +2981,7 @@ export function EventWorkspaceClient({
             Saldo
           </strong>
           <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(financialSummary.balance)}
+            {formatMoney(Number(financialSummary.income) - Number(financialSummary.expense))}
           </p>
         </article>
       </div>
