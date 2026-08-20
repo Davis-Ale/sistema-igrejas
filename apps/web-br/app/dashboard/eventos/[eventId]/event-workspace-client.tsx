@@ -844,6 +844,9 @@ export function EventWorkspaceClient({
         participant.phone
           .toLowerCase()
           .includes(search) ||
+        (participant.email ?? "")
+          .toLowerCase()
+          .includes(search) ||
         participant.email
           ?.toLowerCase()
           .includes(search) ||

@@ -175,8 +175,8 @@ export async function buildApp(): Promise<FastifyInstance> {
         );
 
         if (
-          charge.payment.status ===
-          "RECEIVED"
+          charge.payment.status === "RECEIVED" ||
+          charge.payment.status === "CONFIRMED"
         ) {
           const paymentApplied =
             await applyEventPaymentProviderStatus(

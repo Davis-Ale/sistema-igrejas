@@ -1870,7 +1870,7 @@ export default function PublicEventPage() {
                       margin: 0
                     }}
                   >
-                    O QR Code e o acesso ao aplicativo serão enviados para este e-mail após a confirmação do pagamento.
+                    {registration.paymentStatus === "PAID" ? "Pagamento confirmado. O QR Code e o acesso ao aplicativo estão liberados." : "O QR Code e o acesso ao aplicativo serão enviados para este e-mail após a confirmação do pagamento."}
                   </p>
 
                   {(
