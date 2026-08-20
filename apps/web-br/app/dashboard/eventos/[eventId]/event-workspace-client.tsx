@@ -1052,6 +1052,9 @@ export function EventWorkspaceClient({
         participant.phone
           .toLowerCase()
           .includes(search) ||
+        (participant.email ?? "")
+          .toLowerCase()
+          .includes(search) ||
         registration.checkInToken
           .toLowerCase()
           .includes(search)
