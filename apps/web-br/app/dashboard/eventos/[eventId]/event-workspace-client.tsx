@@ -242,6 +242,10 @@ export function EventWorkspaceClient({
     useState<EventFormFieldType>("TEXT");
   const [participantSearch, setParticipantSearch] =
     useState("");
+  const [
+    participantSearchInput,
+    setParticipantSearchInput
+  ] = useState("");
   const [participantStatus, setParticipantStatus] =
     useState("ALL");
   const [participantPayment, setParticipantPayment] =
@@ -252,6 +256,10 @@ export function EventWorkspaceClient({
     useState("");
   const [checkInSearch, setCheckInSearch] =
     useState("");
+  const [
+    checkInSearchInput,
+    setCheckInSearchInput
+  ] = useState("");
   const [isCheckingIn, setIsCheckingIn] =
     useState(false);
   const [checkInMessage, setCheckInMessage] =
@@ -823,6 +831,44 @@ export function EventWorkspaceClient({
     }
   }
 
+  const normalizeEventSearch = (
+    value: string
+  ) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const getRegistrationStatusLabel = (
+    status: string
+  ) => {
+    const labels: Record<string, string> = {
+      PENDING: "Pendente",
+      CONFIRMED: "Confirmada",
+      CHECKED_IN: "Presente",
+      CANCELLED: "Cancelada"
+    };
+
+    return labels[status] ?? status;
+  };
+
+  const getPaymentStatusLabel = (
+    status: string
+  ) => {
+    const labels: Record<string, string> = {
+      PAID: "Pago",
+      PENDING: "Pendente",
+      WAITING_PAYMENT: "Aguardando pagamento",
+      NOT_REQUIRED: "Não necessário",
+      CANCELLED: "Cancelado",
+      REFUNDED: "Reembolsado"
+    };
+
+    return labels[status] ?? status;
+  };
+
   const filteredParticipants =
     event?.registrations.filter((registration) => {
       const participant =
@@ -832,27 +878,23 @@ export function EventWorkspaceClient({
         return false;
       }
 
-      const search = participantSearch
-        .trim()
-        .toLowerCase();
+      const search =
+        normalizeEventSearch(
+          participantSearch
+        );
 
       const matchesSearch =
         !search ||
-        participant.name
-          .toLowerCase()
-          .includes(search) ||
-        participant.phone
-          .toLowerCase()
-          .includes(search) ||
-        (participant.email ?? "")
-          .toLowerCase()
-          .includes(search) ||
-        participant.email
-          ?.toLowerCase()
-          .includes(search) ||
-        registration.checkInToken
-          .toLowerCase()
-          .includes(search);
+        [
+          participant.name,
+          participant.phone,
+          participant.email ?? "",
+          registration.checkInToken
+        ].some((value) =>
+          normalizeEventSearch(
+            value
+          ).includes(search)
+        );
 
       const matchesStatus =
         participantStatus === "ALL" ||
@@ -1037,27 +1079,28 @@ export function EventWorkspaceClient({
     event?.registrations.filter((registration) => {
       const participant =
         registration.person ?? registration.visitor;
-      const search =
-        checkInSearch.trim().toLowerCase();
 
       if (!participant) {
         return false;
       }
 
+      const search =
+        normalizeEventSearch(
+          checkInSearch
+        );
+
       return (
         !search ||
-        participant.name
-          .toLowerCase()
-          .includes(search) ||
-        participant.phone
-          .toLowerCase()
-          .includes(search) ||
-        (participant.email ?? "")
-          .toLowerCase()
-          .includes(search) ||
-        registration.checkInToken
-          .toLowerCase()
-          .includes(search)
+        [
+          participant.name,
+          participant.phone,
+          participant.email ?? "",
+          registration.checkInToken
+        ].some((value) =>
+          normalizeEventSearch(
+            value
+          ).includes(search)
+        )
       );
     }) ?? [];
 
@@ -2525,6 +2568,15 @@ export function EventWorkspaceClient({
       <h2 style={{ margin: 0 }}>
         Inscrições do evento
       </h2>
+
+      <p
+        style={{
+          color: "#94a3b8",
+          margin: "8px 0 0"
+        }}
+      >
+        Pesquise participantes e refine pelos filtros disponíveis.
+      </p>
     </header>
 
     <div
@@ -2535,17 +2587,49 @@ export function EventWorkspaceClient({
           "minmax(220px, 2fr) repeat(3, minmax(145px, 1fr))"
       }}
     >
-      <input
-        onChange={(event) =>
-          setParticipantSearch(event.target.value)
-        }
-        placeholder="Buscar por nome, e-mail, telefone ou código"
-        style={{
-          borderRadius: "10px",
-          padding: "11px 12px"
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setParticipantSearch(
+            participantSearchInput.trim()
+          );
         }}
-        value={participantSearch}
-      />
+        style={{
+          display: "grid",
+          gap: "8px",
+          gridTemplateColumns:
+            "minmax(140px, 1fr) auto"
+        }}
+      >
+        <input
+          onChange={(event) =>
+            setParticipantSearchInput(
+              event.target.value
+            )
+          }
+          placeholder="Nome, e-mail, telefone ou código"
+          style={{
+            borderRadius: "10px",
+            padding: "11px 12px"
+          }}
+          value={participantSearchInput}
+        />
+
+        <button
+          style={{
+            background: "#2563eb",
+            border: 0,
+            borderRadius: "10px",
+            color: "#ffffff",
+            cursor: "pointer",
+            fontWeight: 900,
+            padding: "11px 16px"
+          }}
+          type="submit"
+        >
+          Pesquisar
+        </button>
+      </form>
 
       <select
         onChange={(event) =>
@@ -2628,6 +2712,17 @@ export function EventWorkspaceClient({
         gap: "10px"
       }}
     >
+      {filteredParticipants.length === 0 ? (
+        <p
+          style={{
+            color: "#94a3b8",
+            margin: 0
+          }}
+        >
+          Nenhum participante encontrado.
+        </p>
+      ) : null}
+
       {filteredParticipants.map((registration) => {
         const participant =
           registration.person ??
@@ -2662,9 +2757,16 @@ export function EventWorkspaceClient({
                 {registration.ticket?.name ??
                   "Sem ingresso"}
               </span>
-              <span>{registration.status}</span>
               <span>
-                {registration.paymentStatus}
+                {getRegistrationStatusLabel(
+                  registration.status
+                )}
+              </span>
+
+              <span>
+                {getPaymentStatusLabel(
+                  registration.paymentStatus
+                )}
               </span>
             </summary>
 
@@ -2738,6 +2840,15 @@ export function EventWorkspaceClient({
       <h2 style={{ margin: 0 }}>
         Credenciamento
       </h2>
+
+      <p
+        style={{
+          color: "#94a3b8",
+          margin: "8px 0 0"
+        }}
+      >
+        Use a credencial para o check-in ou pesquise o participante manualmente.
+      </p>
     </header>
 
     {checkInMessage ? (
@@ -2756,7 +2867,17 @@ export function EventWorkspaceClient({
       </p>
     ) : null}
 
-    <form
+    <div>
+      <strong
+        style={{
+          display: "block",
+          marginBottom: "8px"
+        }}
+      >
+        Check-in por credencial
+      </strong>
+
+      <form
       onSubmit={handleCheckInByCode}
       style={{
         display: "grid",
@@ -2769,7 +2890,7 @@ export function EventWorkspaceClient({
         onChange={(event) =>
           setCheckInCode(event.target.value)
         }
-        placeholder="Código de check-in"
+        placeholder="Código da credencial"
         style={{
           borderRadius: "10px",
           padding: "12px"
@@ -2794,18 +2915,62 @@ export function EventWorkspaceClient({
           : "Fazer check-in"}
       </button>
     </form>
+    </div>
 
-    <input
-      onChange={(event) =>
-        setCheckInSearch(event.target.value)
-      }
-      placeholder="Buscar participante"
-      style={{
-        borderRadius: "10px",
-        padding: "12px"
-      }}
-      value={checkInSearch}
-    />
+    <div>
+      <strong
+        style={{
+          display: "block",
+          marginBottom: "8px"
+        }}
+      >
+        Busca manual
+      </strong>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setCheckInSearch(
+            checkInSearchInput.trim()
+          );
+        }}
+        style={{
+          display: "grid",
+          gap: "10px",
+          gridTemplateColumns:
+            "minmax(220px, 1fr) auto"
+        }}
+      >
+        <input
+          onChange={(event) =>
+            setCheckInSearchInput(
+              event.target.value
+            )
+          }
+          placeholder="Nome, e-mail, telefone ou código"
+          style={{
+            borderRadius: "10px",
+            padding: "12px"
+          }}
+          value={checkInSearchInput}
+        />
+
+        <button
+          style={{
+            background: "#2563eb",
+            border: 0,
+            borderRadius: "10px",
+            color: "#ffffff",
+            cursor: "pointer",
+            fontWeight: 900,
+            padding: "12px 18px"
+          }}
+          type="submit"
+        >
+          Pesquisar
+        </button>
+      </form>
+    </div>
 
     <div
       style={{
@@ -2813,6 +2978,17 @@ export function EventWorkspaceClient({
         gap: "8px"
       }}
     >
+      {checkInParticipants.length === 0 ? (
+        <p
+          style={{
+            color: "#94a3b8",
+            margin: 0
+          }}
+        >
+          Nenhum participante encontrado.
+        </p>
+      ) : null}
+
       {checkInParticipants.map(
         (registration) => {
           const participant =
