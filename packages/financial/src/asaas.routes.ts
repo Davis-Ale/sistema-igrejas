@@ -34,11 +34,13 @@ export type PaymentProviderStatus =
   | "PENDING"
   | "PAID"
   | "CANCELLED"
-  | "OVERDUE";
+  | "OVERDUE"
+  | "REFUND_PENDING";
 
 export type PaymentProviderStatusUpdate = {
   churchId: string;
   paymentId: string;
+  providerEvent: string | null;
   referenceId: string;
   status: PaymentProviderStatus;
 };
@@ -106,8 +108,23 @@ function getAsaasWebhookToken(
 }
 
 function mapAsaasPaymentStatus(
-  status: unknown
+  status: unknown,
+  event: unknown
 ): PaymentProviderStatus | null {
+  if (
+    event ===
+      "PAYMENT_REFUND_IN_PROGRESS"
+  ) {
+    return "REFUND_PENDING";
+  }
+
+  if (
+    event === "PAYMENT_REFUNDED" ||
+    event === "PAYMENT_DELETED"
+  ) {
+    return "CANCELLED";
+  }
+
   if (typeof status !== "string") {
     return null;
   }
@@ -253,7 +270,8 @@ export async function registerAsaasWebhookRoutes(
 
     const paymentStatus =
       mapAsaasPaymentStatus(
-        payment.status
+        payment.status,
+        body.event
       );
 
     const reference =
@@ -270,6 +288,10 @@ export async function registerAsaasWebhookRoutes(
       await onPaymentStatusUpdate({
         churchId: reference.churchId,
         paymentId,
+        providerEvent:
+          typeof body.event === "string"
+            ? body.event
+            : null,
         referenceId: reference.referenceId,
         status: paymentStatus
       });

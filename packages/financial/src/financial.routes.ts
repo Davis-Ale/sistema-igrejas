@@ -14,7 +14,8 @@ import {
   getFinancialSummary,
   listTransactions,
   reverseTransaction,
-  updateTransaction
+  updateTransaction,
+  type TransactionReversalProviderHandler
 } from "./financial.service.js";
 
 type FinancialRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER" | "VISITOR";
@@ -108,6 +109,32 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     return;
   }
 
+  if (
+    error.message ===
+      "PAYMENT_PROVIDER_REVERSAL_UNSUPPORTED_STATUS"
+  ) {
+    await reply.code(409).send({
+      error:
+        "PAYMENT_PROVIDER_REVERSAL_UNSUPPORTED_STATUS",
+      message:
+        "O pagamento não está em um estado que permita estorno."
+    });
+    return;
+  }
+
+  if (
+    error.message ===
+      "PAYMENT_PROVIDER_REVERSAL_FAILED"
+  ) {
+    await reply.code(502).send({
+      error:
+        "PAYMENT_PROVIDER_REVERSAL_FAILED",
+      message:
+        "Não foi possível processar o estorno no provedor."
+    });
+    return;
+  }
+
   await reply.code(500).send({
     error: "INTERNAL_SERVER_ERROR",
     message: "Erro interno."
@@ -116,7 +143,9 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
 
 export async function registerFinancialRoutes(
   app: FastifyInstance,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  transactionReversalProviderHandler?:
+    TransactionReversalProviderHandler
 ): Promise<void> {
   app.get("/financial/transactions", async (request, reply) => {
     try {
@@ -199,7 +228,8 @@ export async function registerFinancialRoutes(
         churchId,
         params.transactionId,
         userId,
-        input
+        input,
+        transactionReversalProviderHandler
       );
     } catch (error) {
       await sendRouteError(error, reply);

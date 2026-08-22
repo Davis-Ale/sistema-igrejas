@@ -110,6 +110,28 @@ export async function deleteAsaasPayment(
   });
 }
 
+export type RefundAsaasPaymentResponse = {
+  id: string;
+  status: string;
+};
+
+export async function refundAsaasPayment(
+  paymentId: string,
+  description?: string,
+  client: AsaasClient = createAsaasClient()
+): Promise<RefundAsaasPaymentResponse> {
+  return client.request<RefundAsaasPaymentResponse>({
+    body: description
+      ? {
+          description
+        }
+      : undefined,
+    method: "POST",
+    path:
+      `/payments/${encodeURIComponent(paymentId)}/refund`
+  });
+}
+
 export type AsaasPixQrCode = {
   encodedImage: string;
   payload: string;

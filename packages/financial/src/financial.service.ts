@@ -204,66 +204,318 @@ export async function cancelTransaction(
   });
 }
 
+export type TransactionReversalMode =
+  | "CANCEL"
+  | "PENDING"
+  | "REVERSE";
+
+export type TransactionReversalProviderHandler = (
+  input: {
+    churchId: string;
+    transactionId: string;
+    asaasId: string | null;
+    eventId: string | null;
+    reason: string;
+  }
+) => Promise<TransactionReversalMode>;
+
+export async function finalizeProviderTransactionCancellation(
+  prisma: PrismaClient,
+  churchId: string,
+  transactionId: string
+) {
+  const transaction =
+    await prisma.transaction.findFirst({
+      where: {
+        id: transactionId,
+        churchId
+      }
+    });
+
+  if (!transaction) {
+    throw new Error(
+      "TRANSACTION_NOT_FOUND"
+    );
+  }
+
+  if (
+    transaction.status === "CANCELLED" ||
+    transaction.status === "REVERSED"
+  ) {
+    return transaction;
+  }
+
+  if (transaction.status !== "ACTIVE") {
+    throw new Error(
+      "TRANSACTION_NOT_ACTIVE"
+    );
+  }
+
+  return prisma.transaction.update({
+    where: {
+      id: transaction.id
+    },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      cancelReason:
+        transaction.cancelReason ??
+        "Pagamento cancelado pelo provedor."
+    }
+  });
+}
+
+export async function finalizeProviderTransactionReversal(
+  prisma: PrismaClient,
+  churchId: string,
+  transactionId: string
+) {
+  return prisma.$transaction(
+    async (tx) => {
+      const transaction =
+        await tx.transaction.findFirst({
+          where: {
+            id: transactionId,
+            churchId
+          }
+        });
+
+      if (!transaction) {
+        throw new Error(
+          "TRANSACTION_NOT_FOUND"
+        );
+      }
+
+      if (
+        transaction.status === "REVERSED" &&
+        transaction.reversalTransactionId
+      ) {
+        const reversalTransaction =
+          await tx.transaction.findUnique({
+            where: {
+              id:
+                transaction.reversalTransactionId
+            }
+          });
+
+        return {
+          originalTransaction:
+            transaction,
+          reversalTransaction
+        };
+      }
+
+      if (
+        transaction.status !== "ACTIVE"
+      ) {
+        throw new Error(
+          "TRANSACTION_NOT_ACTIVE"
+        );
+      }
+
+      const claimed =
+        await tx.transaction.updateMany({
+          where: {
+            id: transaction.id,
+            churchId,
+            status: "ACTIVE"
+          },
+          data: {
+            status: "REVERSED",
+            cancelledAt: new Date(),
+            cancelReason:
+              transaction.cancelReason ??
+              "Estorno confirmado pelo provedor."
+          }
+        });
+
+      if (claimed.count !== 1) {
+        const current =
+          await tx.transaction.findUnique({
+            where: {
+              id: transaction.id
+            }
+          });
+
+        if (
+          current?.status === "REVERSED" &&
+          current.reversalTransactionId
+        ) {
+          const reversalTransaction =
+            await tx.transaction.findUnique({
+              where: {
+                id:
+                  current.reversalTransactionId
+              }
+            });
+
+          return {
+            originalTransaction:
+              current,
+            reversalTransaction
+          };
+        }
+
+        throw new Error(
+          "TRANSACTION_NOT_ACTIVE"
+        );
+      }
+
+      const reversalTransaction =
+        await tx.transaction.create({
+          data: {
+            churchId:
+              transaction.churchId,
+            campusId:
+              transaction.campusId,
+            cnpj:
+              transaction.cnpj,
+            personId:
+              transaction.personId,
+            eventId:
+              transaction.eventId,
+            type:
+              transaction.type,
+            direction:
+              getOppositeDirection(
+                transaction.direction
+              ),
+            amount:
+              transaction.amount,
+            method:
+              transaction.method,
+            costCenter:
+              transaction.costCenter,
+            cancelReason:
+              `Estorno: ${transaction.cancelReason ?? "confirmado pelo provedor"}`,
+            at: new Date()
+          }
+        });
+
+      const originalTransaction =
+        await tx.transaction.update({
+          where: {
+            id: transaction.id
+          },
+          data: {
+            reversalTransactionId:
+              reversalTransaction.id
+          }
+        });
+
+      return {
+        originalTransaction,
+        reversalTransaction
+      };
+    }
+  );
+}
+
 export async function reverseTransaction(
   prisma: PrismaClient,
   churchId: string,
   transactionId: string,
   userId: string,
-  input: TransactionControlInput
+  input: TransactionControlInput,
+  providerHandler?:
+    TransactionReversalProviderHandler
 ) {
-  const transaction = await prisma.transaction.findFirst({
-    where: {
-      id: transactionId,
-      churchId
-    }
-  });
+  const transaction =
+    await prisma.transaction.findFirst({
+      where: {
+        id: transactionId,
+        churchId
+      }
+    });
 
   if (!transaction) {
-    throw new Error("TRANSACTION_NOT_FOUND");
+    throw new Error(
+      "TRANSACTION_NOT_FOUND"
+    );
   }
 
   if (transaction.status !== "ACTIVE") {
-    throw new Error("TRANSACTION_NOT_ACTIVE");
+    throw new Error(
+      "TRANSACTION_NOT_ACTIVE"
+    );
   }
 
-  return prisma.$transaction(async (tx) => {
-    const reversalTransaction = await tx.transaction.create({
-      data: {
-        churchId: transaction.churchId,
-        campusId: transaction.campusId,
-        cnpj: transaction.cnpj,
-        personId: transaction.personId,
-        eventId: transaction.eventId,
-        type: transaction.type,
-        direction: getOppositeDirection(transaction.direction),
-        amount: transaction.amount,
-        method: transaction.method,
-        costCenter: transaction.costCenter,
-        asaasId: transaction.asaasId,
-        nfseId: transaction.nfseId,
-        cancelReason: `Estorno: ${input.reason}`,
-        at: new Date()
-      }
-    });
+  const mode =
+    providerHandler
+      ? await providerHandler({
+          churchId,
+          transactionId:
+            transaction.id,
+          asaasId:
+            transaction.asaasId,
+          eventId:
+            transaction.eventId,
+          reason:
+            input.reason
+        })
+      : "REVERSE";
 
-    const originalTransaction = await tx.transaction.update({
-      where: {
-        id: transactionId
-      },
-      data: {
-        status: "REVERSED",
-        cancelledAt: new Date(),
-        cancelledByUserId: userId,
-        cancelReason: input.reason,
-        reversalTransactionId: reversalTransaction.id
-      }
-    });
+  if (mode === "CANCEL") {
+    const originalTransaction =
+      await prisma.transaction.update({
+        where: {
+          id: transaction.id
+        },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelledByUserId:
+            userId,
+          cancelReason:
+            input.reason
+        }
+      });
 
     return {
       originalTransaction,
-      reversalTransaction
+      reversalTransaction: null,
+      providerPending: false
     };
+  }
+
+  await prisma.transaction.update({
+    where: {
+      id: transaction.id
+    },
+    data: {
+      cancelledByUserId:
+        userId,
+      cancelReason:
+        input.reason
+    }
   });
+
+  if (mode === "PENDING") {
+    const originalTransaction =
+      await prisma.transaction.findUnique({
+        where: {
+          id: transaction.id
+        }
+      });
+
+    return {
+      originalTransaction,
+      reversalTransaction: null,
+      providerPending: true
+    };
+  }
+
+  const result =
+    await finalizeProviderTransactionReversal(
+      prisma,
+      churchId,
+      transaction.id
+    );
+
+  return {
+    ...result,
+    providerPending: false
+  };
 }
 
 export async function listTransactions(

@@ -1414,6 +1414,14 @@ function shouldIgnorePaymentStatusRegression(
     return true;
   }
 
+  if (
+    currentStatus === "REFUND_PENDING" &&
+    incomingStatus !== "REFUND_PENDING" &&
+    incomingStatus !== "CANCELLED"
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -1545,7 +1553,8 @@ type RegistrationPaymentStatus =
   | "PENDING"
   | "PAID"
   | "CANCELLED"
-  | "OVERDUE";
+  | "OVERDUE"
+  | "REFUND_PENDING";
 
 type ApplyRegistrationPaymentStatusInput = {
   registrationId: string;

@@ -23,7 +23,10 @@ import {
 import {
   createAsaasChargeForExistingTransaction,
   deleteAsaasPayment,
+  finalizeProviderTransactionCancellation,
+  finalizeProviderTransactionReversal,
   getAsaasPayment,
+  refundAsaasPayment,
   registerAsaasRoutes,
   registerAsaasWebhookRoutes,
   registerFinancialRoutes
@@ -365,32 +368,95 @@ export async function buildApp(): Promise<FastifyInstance> {
     async ({
       churchId,
       paymentId,
+      providerEvent,
       referenceId,
       status
     }) => {
+      const previousPayment =
+        await prisma.eventPayment.findFirst({
+          where: {
+            id: referenceId,
+            churchId
+          },
+          select: {
+            id: true,
+            status: true,
+            transactionId: true
+          }
+        });
+
+      const providerTransaction =
+        await prisma.transaction.findFirst({
+          where: {
+            churchId,
+            asaasId: paymentId
+          },
+          select: {
+            id: true,
+            status: true
+          }
+        });
+
       const handledStructuredPayment =
         await applyEventPaymentProviderStatus(
           prisma,
           churchId,
           {
-            eventPaymentId: referenceId,
-            providerPaymentId: paymentId,
-            paymentStatus: status
+            eventPaymentId:
+              referenceId,
+            providerPaymentId:
+              paymentId,
+            paymentStatus:
+              status
           }
         );
 
-      /*
-        Compatibilidade temporária com referências
-        anteriores ao EventPayment estruturado.
-      */
+      if (
+        status === "CANCELLED" &&
+        providerTransaction?.status ===
+          "ACTIVE"
+      ) {
+        const shouldReverse =
+          providerEvent ===
+            "PAYMENT_REFUNDED" ||
+          previousPayment?.status ===
+            "PAID" ||
+          previousPayment?.status ===
+            "REFUND_PENDING";
+
+        const shouldCancel =
+          providerEvent ===
+            "PAYMENT_DELETED" ||
+          previousPayment?.status ===
+            "PENDING" ||
+          previousPayment?.status ===
+            "OVERDUE";
+
+        if (shouldReverse) {
+          await finalizeProviderTransactionReversal(
+            prisma,
+            churchId,
+            providerTransaction.id
+          );
+        } else if (shouldCancel) {
+          await finalizeProviderTransactionCancellation(
+            prisma,
+            churchId,
+            providerTransaction.id
+          );
+        }
+      }
+
       if (!handledStructuredPayment) {
         await applyRegistrationPaymentStatus(
           prisma,
           churchId,
           {
-            registrationId: referenceId,
+            registrationId:
+              referenceId,
             paymentId,
-            paymentStatus: status
+            paymentStatus:
+              status
           }
         );
       }
@@ -412,7 +478,190 @@ export async function buildApp(): Promise<FastifyInstance> {
         protectedRoutes,
         prisma
       );
-      await registerFinancialRoutes(protectedRoutes, prisma);
+      await registerFinancialRoutes(
+        protectedRoutes,
+        prisma,
+        async ({
+          churchId,
+          transactionId,
+          asaasId,
+          reason
+        }) => {
+          if (!asaasId) {
+            return "REVERSE";
+          }
+
+          try {
+            const transaction =
+              await prisma.transaction.findFirst({
+                where: {
+                  id:
+                    transactionId,
+                  churchId
+                },
+                select: {
+                  eventPayment: {
+                    select: {
+                      id: true,
+                      provider: true,
+                      providerPaymentId: true,
+                      status: true
+                    }
+                  }
+                }
+              });
+
+            const eventPayment =
+              transaction?.eventPayment ??
+              null;
+
+            if (
+              eventPayment &&
+              (
+                eventPayment.provider !==
+                  "ASAAS" ||
+                (
+                  eventPayment.providerPaymentId &&
+                  eventPayment.providerPaymentId !==
+                    asaasId
+                )
+              )
+            ) {
+              throw new Error(
+                "PAYMENT_PROVIDER_REVERSAL_FAILED"
+              );
+            }
+
+            const payment =
+              await getAsaasPayment(
+                asaasId
+              );
+
+            const applyEventStatus =
+              async (
+                paymentStatus:
+                  | "CANCELLED"
+                  | "REFUND_PENDING"
+              ) => {
+                if (!eventPayment) {
+                  return;
+                }
+
+                const applied =
+                  await applyEventPaymentProviderStatus(
+                    prisma,
+                    churchId,
+                    {
+                      eventPaymentId:
+                        eventPayment.id,
+                      providerPaymentId:
+                        asaasId,
+                      paymentStatus
+                    }
+                  );
+
+                if (!applied) {
+                  throw new Error(
+                    "PAYMENT_PROVIDER_REVERSAL_FAILED"
+                  );
+                }
+              };
+
+            if (
+              payment.status === "PENDING" ||
+              payment.status === "OVERDUE"
+            ) {
+              await deleteAsaasPayment(
+                asaasId
+              );
+
+              await applyEventStatus(
+                "CANCELLED"
+              );
+
+              return "CANCEL";
+            }
+
+            if (
+              payment.status === "CANCELLED"
+            ) {
+              await applyEventStatus(
+                "CANCELLED"
+              );
+
+              return "CANCEL";
+            }
+
+            if (
+              payment.status === "REFUNDED"
+            ) {
+              await applyEventStatus(
+                "CANCELLED"
+              );
+
+              return "REVERSE";
+            }
+
+            if (
+              payment.status === "RECEIVED" ||
+              payment.status === "CONFIRMED"
+            ) {
+              await refundAsaasPayment(
+                asaasId,
+                reason
+              );
+
+              const refreshedPayment =
+                await getAsaasPayment(
+                  asaasId
+                );
+
+              if (
+                refreshedPayment.status ===
+                  "REFUNDED"
+              ) {
+                await applyEventStatus(
+                  "CANCELLED"
+                );
+
+                return "REVERSE";
+              }
+
+              await applyEventStatus(
+                "REFUND_PENDING"
+              );
+
+              return "PENDING";
+            }
+
+            throw new Error(
+              "PAYMENT_PROVIDER_REVERSAL_UNSUPPORTED_STATUS"
+            );
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              error.message ===
+                "PAYMENT_PROVIDER_REVERSAL_UNSUPPORTED_STATUS"
+            ) {
+              throw error;
+            }
+
+            app.log.error(
+              {
+                err: error,
+                churchId,
+                transactionId,
+                asaasId
+              },
+              "Payment provider reversal failed"
+            );
+
+            throw new Error(
+              "PAYMENT_PROVIDER_REVERSAL_FAILED"
+            );
+          }
+        }
+      );
       await registerAsaasRoutes(protectedRoutes, prisma);
       await registerCellListRoutes(protectedRoutes, prisma);
       await registerCellRoutes(protectedRoutes, prisma);
