@@ -112,11 +112,17 @@ function mapAsaasPaymentStatus(
     return null;
   }
 
-  if (status === "RECEIVED") {
+  if (
+    status === "RECEIVED" ||
+    status === "CONFIRMED"
+  ) {
     return "PAID";
   }
 
-  if (status === "CANCELLED" || status === "REFUNDED") {
+  if (
+    status === "CANCELLED" ||
+    status === "REFUNDED"
+  ) {
     return "CANCELLED";
   }
 
@@ -124,7 +130,11 @@ function mapAsaasPaymentStatus(
     return "OVERDUE";
   }
 
-  return "PENDING";
+  if (status === "PENDING") {
+    return "PENDING";
+  }
+
+  return null;
 }
 
 function parseAsaasExternalReference(externalReference: unknown) {

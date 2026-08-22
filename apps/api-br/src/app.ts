@@ -13,6 +13,7 @@ import {
   applyRegistrationPaymentStatus,
   attachEventPaymentProviderId,
   getEventRegistrationPaymentCheckout,
+  resetPendingEventPaymentProviderReference,
   registerEventApiKeyRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
@@ -21,6 +22,8 @@ import {
 } from "@sistema-igrejas/events";
 import {
   createAsaasChargeForExistingTransaction,
+  deleteAsaasPayment,
+  getAsaasPayment,
   registerAsaasRoutes,
   registerAsaasWebhookRoutes,
   registerFinancialRoutes
@@ -143,6 +146,88 @@ export async function buildApp(): Promise<FastifyInstance> {
           : "CREDIT_CARD" as const;
 
       try {
+        if (
+          checkout.providerPaymentId
+        ) {
+          const existingPayment =
+            await getAsaasPayment(
+              checkout.providerPaymentId
+            );
+
+          if (
+            existingPayment.billingType !==
+              billingType
+          ) {
+            if (
+              existingPayment.status ===
+                "RECEIVED" ||
+              existingPayment.status ===
+                "CONFIRMED"
+            ) {
+              const paymentApplied =
+                await applyEventPaymentProviderStatus(
+                  prisma,
+                  checkout.churchId,
+                  {
+                    eventPaymentId:
+                      checkout.paymentId,
+                    providerPaymentId:
+                      checkout.providerPaymentId,
+                    paymentStatus: "PAID"
+                  }
+                );
+
+              if (!paymentApplied) {
+                throw new Error(
+                  "EVENT_PAYMENT_PROVIDER_STATUS_NOT_APPLIED"
+                );
+              }
+
+              return null;
+            }
+
+            if (
+              existingPayment.status !==
+                "PENDING" &&
+              existingPayment.status !==
+                "OVERDUE"
+            ) {
+              throw new Error(
+                "PAYMENT_METHOD_ALREADY_SELECTED"
+              );
+            }
+
+            await deleteAsaasPayment(
+              checkout.providerPaymentId
+            );
+
+            const providerReset =
+              await resetPendingEventPaymentProviderReference(
+                prisma,
+                checkout.churchId,
+                checkout.paymentId,
+                checkout.providerPaymentId
+              );
+
+            if (!providerReset) {
+              throw new Error(
+                "EVENT_PAYMENT_PROVIDER_REFERENCE_NOT_RESET"
+              );
+            }
+
+            app.log.info(
+              {
+                churchId:
+                  checkout.churchId,
+                eventPaymentId:
+                  checkout.paymentId,
+                paymentMethod
+              },
+              "Event payment charge replaced"
+            );
+          }
+        }
+
         const charge =
           await createAsaasChargeForExistingTransaction(
             prisma,
@@ -247,8 +332,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       } catch (error) {
         if (
           error instanceof Error &&
-          error.message ===
-            "PAYMENT_METHOD_ALREADY_SELECTED"
+          (
+            error.message ===
+              "PAYMENT_METHOD_REPLACEMENT_REQUIRED" ||
+            error.message ===
+              "PAYMENT_METHOD_ALREADY_SELECTED"
+          )
         ) {
           throw error;
         }

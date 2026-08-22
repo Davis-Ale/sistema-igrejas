@@ -1315,6 +1315,108 @@ export async function attachEventPaymentProviderId(
   return true;
 }
 
+export async function resetPendingEventPaymentProviderReference(
+  prisma: PrismaClient,
+  churchId: string,
+  eventPaymentId: string,
+  providerPaymentId: string
+): Promise<boolean> {
+  const payment =
+    await prisma.eventPayment.findFirst({
+      where: {
+        id: eventPaymentId,
+        churchId
+      },
+      select: {
+        id: true,
+        status: true,
+        transactionId: true,
+        providerPaymentId: true,
+        transaction: {
+          select: {
+            asaasId: true
+          }
+        }
+      }
+    });
+
+  if (!payment) {
+    return false;
+  }
+
+  if (
+    payment.status !== "PENDING"
+  ) {
+    throw new Error(
+      "EVENT_PAYMENT_NOT_PENDING"
+    );
+  }
+
+  if (
+    payment.providerPaymentId !==
+      providerPaymentId
+  ) {
+    throw new Error(
+      "EVENT_PAYMENT_PROVIDER_ID_CONFLICT"
+    );
+  }
+
+  if (
+    payment.transaction.asaasId &&
+    payment.transaction.asaasId !==
+      providerPaymentId
+  ) {
+    throw new Error(
+      "TRANSACTION_PROVIDER_ID_CONFLICT"
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.eventPayment.update({
+      where: {
+        id: payment.id
+      },
+      data: {
+        providerPaymentId: null
+      }
+    }),
+    prisma.transaction.update({
+      where: {
+        id: payment.transactionId
+      },
+      data: {
+        asaasId: null
+      }
+    })
+  ]);
+
+  return true;
+}
+
+function shouldIgnorePaymentStatusRegression(
+  currentStatus: string,
+  incomingStatus: string
+): boolean {
+  if (
+    currentStatus === "CANCELLED" &&
+    incomingStatus !== "CANCELLED"
+  ) {
+    return true;
+  }
+
+  if (
+    currentStatus === "PAID" &&
+    (
+      incomingStatus === "PENDING" ||
+      incomingStatus === "OVERDUE"
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function applyEventPaymentProviderStatus(
   prisma: PrismaClient,
   churchId: string,
@@ -1365,6 +1467,15 @@ export async function applyEventPaymentProviderStatus(
     payment.providerPaymentId ===
       input.providerPaymentId &&
     payment.status === input.paymentStatus
+  ) {
+    return true;
+  }
+
+  if (
+    shouldIgnorePaymentStatusRegression(
+      payment.status,
+      input.paymentStatus
+    )
   ) {
     return true;
   }
@@ -1511,6 +1622,16 @@ export async function applyRegistrationPaymentStatus(
           matchesStructuredPayment
         : registration.paymentId ===
           input.paymentId
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    shouldIgnorePaymentStatusRegression(
+      eventPayment?.status ??
+        registration.paymentStatus,
+      input.paymentStatus
     )
   ) {
     return true;

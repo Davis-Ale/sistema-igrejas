@@ -94,6 +94,22 @@ export async function getAsaasPayment(
   });
 }
 
+export type DeleteAsaasPaymentResponse = {
+  deleted: boolean;
+  id: string;
+};
+
+export async function deleteAsaasPayment(
+  paymentId: string,
+  client: AsaasClient = createAsaasClient()
+): Promise<DeleteAsaasPaymentResponse> {
+  return client.request<DeleteAsaasPaymentResponse>({
+    method: "DELETE",
+    path:
+      `/payments/${encodeURIComponent(paymentId)}`
+  });
+}
+
 export type AsaasPixQrCode = {
   encodedImage: string;
   payload: string;
@@ -115,7 +131,9 @@ export async function getAsaasPixQrCode(
 export type CreateAsaasChargeForExistingTransactionInput = {
   transactionId: string;
   referenceId: string;
-  billingType: "BOLETO" | "PIX" | "CREDIT_CARD";
+  billingType:
+    | "PIX"
+    | "CREDIT_CARD";
   customer: {
     cpfCnpj?: string;
     email?: string;
@@ -161,20 +179,25 @@ export async function createAsaasChargeForExistingTransaction(
     );
   }
 
-  /*
-    Se uma tentativa anterior criou a cobrança no Asaas
-    e gravou o ID na Transaction, reutilizamos o mesmo ID.
-    Isso impede uma segunda cobrança após retry.
-  */
   if (transaction.asaasId) {
     const payment =
       await getAsaasPayment(
         transaction.asaasId
       );
 
+    if (
+      payment.billingType !==
+      input.billingType
+    ) {
+      throw new Error(
+        "PAYMENT_METHOD_ALREADY_SELECTED"
+      );
+    }
+
     const pixQrCode =
       payment.billingType === "PIX" &&
-      payment.status !== "RECEIVED"
+      payment.status !== "RECEIVED" &&
+      payment.status !== "CONFIRMED"
         ? await getAsaasPixQrCode(
             transaction.asaasId
           )
@@ -182,25 +205,14 @@ export async function createAsaasChargeForExistingTransaction(
 
     return {
       payment,
-      paymentId: transaction.asaasId,
+      paymentId:
+        transaction.asaasId,
       pixQrCode,
       invoiceUrl:
         payment.invoiceUrl ?? null,
       reused: true
     };
   }
-
-  await prisma.transaction.update({
-    where: {
-      id: transaction.id
-    },
-    data: {
-      method:
-        input.billingType === "PIX"
-          ? "PIX"
-          : "CARD"
-    }
-  });
 
   const customerInput: CreateAsaasCustomerInput = {
     externalReference:
@@ -229,12 +241,16 @@ export async function createAsaasChargeForExistingTransaction(
     );
 
   const paymentInput: CreateAsaasPaymentInput = {
-    billingType: input.billingType,
-    customerId: customer.id,
-    dueDate: input.dueDate,
+    billingType:
+      input.billingType,
+    customerId:
+      customer.id,
+    dueDate:
+      input.dueDate,
     externalReference:
       `${churchId}:${input.referenceId}:payment`,
-    value: input.value
+    value:
+      input.value
   };
 
   if (input.description) {
@@ -252,19 +268,26 @@ export async function createAsaasChargeForExistingTransaction(
     churchId,
     transaction.id,
     {
-      asaasId: payment.id
+      asaasId: payment.id,
+      method:
+        payment.billingType === "PIX"
+          ? "PIX"
+          : "CARD"
     }
   );
 
   const pixQrCode =
-    input.billingType === "PIX"
-      ? await getAsaasPixQrCode(payment.id)
+    payment.billingType === "PIX"
+      ? await getAsaasPixQrCode(
+          payment.id
+        )
       : null;
 
   return {
     customer,
     payment,
-    paymentId: payment.id,
+    paymentId:
+      payment.id,
     pixQrCode,
     invoiceUrl:
       payment.invoiceUrl ?? null,

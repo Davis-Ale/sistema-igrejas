@@ -14,7 +14,8 @@ export {
   applyEventPaymentProviderStatus,
   applyRegistrationPaymentStatus,
   attachEventPaymentProviderId,
-  getEventRegistrationPaymentCheckout
+  getEventRegistrationPaymentCheckout,
+  resetPendingEventPaymentProviderReference
 } from "./event.service.js";
 
 export type {

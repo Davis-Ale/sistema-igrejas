@@ -152,6 +152,19 @@ async function sendPublicRouteError(
 
   if (
     error.message ===
+    "PAYMENT_METHOD_REPLACEMENT_REQUIRED"
+  ) {
+    await reply.code(409).send({
+      error:
+        "PAYMENT_METHOD_REPLACEMENT_REQUIRED",
+      message:
+        "Existe uma cobrança pendente em outra forma de pagamento. Para alterar, a cobrança atual precisa ser cancelada e substituída."
+    });
+    return;
+  }
+
+  if (
+    error.message ===
     "PAYMENT_METHOD_ALREADY_SELECTED"
   ) {
     await reply.code(409).send({
