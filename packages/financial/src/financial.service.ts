@@ -541,6 +541,50 @@ export async function listTransactions(
           slug: true,
           date: true
         }
+      },
+      eventPayment: {
+        select: {
+          id: true,
+          status: true,
+          provider: true,
+          providerPaymentId: true,
+          order: {
+            select: {
+              registrations: {
+                select: {
+                  person: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      email: true
+                    }
+                  },
+                  visitor: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      email: true
+                    }
+                  },
+                  ticket: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  },
+                  ticketBatch: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     orderBy: {

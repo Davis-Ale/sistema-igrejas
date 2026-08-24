@@ -73,21 +73,60 @@ type ApiErrorResponse = {
   message?: string;
 };
 
+type EventFinancialParticipant = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+};
+
+type EventFinancialRegistration = {
+  person: EventFinancialParticipant | null;
+  visitor: EventFinancialParticipant | null;
+  ticket: {
+    id: string;
+    name: string;
+  } | null;
+  ticketBatch: {
+    id: string;
+    name: string;
+  } | null;
+};
+
 type EventFinancialTransaction = {
   id: string;
   amount: string | number;
   direction: "IN" | "OUT";
-  status: "ACTIVE" | "CANCELLED" | "REVERSED";
+  status:
+    | "ACTIVE"
+    | "CANCELLED"
+    | "REVERSED";
   method: string;
   costCenter: string | null;
   at: string;
   cancelReason: string | null;
+  asaasId: string | null;
+  nfseId: string | null;
+  person:
+    | EventFinancialParticipant
+    | null;
+  eventPayment: {
+    id: string;
+    status: string;
+    provider: string;
+    providerPaymentId:
+      | string
+      | null;
+    order: {
+      registrations:
+        EventFinancialRegistration[];
+    };
+  } | null;
 };
 
 type EventFinancialSummary = {
   income: string | number;
   expense: string | number;
-
 };
 
 type TicketBatch = {
@@ -272,6 +311,22 @@ export function EventWorkspaceClient({
     useState<EventFinancialSummary | null>(null);
   const [isLoadingFinancial, setIsLoadingFinancial] =
     useState(false);
+  const [
+    financialSearchInput,
+    setFinancialSearchInput
+  ] = useState("");
+  const [
+    financialSearch,
+    setFinancialSearch
+  ] = useState("");
+  const [
+    financialMethodFilter,
+    setFinancialMethodFilter
+  ] = useState("ALL");
+  const [
+    financialStatusFilter,
+    setFinancialStatusFilter
+  ] = useState("ALL");
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -1103,6 +1158,246 @@ export function EventWorkspaceClient({
         )
       );
     }) ?? [];
+
+  function normalizeFinancialSearch(
+    value: string
+  ) {
+    return value
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function getEventFinancialRegistrations(
+    transaction:
+      EventFinancialTransaction
+  ) {
+    return (
+      transaction.eventPayment
+        ?.order.registrations ??
+      []
+    );
+  }
+
+  function getEventFinancialParticipants(
+    transaction:
+      EventFinancialTransaction
+  ) {
+    const participants =
+      getEventFinancialRegistrations(
+        transaction
+      )
+        .map(
+          (registration) =>
+            registration.person ??
+            registration.visitor
+        )
+        .filter(
+          (
+            participant
+          ): participant is
+            EventFinancialParticipant =>
+            Boolean(participant)
+        );
+
+    if (
+      participants.length === 0 &&
+      transaction.person
+    ) {
+      return [
+        transaction.person
+      ];
+    }
+
+    return participants;
+  }
+
+  function getEventFinancialMethodLabel(
+    method: string
+  ) {
+    if (method === "PIX") {
+      return "PIX";
+    }
+
+    if (method === "CARD") {
+      return "Cartão";
+    }
+
+    return method;
+  }
+
+  function getEventPaymentStatusLabel(
+    status: string | null
+  ) {
+    if (status === "PAID") {
+      return "Pago";
+    }
+
+    if (status === "PENDING") {
+      return "Pendente";
+    }
+
+    if (status === "OVERDUE") {
+      return "Vencido";
+    }
+
+    if (
+      status ===
+      "REFUND_PENDING"
+    ) {
+      return "Reembolso em processamento";
+    }
+
+    if (status === "CANCELLED") {
+      return "Cancelado";
+    }
+
+    return "Sem pagamento";
+  }
+
+  function getTransactionStatusLabel(
+    status:
+      EventFinancialTransaction["status"]
+  ) {
+    if (status === "ACTIVE") {
+      return "Ativa";
+    }
+
+    if (status === "CANCELLED") {
+      return "Cancelada";
+    }
+
+    return "Estornada";
+  }
+
+  const filteredFinancialTransactions =
+    financialTransactions.filter(
+      (transaction) => {
+        const search =
+          normalizeFinancialSearch(
+            financialSearch
+          );
+
+        const registrations =
+          getEventFinancialRegistrations(
+            transaction
+          );
+
+        const participants =
+          getEventFinancialParticipants(
+            transaction
+          );
+
+        const paymentStatus =
+          transaction.eventPayment
+            ?.status ?? null;
+
+        const searchableValues = [
+          transaction.asaasId,
+          transaction.eventPayment
+            ?.providerPaymentId,
+          transaction.eventPayment
+            ?.provider,
+          transaction.costCenter,
+          getEventFinancialMethodLabel(
+            transaction.method
+          ),
+          getEventPaymentStatusLabel(
+            paymentStatus
+          ),
+          getTransactionStatusLabel(
+            transaction.status
+          ),
+          ...participants.flatMap(
+            (participant) => [
+              participant.name,
+              participant.email,
+              participant.phone
+            ]
+          ),
+          ...registrations.flatMap(
+            (registration) => [
+              registration.ticket?.name,
+              registration.ticketBatch
+                ?.name
+            ]
+          )
+        ];
+
+        const matchesSearch =
+          !search ||
+          searchableValues.some(
+            (value) =>
+              value &&
+              normalizeFinancialSearch(
+                String(value)
+              ).includes(search)
+          );
+
+        const matchesMethod =
+          financialMethodFilter ===
+            "ALL" ||
+          transaction.method ===
+            financialMethodFilter;
+
+        let matchesStatus = true;
+
+        if (
+          financialStatusFilter ===
+          "PAID"
+        ) {
+          matchesStatus =
+            paymentStatus === "PAID" &&
+            transaction.status ===
+              "ACTIVE";
+        }
+
+        if (
+          financialStatusFilter ===
+          "PENDING"
+        ) {
+          matchesStatus =
+            paymentStatus ===
+              "PENDING" ||
+            paymentStatus ===
+              "OVERDUE";
+        }
+
+        if (
+          financialStatusFilter ===
+          "REFUND_PENDING"
+        ) {
+          matchesStatus =
+            paymentStatus ===
+              "REFUND_PENDING";
+        }
+
+        if (
+          financialStatusFilter ===
+          "CANCELLED"
+        ) {
+          matchesStatus =
+            transaction.status ===
+              "CANCELLED";
+        }
+
+        if (
+          financialStatusFilter ===
+          "REFUNDED"
+        ) {
+          matchesStatus =
+            transaction.status ===
+              "REVERSED";
+        }
+
+        return (
+          matchesSearch &&
+          matchesMethod &&
+          matchesStatus
+        );
+      }
+    );
 
   async function loadEventFinancial() {
     const token = getSessionToken();
@@ -3107,13 +3402,24 @@ export function EventWorkspaceClient({
       <h2 style={{ margin: 0 }}>
         Movimentações do evento
       </h2>
+
+      <p
+        style={{
+          color: "#94a3b8",
+          margin: "8px 0 0"
+        }}
+      >
+        Acompanhe vendas, participantes,
+        métodos e status dos pagamentos.
+      </p>
     </header>
 
     {isLoadingFinancial ? (
       <p>Carregando financeiro...</p>
     ) : null}
 
-    {!isLoadingFinancial && financialSummary ? (
+    {!isLoadingFinancial &&
+    financialSummary ? (
       <div
         style={{
           display: "grid",
@@ -3124,99 +3430,537 @@ export function EventWorkspaceClient({
       >
         <article
           style={{
-            border: "1px solid rgba(148, 163, 184, 0.18)",
+            border:
+              "1px solid rgba(148, 163, 184, 0.18)",
             borderRadius: "12px",
             padding: "14px"
           }}
         >
-          <strong style={{ color: "#94a3b8" }}>
+          <strong
+            style={{
+              color: "#94a3b8"
+            }}
+          >
             Entradas
           </strong>
-          <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(financialSummary.income)}
+          <p
+            style={{
+              fontSize: "20px",
+              fontWeight: 900,
+              margin: "6px 0 0"
+            }}
+          >
+            {formatMoney(
+              financialSummary.income
+            )}
           </p>
         </article>
 
         <article
           style={{
-            border: "1px solid rgba(148, 163, 184, 0.18)",
+            border:
+              "1px solid rgba(148, 163, 184, 0.18)",
             borderRadius: "12px",
             padding: "14px"
           }}
         >
-          <strong style={{ color: "#94a3b8" }}>
+          <strong
+            style={{
+              color: "#94a3b8"
+            }}
+          >
             Saídas
           </strong>
-          <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(financialSummary.expense)}
+          <p
+            style={{
+              fontSize: "20px",
+              fontWeight: 900,
+              margin: "6px 0 0"
+            }}
+          >
+            {formatMoney(
+              financialSummary.expense
+            )}
           </p>
         </article>
 
         <article
           style={{
-            border: "1px solid rgba(148, 163, 184, 0.18)",
+            border:
+              "1px solid rgba(148, 163, 184, 0.18)",
             borderRadius: "12px",
             padding: "14px"
           }}
         >
-          <strong style={{ color: "#94a3b8" }}>
+          <strong
+            style={{
+              color: "#94a3b8"
+            }}
+          >
             Saldo
           </strong>
-          <p style={{ margin: "6px 0 0" }}>
-            {formatMoney(Number(financialSummary.income) - Number(financialSummary.expense))}
+          <p
+            style={{
+              fontSize: "20px",
+              fontWeight: 900,
+              margin: "6px 0 0"
+            }}
+          >
+            {formatMoney(
+              Number(
+                financialSummary.income
+              ) -
+                Number(
+                  financialSummary.expense
+                )
+            )}
           </p>
         </article>
       </div>
     ) : null}
 
-    {!isLoadingFinancial &&
-    financialTransactions.length === 0 ? (
-      <p>Nenhuma movimentação encontrada.</p>
-    ) : null}
+    <form
+      onSubmit={(formEvent) => {
+        formEvent.preventDefault();
 
-    <div style={{ display: "grid", gap: "8px" }}>
-      {financialTransactions.map((transaction) => (
-        <div
-          key={transaction.id}
+        setFinancialSearch(
+          financialSearchInput.trim()
+        );
+      }}
+      style={{
+        alignItems: "end",
+        display: "grid",
+        gap: "14px",
+        gridTemplateColumns:
+          "minmax(300px, 2.2fr) minmax(180px, 0.9fr) minmax(210px, 1fr) 132px",
+        width: "100%"
+      }}
+    >
+      <label
+        style={{
+          display: "grid",
+          gap: "7px",
+          minWidth: 0
+        }}
+      >
+        <span
           style={{
-            alignItems: "center",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "12px",
-            display: "grid",
-            gap: "10px",
-            gridTemplateColumns:
-              "minmax(90px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(140px, 1fr)",
-            padding: "12px 15px"
+            color: "#94a3b8",
+            fontSize: "12px",
+            fontWeight: 800
           }}
         >
-          <span
-            style={{
-              color:
-                transaction.direction === "IN"
-                  ? "#a7f3d0"
-                  : "#fca5a5",
-              fontWeight: 900
-            }}
-          >
-            {transaction.direction === "IN" ? "+" : "-"}
-            {formatMoney(transaction.amount)}
-          </span>
+          Pesquisar movimentações
+        </span>
 
-          <span>{transaction.method}</span>
+        <input
+          onChange={(event) =>
+            setFinancialSearchInput(
+              event.target.value
+            )
+          }
+          placeholder="Participante, e-mail, telefone, ingresso ou cobrança"
+          style={{
+            boxSizing: "border-box",
+            fontSize: "14px",
+            minHeight: "46px",
+            padding: "0 14px",
+            width: "100%"
+          }}
+          type="search"
+          value={financialSearchInput}
+        />
+      </label>
 
-          <span>
-            {transaction.status === "ACTIVE"
-              ? "Ativa"
-              : transaction.status === "CANCELLED"
-                ? "Cancelada"
-                : "Estornada"}
-          </span>
+      <label
+        style={{
+          display: "grid",
+          gap: "7px",
+          minWidth: 0
+        }}
+      >
+        <span
+          style={{
+            color: "#94a3b8",
+            fontSize: "12px",
+            fontWeight: 800
+          }}
+        >
+          Método
+        </span>
 
-          <span style={{ color: "#94a3b8" }}>
-            {formatDate(transaction.at)}
-          </span>
-        </div>
-      ))}
+        <select
+          onChange={(event) =>
+            setFinancialMethodFilter(
+              event.target.value
+            )
+          }
+          style={{
+            boxSizing: "border-box",
+            fontSize: "14px",
+            minHeight: "46px",
+            padding: "0 12px",
+            width: "100%"
+          }}
+          value={financialMethodFilter}
+        >
+          <option value="ALL">
+            Todos os métodos
+          </option>
+          <option value="PIX">
+            PIX
+          </option>
+          <option value="CARD">
+            Cartão
+          </option>
+        </select>
+      </label>
+
+      <label
+        style={{
+          display: "grid",
+          gap: "7px",
+          minWidth: 0
+        }}
+      >
+        <span
+          style={{
+            color: "#94a3b8",
+            fontSize: "12px",
+            fontWeight: 800
+          }}
+        >
+          Status
+        </span>
+
+        <select
+          onChange={(event) =>
+            setFinancialStatusFilter(
+              event.target.value
+            )
+          }
+          style={{
+            boxSizing: "border-box",
+            fontSize: "14px",
+            minHeight: "46px",
+            padding: "0 12px",
+            width: "100%"
+          }}
+          value={financialStatusFilter}
+        >
+          <option value="ALL">
+            Todos os status
+          </option>
+          <option value="PAID">
+            Pago
+          </option>
+          <option value="PENDING">
+            Pendente
+          </option>
+          <option value="REFUND_PENDING">
+            Reembolso em processamento
+          </option>
+          <option value="CANCELLED">
+            Cancelado
+          </option>
+          <option value="REFUNDED">
+            Reembolsado
+          </option>
+        </select>
+      </label>
+
+      <button
+        style={{
+          alignSelf: "end",
+          minHeight: "46px",
+          minWidth: "132px",
+          padding: "0 18px",
+          whiteSpace: "nowrap",
+          width: "132px"
+        }}
+        type="submit"
+      >
+        Pesquisar
+      </button>
+    </form>
+
+    {!isLoadingFinancial &&
+    filteredFinancialTransactions.length ===
+      0 ? (
+      <p>
+        Nenhuma movimentação encontrada.
+      </p>
+    ) : null}
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px"
+      }}
+    >
+      {filteredFinancialTransactions.map(
+        (transaction) => {
+          const registrations =
+            getEventFinancialRegistrations(
+              transaction
+            );
+
+          const participants =
+            getEventFinancialParticipants(
+              transaction
+            );
+
+          const participantNames =
+            participants.length > 0
+              ? participants
+                  .map(
+                    (participant) =>
+                      participant.name
+                  )
+                  .join(", ")
+              : "Sem participante vinculado";
+
+          const tickets =
+            registrations
+              .map((registration) => {
+                const ticket =
+                  registration.ticket
+                    ?.name;
+
+                const batch =
+                  registration.ticketBatch
+                    ?.name;
+
+                if (
+                  ticket &&
+                  batch
+                ) {
+                  return (
+                    ticket +
+                    " • " +
+                    batch
+                  );
+                }
+
+                return (
+                  ticket ??
+                  batch ??
+                  null
+                );
+              })
+              .filter(
+                (
+                  value
+                ): value is string =>
+                  Boolean(value)
+              );
+
+          const paymentStatus =
+            transaction.eventPayment
+              ?.status ?? null;
+
+          const provider =
+            transaction.eventPayment
+              ?.provider ??
+            (transaction.asaasId
+              ? "ASAAS"
+              : null);
+
+          const providerPaymentId =
+            transaction.eventPayment
+              ?.providerPaymentId ??
+            transaction.asaasId;
+
+          return (
+            <article
+              key={transaction.id}
+              style={{
+                border:
+                  "1px solid rgba(148, 163, 184, 0.18)",
+                borderRadius: "14px",
+                display: "grid",
+                gap: "12px",
+                padding: "16px"
+              }}
+            >
+              <div
+                style={{
+                  alignItems: "start",
+                  display: "grid",
+                  gap: "12px",
+                  gridTemplateColumns:
+                    "minmax(180px, 1.5fr) minmax(150px, 1fr) minmax(110px, 0.7fr) minmax(120px, 0.8fr)"
+                }}
+              >
+                <div>
+                  <strong>
+                    {participantNames}
+                  </strong>
+                  <p
+                    style={{
+                      color:
+                        "#94a3b8",
+                      margin:
+                        "5px 0 0"
+                    }}
+                  >
+                    {tickets.length > 0
+                      ? tickets.join(
+                          ", "
+                        )
+                      : "Sem ingresso vinculado"}
+                  </p>
+                </div>
+
+                <div>
+                  <span
+                    style={{
+                      color:
+                        "#94a3b8",
+                      display:
+                        "block",
+                      fontSize:
+                        "12px"
+                    }}
+                  >
+                    Pagamento
+                  </span>
+                  <strong>
+                    {getEventPaymentStatusLabel(
+                      paymentStatus
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span
+                    style={{
+                      color:
+                        "#94a3b8",
+                      display:
+                        "block",
+                      fontSize:
+                        "12px"
+                    }}
+                  >
+                    Método
+                  </span>
+                  <strong>
+                    {getEventFinancialMethodLabel(
+                      transaction.method
+                    )}
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    textAlign:
+                      "right"
+                  }}
+                >
+                  <strong
+                    style={{
+                      color:
+                        transaction.direction ===
+                        "IN"
+                          ? "#a7f3d0"
+                          : "#fca5a5",
+                      fontSize:
+                        "18px"
+                    }}
+                  >
+                    {transaction.direction ===
+                    "IN"
+                      ? "+"
+                      : "-"}
+                    {formatMoney(
+                      transaction.amount
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  borderTop:
+                    "1px solid rgba(148, 163, 184, 0.12)",
+                  color:
+                    "#94a3b8",
+                  display:
+                    "grid",
+                  fontSize:
+                    "12px",
+                  gap:
+                    "8px",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(150px, 1fr))",
+                  paddingTop:
+                    "10px"
+                }}
+              >
+                <span>
+                  Financeiro:{" "}
+                  <strong
+                    style={{
+                      color:
+                        "#e2e8f0"
+                    }}
+                  >
+                    {getTransactionStatusLabel(
+                      transaction.status
+                    )}
+                  </strong>
+                </span>
+
+                <span>
+                  Provider:{" "}
+                  <strong
+                    style={{
+                      color:
+                        "#e2e8f0"
+                    }}
+                  >
+                    {provider ??
+                      "Interno"}
+                  </strong>
+                </span>
+
+                <span
+                  title={
+                    providerPaymentId ??
+                    ""
+                  }
+                >
+                  Cobrança:{" "}
+                  <strong
+                    style={{
+                      color:
+                        "#e2e8f0"
+                    }}
+                  >
+                    {providerPaymentId ??
+                      "Sem ID externo"}
+                  </strong>
+                </span>
+
+                <span>
+                  Data:{" "}
+                  <strong
+                    style={{
+                      color:
+                        "#e2e8f0"
+                    }}
+                  >
+                    {formatDate(
+                      transaction.at
+                    )}
+                  </strong>
+                </span>
+              </div>
+            </article>
+          );
+        }
+      )}
     </div>
   </section>
 ) : null}

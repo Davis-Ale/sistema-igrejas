@@ -1,5 +1,37 @@
 import { z } from "zod";
 
+function isValidCpf(value: string) {
+  const cpf = value.replace(/\D/g, "");
+
+  if (
+    cpf.length !== 11 ||
+    /^(\d)\1{10}$/.test(cpf)
+  ) {
+    return false;
+  }
+
+  function calculateDigit(length: number) {
+    let total = 0;
+
+    for (let index = 0; index < length; index += 1) {
+      total +=
+        Number(cpf[index]) *
+        (length + 1 - index);
+    }
+
+    const remainder = (total * 10) % 11;
+
+    return remainder === 10
+      ? 0
+      : remainder;
+  }
+
+  return (
+    calculateDigit(9) === Number(cpf[9]) &&
+    calculateDigit(10) === Number(cpf[10])
+  );
+}
+
 export const registrationStatusSchema = z.enum([
   "PENDING",
   "CONFIRMED",
@@ -49,7 +81,14 @@ export const createPublicRegistrationSchema = z.object({
   name: z.string().trim().min(2, "Nome é obrigatório."),
   phone: z.string().trim().min(8, "Telefone é obrigatório."),
   email: z.string().trim().email("E-mail inválido.").optional(),
-  cpf: z.string().trim().optional(),
+  cpf: z
+    .string()
+    .trim()
+    .refine(
+      (value) => isValidCpf(value),
+      "CPF inválido."
+    )
+    .optional(),
   paymentMethod: z
     .enum([
       "PIX",

@@ -32,9 +32,17 @@ async function sendPublicRouteError(
   reply: FastifyReply
 ): Promise<void> {
   if (error instanceof ZodError) {
+    const hasCpfError =
+      error.issues.some(
+        (issue) =>
+          issue.path[0] === "cpf"
+      );
+
     await reply.code(400).send({
       error: "VALIDATION_ERROR",
-      message: "Os dados enviados são inválidos."
+      message: hasCpfError
+        ? "Informe um CPF válido para continuar."
+        : "Os dados enviados são inválidos."
     });
     return;
   }

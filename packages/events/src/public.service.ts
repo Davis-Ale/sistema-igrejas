@@ -142,6 +142,10 @@ async function findExistingPublicRegistrationToken(
         },
         visitor: {
           is: {
+            name: {
+              equals: input.name.trim(),
+              mode: "insensitive"
+            },
             OR: identityFilters
           }
         }
