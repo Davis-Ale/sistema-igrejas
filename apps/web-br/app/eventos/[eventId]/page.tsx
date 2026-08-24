@@ -67,6 +67,7 @@ type PublicEvent = {
   date: string;
   price: string | number;
   isPaid: boolean;
+  publicRegistrationEnabled: boolean;
   church: {
     name: string;
     slug: string;
@@ -319,6 +320,11 @@ export default function PublicEventPage() {
     formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
+
+    if (!event?.publicRegistrationEnabled) {
+      setError("As inscrições deste evento estão encerradas.");
+      return;
+    }
 
     setError(null);
     setRegistration(null);
@@ -656,8 +662,22 @@ export default function PublicEventPage() {
                       margin: 0
                     }}
                   >
-                    Fazer inscrição
+                    {event.publicRegistrationEnabled
+                        ? "Fazer inscrição"
+                        : "Inscrições encerradas"}
                   </h2>
+
+                  {!event.publicRegistrationEnabled ? (
+                    <p
+                      style={{
+                        color: "#fbbf24",
+                        lineHeight: 1.6,
+                        margin: 0
+                      }}
+                    >
+                      Este evento continua publicado, mas novas inscrições estão fechadas.
+                    </p>
+                  ) : null}
 
                   <form
                     onSubmit={handleRegister}

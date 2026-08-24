@@ -2314,7 +2314,7 @@ export function EventWorkspaceClient({
                     <p style={{ marginBottom: 0 }}>
                       {event.isPublic
                         ? "Publicado"
-                        : "Não publicado"}
+                        : "Rascunho"}
                     </p>
                   </article>
                 </div>

@@ -363,8 +363,7 @@ export async function getPublicEventById(prisma: PrismaClient, eventId: string) 
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      isPublic: true,
-      publicRegistrationEnabled: true
+      isPublic: true
     },
     select: {
       id: true,
