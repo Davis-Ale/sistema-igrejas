@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   CreateTransactionInput,
   ListTransactionsQueryInput,
@@ -598,11 +598,36 @@ export async function getFinancialSummary(
   churchId: string,
   query: ListTransactionsQueryInput
 ) {
-  const where = {
-    ...buildTransactionWhere(churchId, query),
-    status: query.status ?? {
-      not: "CANCELLED" as const
+  const summaryFilters: Prisma.TransactionWhereInput[] = [
+    buildTransactionWhere(churchId, query),
+    {
+      status: query.status ?? {
+        not: "CANCELLED"
+      }
     }
+  ];
+
+  if (query.eventId) {
+    summaryFilters.push({
+      OR: [
+        {
+          eventPayment: {
+            is: null
+          }
+        },
+        {
+          eventPayment: {
+            is: {
+              status: "PAID"
+            }
+          }
+        }
+      ]
+    });
+  }
+
+  const where: Prisma.TransactionWhereInput = {
+    AND: summaryFilters
   };
 
   const [income, expense] = await Promise.all([
