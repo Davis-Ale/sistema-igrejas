@@ -1,5 +1,6 @@
 "use client";
 
+import QRCode from "react-qr-code";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -1477,7 +1478,10 @@ export function EventWorkspaceClient({
   }
 
   useEffect(() => {
-    if (activeSection === "financial") {
+    if (
+      activeSection === "financial" ||
+      activeSection === "overview"
+    ) {
       void loadEventFinancial();
     }
   }, [activeSection, eventId]);
@@ -1822,111 +1826,392 @@ export function EventWorkspaceClient({
               >
             {activeSection === "overview" ? (
               <section
-              id="visao-geral"
-              style={{
-                display: "grid",
-                gap: "16px",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(190px, 1fr))"
-              }}
-            >
-              <article
+                id="visao-geral"
                 style={{
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border: "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "20px",
-                  padding: "20px"
+                  display: "grid",
+                  gap: "20px"
                 }}
               >
-                <strong style={{ color: "#94a3b8", fontSize: "13px" }}>
-                  Inscrições
-                </strong>
-
-                <p
+                <header
                   style={{
-                    color: "#ffffff",
-                    fontSize: "28px",
-                    fontWeight: 900,
-                    margin: "10px 0 0"
+                    alignItems: "flex-start",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "16px",
+                    justifyContent: "space-between"
                   }}
                 >
-                  {statistics.active}/{event.capacity}
-                </p>
-              </article>
+                  <div>
+                    <p
+                      style={{
+                        color: "#60a5fa",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        letterSpacing: "0.08em",
+                        margin: "0 0 8px",
+                        textTransform: "uppercase"
+                      }}
+                    >
+                      Visão geral
+                    </p>
 
-              <article
-                style={{
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border: "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "20px",
-                  padding: "20px"
-                }}
-              >
-                <strong style={{ color: "#94a3b8", fontSize: "13px" }}>
-                  Check-ins
-                </strong>
+                    <h2
+                      style={{
+                        color: "#ffffff",
+                        fontSize: "26px",
+                        margin: 0
+                      }}
+                    >
+                      Resumo operacional do evento
+                    </h2>
 
-                <p
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        lineHeight: 1.6,
+                        margin: "8px 0 0",
+                        maxWidth: "680px"
+                      }}
+                    >
+                      Acompanhe publicação, inscrições, ingressos,
+                      check-in e financeiro em uma única visão.
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "10px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        background: event.isPublic
+                          ? "rgba(34, 197, 94, 0.14)"
+                          : "rgba(245, 158, 11, 0.14)",
+                        border: event.isPublic
+                          ? "1px solid rgba(34, 197, 94, 0.3)"
+                          : "1px solid rgba(245, 158, 11, 0.3)",
+                        borderRadius: "999px",
+                        color: event.isPublic
+                          ? "#86efac"
+                          : "#fcd34d",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        padding: "8px 12px"
+                      }}
+                    >
+                      {event.isPublic ? "Publicado" : "Rascunho"}
+                    </span>
+
+                    <span
+                      style={{
+                        background: event.publicRegistrationEnabled
+                          ? "rgba(59, 130, 246, 0.14)"
+                          : "rgba(148, 163, 184, 0.12)",
+                        border: event.publicRegistrationEnabled
+                          ? "1px solid rgba(59, 130, 246, 0.3)"
+                          : "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "999px",
+                        color: event.publicRegistrationEnabled
+                          ? "#93c5fd"
+                          : "#cbd5e1",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        padding: "8px 12px"
+                      }}
+                    >
+                      {event.publicRegistrationEnabled
+                        ? "Inscrições abertas"
+                        : "Inscrições fechadas"}
+                    </span>
+                  </div>
+                </header>
+
+                <div
                   style={{
-                    color: "#ffffff",
-                    fontSize: "28px",
-                    fontWeight: 900,
-                    margin: "10px 0 0"
+                    display: "grid",
+                    gap: "14px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(160px, 1fr))"
                   }}
                 >
-                  {statistics.checkedIn}
-                </p>
-              </article>
+                  {[
+                    {
+                      label: "Inscrições",
+                      value:
+                        statistics.active + "/" + event.capacity
+                    },
+                    {
+                      label: "Check-ins",
+                      value: String(statistics.checkedIn)
+                    },
+                    {
+                      label: "Lista de espera",
+                      value: String(statistics.waitlisted)
+                    },
+                    {
+                      label: "Ingressos",
+                      value: String(tickets.length)
+                    },
+                    {
+                      label: "Valor",
+                      value: event.isPaid
+                        ? formatMoney(event.price)
+                        : "Gratuito"
+                    },
+                    {
+                      label: "Entradas",
+                      value: isLoadingFinancial
+                        ? "..."
+                        : financialSummary
+                          ? formatMoney(financialSummary.income)
+                          : "—"
+                    },
+                    {
+                      label: "Saldo",
+                      value: isLoadingFinancial
+                        ? "..."
+                        : financialSummary
+                          ? formatMoney(
+                              Number(financialSummary.income) -
+                                Number(financialSummary.expense)
+                            )
+                          : "—"
+                    }
+                  ].map((item) => (
+                    <article
+                      key={item.label}
+                      style={{
+                        background: "rgba(15, 23, 42, 0.82)",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.18)",
+                        borderRadius: "20px",
+                        minWidth: 0,
+                        padding: "20px"
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: "13px"
+                        }}
+                      >
+                        {item.label}
+                      </strong>
 
-              <article
-                style={{
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border: "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "20px",
-                  padding: "20px"
-                }}
-              >
-                <strong style={{ color: "#94a3b8", fontSize: "13px" }}>
-                  Lista de espera
-                </strong>
+                      <p
+                        style={{
+                          color: "#ffffff",
+                          fontSize: "24px",
+                          fontWeight: 900,
+                          margin: "10px 0 0",
+                          overflowWrap: "anywhere"
+                        }}
+                      >
+                        {item.value}
+                      </p>
+                    </article>
+                  ))}
+                </div>
 
-                <p
+                <div
                   style={{
-                    color: "#ffffff",
-                    fontSize: "28px",
-                    fontWeight: 900,
-                    margin: "10px 0 0"
+                    display: "grid",
+                    gap: "18px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(300px, 1fr))"
                   }}
                 >
-                  {statistics.waitlisted}
-                </p>
-              </article>
+                  <article
+                    style={{
+                      background: "rgba(15, 23, 42, 0.82)",
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.18)",
+                      borderRadius: "24px",
+                      display: "grid",
+                      gap: "18px",
+                      padding: "22px"
+                    }}
+                  >
+                    <div>
+                      <strong
+                        style={{
+                          color: "#ffffff",
+                          fontSize: "18px"
+                        }}
+                      >
+                        Página pública do evento
+                      </strong>
 
-              <article
-                style={{
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border: "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "20px",
-                  padding: "20px"
-                }}
-              >
-                <strong style={{ color: "#94a3b8", fontSize: "13px" }}>
-                  Valor
-                </strong>
+                      <p
+                        style={{
+                          color: "#94a3b8",
+                          lineHeight: 1.6,
+                          margin: "6px 0 0"
+                        }}
+                      >
+                        Link e QR Code para divulgação da página
+                        pública.
+                      </p>
+                    </div>
 
-                <p
-                  style={{
-                    color: "#ffffff",
-                    fontSize: "24px",
-                    fontWeight: 900,
-                    margin: "10px 0 0"
-                  }}
-                >
-                  {event.isPaid
-                    ? formatMoney(event.price)
-                    : "Gratuito"}
-                </p>
-              </article>
+                    {event.isPublic ? (
+                      <div
+                        style={{
+                          alignItems: "center",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "18px"
+                        }}
+                      >
+                        <div
+                          style={{
+                            background: "#ffffff",
+                            borderRadius: "16px",
+                            display: "grid",
+                            padding: "12px",
+                            placeItems: "center"
+                          }}
+                        >
+                          <QRCode
+                            size={112}
+                            value={publicRegistrationUrl}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "10px",
+                            minWidth: 0
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              overflowWrap: "anywhere"
+                            }}
+                          >
+                            {publicRegistrationUrl}
+                          </span>
+
+                          <a
+                            href={publicRegistrationUrl}
+                            rel="noreferrer"
+                            style={{
+                              color: "#93c5fd",
+                              fontWeight: 900,
+                              textDecoration: "none"
+                            }}
+                            target="_blank"
+                          >
+                            Abrir página pública
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <p
+                        style={{
+                          background:
+                            "rgba(245, 158, 11, 0.10)",
+                          border:
+                            "1px solid rgba(245, 158, 11, 0.22)",
+                          borderRadius: "14px",
+                          color: "#fde68a",
+                          lineHeight: 1.6,
+                          margin: 0,
+                          padding: "14px"
+                        }}
+                      >
+                        O evento está em rascunho. Publique-o para
+                        disponibilizar a página e o QR Code.
+                      </p>
+                    )}
+                  </article>
+
+                  <article
+                    style={{
+                      background: "rgba(15, 23, 42, 0.82)",
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.18)",
+                      borderRadius: "24px",
+                      display: "grid",
+                      gap: "14px",
+                      padding: "22px"
+                    }}
+                  >
+                    <strong
+                      style={{
+                        color: "#ffffff",
+                        fontSize: "18px"
+                      }}
+                    >
+                      Status operacional
+                    </strong>
+
+                    {[
+                      [
+                        "Publicação",
+                        event.isPublic
+                          ? "Publicado"
+                          : "Rascunho"
+                      ],
+                      [
+                        "Inscrições públicas",
+                        event.publicRegistrationEnabled
+                          ? "Abertas"
+                          : "Fechadas"
+                      ],
+                      [
+                        "Ingressos configurados",
+                        String(tickets.length)
+                      ],
+                      [
+                        "Participantes ativos",
+                        String(statistics.active)
+                      ],
+                      [
+                        "Credenciados",
+                        String(statistics.checkedIn)
+                      ]
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          alignItems: "center",
+                          borderBottom:
+                            "1px solid rgba(148, 163, 184, 0.12)",
+                          display: "flex",
+                          gap: "16px",
+                          justifyContent: "space-between",
+                          paddingBottom: "12px"
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "14px"
+                          }}
+                        >
+                          {label}
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#ffffff",
+                            fontSize: "14px",
+                            textAlign: "right"
+                          }}
+                        >
+                          {value}
+                        </strong>
+                      </div>
+                    ))}
+                  </article>
+                </div>
               </section>
             ) : null}
 
