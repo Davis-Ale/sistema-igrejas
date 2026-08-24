@@ -66,6 +66,12 @@ export const updateEventSchema = createEventSchema
     }
   );
 
+export const duplicateEventSchema = z.object({
+  title: z.string().trim().min(1, "Título é obrigatório."),
+  slug: z.string().trim().min(1, "Slug é obrigatório."),
+  date: z.coerce.date()
+});
+
 export const createRegistrationSchema = z
   .object({
     eventId: z.string().trim().min(1, "Evento é obrigatório."),
@@ -123,6 +129,7 @@ export const checkInByTokenSchema = z.object({
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type DuplicateEventInput = z.infer<typeof duplicateEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
 export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;

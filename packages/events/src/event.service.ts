@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   CheckInByTokenInput,
   CreateEventInput,
+  DuplicateEventInput,
   CreatePublicRegistrationInput,
   CreateRegistrationInput,
   UpdateEventInput,
@@ -157,6 +158,196 @@ export async function createEvent(
       trailStageId: input.trailStageId ?? null
     }
   });
+}
+
+export async function duplicateEvent(
+  prisma: PrismaClient,
+  churchId: string,
+  eventId: string,
+  input: DuplicateEventInput
+) {
+  return prisma.$transaction(
+    async (transaction) => {
+      const source =
+        await transaction.event.findFirst({
+          where: {
+            id: eventId,
+            churchId
+          },
+          include: {
+            ticketTypes: {
+              include: {
+                batches: true
+              }
+            },
+            formFields: {
+              include: {
+                options: true,
+                ticketScopes: true
+              }
+            }
+          }
+        });
+
+      if (!source) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+
+      const duplicated =
+        await transaction.event.create({
+          data: {
+            churchId,
+            campusId: source.campusId,
+            title: input.title,
+            slug: input.slug,
+            publicSlug: null,
+            date: input.date,
+            capacity: source.capacity,
+            price: source.price,
+            isPublic: false,
+            isPaid: source.isPaid,
+            publicRegistrationEnabled: false,
+            waitlistEnabled:
+              source.waitlistEnabled,
+            trailStageId:
+              source.trailStageId
+          }
+        });
+
+      const dateShift =
+        input.date.getTime() -
+        source.date.getTime();
+
+      const ticketIds =
+        new Map<string, string>();
+
+      for (
+        const ticket
+        of source.ticketTypes
+      ) {
+        const createdTicket =
+          await transaction.eventTicket.create({
+            data: {
+              churchId,
+              eventId: duplicated.id,
+              name: ticket.name,
+              description:
+                ticket.description,
+              isFree: ticket.isFree,
+              isVisible:
+                ticket.isVisible
+            }
+          });
+
+        ticketIds.set(
+          ticket.id,
+          createdTicket.id
+        );
+
+        for (
+          const batch
+          of ticket.batches
+        ) {
+          await transaction.ticketBatch.create({
+            data: {
+              churchId,
+              eventId:
+                duplicated.id,
+              ticketId:
+                createdTicket.id,
+              name: batch.name,
+              quantity:
+                batch.quantity,
+              price: batch.price,
+              salesStart:
+                new Date(
+                  batch.salesStart.getTime() +
+                    dateShift
+                ),
+              salesEnd:
+                new Date(
+                  batch.salesEnd.getTime() +
+                    dateShift
+                ),
+              isVisible:
+                batch.isVisible
+            }
+          });
+        }
+      }
+
+      const orderedFields =
+        [...source.formFields].sort(
+          (left, right) =>
+            left.order - right.order
+        );
+
+      for (
+        const field
+        of orderedFields
+      ) {
+        const createdField =
+          await transaction.eventFormField.create({
+            data: {
+              churchId,
+              eventId:
+                duplicated.id,
+              label: field.label,
+              type: field.type,
+              isRequired:
+                field.isRequired,
+              isSensitive:
+                field.isSensitive,
+              order: field.order,
+              isActive:
+                field.isActive
+            }
+          });
+
+        for (
+          const option
+          of field.options
+        ) {
+          await transaction.eventFormFieldOption.create({
+            data: {
+              fieldId:
+                createdField.id,
+              label: option.label,
+              value: option.value,
+              order: option.order
+            }
+          });
+        }
+
+        for (
+          const scope
+          of field.ticketScopes
+        ) {
+          const duplicatedTicketId =
+            ticketIds.get(
+              scope.ticketId
+            );
+
+          if (!duplicatedTicketId) {
+            throw new Error(
+              "EVENT_FORM_TICKET_SCOPE_INVALID"
+            );
+          }
+
+          await transaction.eventFormFieldTicket.create({
+            data: {
+              fieldId:
+                createdField.id,
+              ticketId:
+                duplicatedTicketId
+            }
+          });
+        }
+      }
+
+      return duplicated;
+    }
+  );
 }
 
 export async function updateEvent(

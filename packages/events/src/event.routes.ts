@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import {
   checkInByTokenSchema,
   createEventSchema,
+  duplicateEventSchema,
   createRegistrationSchema,
   updateEventSchema,
   updateRegistrationStatusSchema
@@ -13,6 +14,7 @@ import {
 import {
   checkInRegistrationByToken,
   createEvent,
+  duplicateEvent,
   createRegistration,
   getEventById,
   listEvents,
@@ -170,6 +172,43 @@ export async function registerEventRoutes(
       await sendRouteError(error, reply);
     }
   });
+
+  app.post(
+    "/events/:eventId/duplicate",
+    async (request, reply) => {
+      try {
+        const churchId =
+          getChurchId(request);
+
+        const params =
+          request.params as {
+            eventId: string;
+          };
+
+        const input =
+          duplicateEventSchema.parse(
+            request.body
+          );
+
+        const event =
+          await duplicateEvent(
+            prisma,
+            churchId,
+            params.eventId,
+            input
+          );
+
+        await reply
+          .code(201)
+          .send(event);
+      } catch (error) {
+        await sendRouteError(
+          error,
+          reply
+        );
+      }
+    }
+  );
 
   app.get("/events/:eventId", async (request, reply) => {
     try {
