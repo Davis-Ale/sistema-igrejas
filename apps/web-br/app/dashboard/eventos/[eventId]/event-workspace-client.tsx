@@ -3,10 +3,21 @@
 import QRCode from "react-qr-code";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 
 type LoginSession = {
   token: string;
+};
+
+type EventSummaryOption = {
+  id: string;
+  title: string;
+  date: string;
 };
 
 type RegistrationStatus =
@@ -224,6 +235,16 @@ function getSessionToken() {
   }
 }
 
+function createSlug(title: string) {
+  return title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "full",
@@ -328,6 +349,46 @@ export function EventWorkspaceClient({
     financialStatusFilter,
     setFinancialStatusFilter
   ] = useState("ALL");
+  const [eventsList, setEventsList] = useState<
+    EventSummaryOption[]
+  >([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] =
+    useState(false);
+  const [isCreatingEvent, setIsCreatingEvent] =
+    useState(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDate, setCreateDate] = useState("");
+  const [createCapacity, setCreateCapacity] =
+    useState("50");
+  const [createPrice, setCreatePrice] = useState("0");
+  const [createIsPublic, setCreateIsPublic] =
+    useState(false);
+  const [
+    createPublicRegistrationEnabled,
+    setCreatePublicRegistrationEnabled
+  ] = useState(false);
+  const [
+    createWaitlistEnabled,
+    setCreateWaitlistEnabled
+  ] = useState(true);
+  const [createError, setCreateError] = useState<
+    string | null
+  >(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] =
+    useState(false);
+  const [isDuplicatingEvent, setIsDuplicatingEvent] =
+    useState(false);
+  const [duplicateTitle, setDuplicateTitle] =
+    useState("");
+  const [duplicateSlug, setDuplicateSlug] = useState("");
+  const [duplicateDate, setDuplicateDate] = useState("");
+  const [
+    duplicateSlugTouched,
+    setDuplicateSlugTouched
+  ] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<
+    string | null
+  >(null);
 
   const statistics = useMemo(() => {
     const registrations = event?.registrations ?? [];
@@ -394,6 +455,40 @@ export function EventWorkspaceClient({
 
     void loadEvent();
   }, [eventId, router]);
+
+  useEffect(() => {
+    async function loadEventsList() {
+      const token = getSessionToken();
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/events`,
+          {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data =
+          (await response.json()) as EventSummaryOption[];
+
+        setEventsList(data);
+      } catch {
+      }
+    }
+
+    void loadEventsList();
+  }, []);
 
   async function loadTickets() {
     const token = getSessionToken();
@@ -1503,8 +1598,209 @@ export function EventWorkspaceClient({
       .slice(0, 16);
   }
 
+  function openCreateEventModal() {
+    setCreateTitle("");
+    setCreateDate("");
+    setCreateCapacity("50");
+    setCreatePrice("0");
+    setCreateIsPublic(false);
+    setCreatePublicRegistrationEnabled(false);
+    setCreateWaitlistEnabled(true);
+    setCreateError(null);
+    setIsCreateModalOpen(true);
+  }
+
+  function closeCreateEventModal() {
+    if (isCreatingEvent) {
+      return;
+    }
+
+    setIsCreateModalOpen(false);
+    setCreateError(null);
+  }
+
+  function openDuplicateEventModal() {
+    if (!event) {
+      return;
+    }
+
+    const nextTitle = `Cópia de ${event.title}`;
+
+    setDuplicateTitle(nextTitle);
+    setDuplicateSlug(createSlug(nextTitle));
+    setDuplicateDate(formatDateTimeLocal(event.date));
+    setDuplicateSlugTouched(false);
+    setDuplicateError(null);
+    setIsDuplicateModalOpen(true);
+  }
+
+  function closeDuplicateEventModal() {
+    if (isDuplicatingEvent) {
+      return;
+    }
+
+    setIsDuplicateModalOpen(false);
+    setDuplicateError(null);
+  }
+
+  async function handleCreateEvent(
+    formEvent: FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const slug = createSlug(createTitle);
+
+    if (!slug) {
+      setCreateError(
+        "Informe um título válido para gerar o slug do evento."
+      );
+      return;
+    }
+
+    setCreateError(null);
+    setIsCreatingEvent(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events`,
+        {
+          body: JSON.stringify({
+            capacity: Number(createCapacity),
+            date: new Date(createDate).toISOString(),
+            isPaid: Number(createPrice) > 0,
+            isPublic: createIsPublic,
+            price: Number(createPrice),
+            publicRegistrationEnabled:
+              createPublicRegistrationEnabled,
+            slug,
+            title: createTitle,
+            waitlistEnabled: createWaitlistEnabled
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = (await response.json()) as
+        | { id: string }
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setCreateError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível cadastrar o evento."
+        );
+        return;
+      }
+
+      if (!("id" in data) || !data.id) {
+        setCreateError(
+          "Não foi possível cadastrar o evento."
+        );
+        return;
+      }
+
+      setIsCreateModalOpen(false);
+      router.push(`/dashboard/eventos/${data.id}`);
+    } catch {
+      setCreateError(
+        "Não foi possível cadastrar o evento agora."
+      );
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  }
+
+  async function handleDuplicateEvent(
+    formEvent: FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    if (!event) {
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const title = duplicateTitle.trim();
+    const slug = duplicateSlug.trim();
+
+    if (!title || !slug || !duplicateDate) {
+      setDuplicateError(
+        "Preencha título, slug e data para duplicar o evento."
+      );
+      return;
+    }
+
+    setDuplicateError(null);
+    setIsDuplicatingEvent(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${event.id}/duplicate`,
+        {
+          body: JSON.stringify({
+            date: new Date(duplicateDate).toISOString(),
+            slug,
+            title
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = (await response.json()) as
+        | { id: string }
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setDuplicateError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível duplicar o evento."
+        );
+        return;
+      }
+
+      if (!("id" in data) || !data.id) {
+        setDuplicateError(
+          "Não foi possível duplicar o evento."
+        );
+        return;
+      }
+
+      setIsDuplicateModalOpen(false);
+      router.push(`/dashboard/eventos/${data.id}`);
+    } catch {
+      setDuplicateError(
+        "Não foi possível duplicar o evento agora."
+      );
+    } finally {
+      setIsDuplicatingEvent(false);
+    }
+  }
+
   async function handleSaveInformation(
-    formEvent: React.FormEvent<HTMLFormElement>
+    formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
 
@@ -1688,6 +1984,63 @@ export function EventWorkspaceClient({
                   {event.church.name}
                 </p>
 
+                <label
+                  style={{
+                    color: "#94a3b8",
+                    display: "grid",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    gap: "8px",
+                    marginBottom: "14px",
+                    maxWidth: "420px"
+                  }}
+                >
+                  Evento
+
+                  <select
+                    onChange={(changeEvent) => {
+                      const nextEventId =
+                        changeEvent.target.value;
+
+                      if (
+                        nextEventId &&
+                        nextEventId !== event.id
+                      ) {
+                        router.push(
+                          `/dashboard/eventos/${nextEventId}`
+                        );
+                      }
+                    }}
+                    style={{
+                      background: "#0f172a",
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.3)",
+                      borderRadius: "12px",
+                      color: "#ffffff",
+                      font: "inherit",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      padding: "11px 12px"
+                    }}
+                    value={event.id}
+                  >
+                    {(eventsList.length > 0
+                      ? eventsList
+                      : [
+                          {
+                            date: event.date,
+                            id: event.id,
+                            title: event.title
+                          }
+                        ]
+                    ).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <h1
                   style={{
                     color: "#ffffff",
@@ -1776,8 +2129,53 @@ export function EventWorkspaceClient({
                   top: "24px"
                 }}
               >
+                <button
+                  onClick={() =>
+                    setActiveSection("overview")
+                  }
+                  style={{
+                    background:
+                      activeSection === "overview"
+                        ? "#2563eb"
+                        : "transparent",
+                    border: 0,
+                    borderRadius: "12px",
+                    color:
+                      activeSection === "overview"
+                        ? "#ffffff"
+                        : "#cbd5e1",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: 900,
+                    padding: "12px 14px",
+                    textAlign: "left"
+                  }}
+                  type="button"
+                >
+                  Visão geral
+                </button>
+
+                <button
+                  onClick={openCreateEventModal}
+                  style={{
+                    background:
+                      "rgba(37, 99, 235, 0.12)",
+                    border:
+                      "1px dashed rgba(96, 165, 250, 0.45)",
+                    borderRadius: "12px",
+                    color: "#93c5fd",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: 900,
+                    padding: "12px 14px",
+                    textAlign: "left"
+                  }}
+                  type="button"
+                >
+                  + Criar evento
+                </button>
+
                 {[
-                  ["overview", "Visão geral"],
                   ["information", "Informações"],
                   ["tickets", "Ingressos"],
                   ["registration-form", "Formulário de inscrição"],
@@ -2263,25 +2661,51 @@ export function EventWorkspaceClient({
                 </div>
 
                 {!isEditingInformation ? (
-                  <button
-                    onClick={() => {
-                      setError(null);
-                      setInformationMessage(null);
-                      setIsEditingInformation(true);
-                    }}
+                  <div
                     style={{
-                      background: "#2563eb",
-                      border: 0,
-                      borderRadius: "12px",
-                      color: "#ffffff",
-                      cursor: "pointer",
-                      fontWeight: 900,
-                      padding: "11px 16px"
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "10px"
                     }}
-                    type="button"
                   >
-                    Editar informações
-                  </button>
+                    <button
+                      onClick={openDuplicateEventModal}
+                      style={{
+                        background:
+                          "rgba(15, 23, 42, 0.68)",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#e2e8f0",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                        padding: "11px 16px"
+                      }}
+                      type="button"
+                    >
+                      Duplicar evento
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setInformationMessage(null);
+                        setIsEditingInformation(true);
+                      }}
+                      style={{
+                        background: "#2563eb",
+                        border: 0,
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                        padding: "11px 16px"
+                      }}
+                      type="button"
+                    >
+                      Editar informações
+                    </button>
+                  </div>
                 ) : null}
               </header>
 
@@ -4346,6 +4770,667 @@ export function EventWorkspaceClient({
           </>
         ) : null}
       </section>
+
+      {isCreateModalOpen ? (
+        <div
+          onClick={closeCreateEventModal}
+          style={{
+            alignItems: "center",
+            background: "rgba(2, 6, 23, 0.72)",
+            display: "flex",
+            inset: 0,
+            justifyContent: "center",
+            padding: "24px",
+            position: "fixed",
+            zIndex: 60
+          }}
+        >
+          <div
+            onClick={(clickEvent) =>
+              clickEvent.stopPropagation()
+            }
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+              border:
+                "1px solid rgba(148, 163, 184, 0.22)",
+              borderRadius: "28px",
+              boxShadow:
+                "0 28px 90px rgba(2, 6, 23, 0.48)",
+              display: "grid",
+              gap: "28px",
+              maxHeight: "calc(100vh - 48px)",
+              maxWidth: "760px",
+              overflow: "auto",
+              padding: "36px",
+              width: "100%"
+            }}
+          >
+            <header
+              style={{
+                display: "grid",
+                gap: "8px"
+              }}
+            >
+              <p
+                style={{
+                  color: "#60a5fa",
+                  fontSize: "13px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  margin: 0,
+                  textTransform: "uppercase"
+                }}
+              >
+                Módulo Eventos
+              </p>
+
+              <h2
+                style={{
+                  color: "#ffffff",
+                  fontSize: "28px",
+                  letterSpacing: "-0.03em",
+                  margin: 0
+                }}
+              >
+                Criar evento
+              </h2>
+
+              <p
+                style={{
+                  color: "#94a3b8",
+                  lineHeight: 1.6,
+                  margin: 0
+                }}
+              >
+                Cadastre um novo evento com os dados
+                principais e a configuração de publicação.
+              </p>
+            </header>
+
+            {createError ? (
+              <p
+                style={{
+                  background: "rgba(127, 29, 29, 0.32)",
+                  border:
+                    "1px solid rgba(248, 113, 113, 0.28)",
+                  borderRadius: "14px",
+                  color: "#fecaca",
+                  margin: 0,
+                  padding: "14px"
+                }}
+              >
+                {createError}
+              </p>
+            ) : null}
+
+            <form
+              onSubmit={handleCreateEvent}
+              style={{
+                display: "grid",
+                gap: "28px"
+              }}
+            >
+              <section
+                style={{
+                  background: "rgba(15, 23, 42, 0.72)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "22px",
+                  display: "grid",
+                  gap: "18px",
+                  padding: "24px"
+                }}
+              >
+                <h3
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "18px",
+                    margin: 0
+                  }}
+                >
+                  Dados principais
+                </h3>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "16px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(240px, 1fr))"
+                  }}
+                >
+                  <label
+                    style={{
+                      color: "#e2e8f0",
+                      display: "grid",
+                      fontWeight: 800,
+                      gap: "8px"
+                    }}
+                  >
+                    Título
+
+                    <input
+                      onChange={(changeEvent) =>
+                        setCreateTitle(
+                          changeEvent.target.value
+                        )
+                      }
+                      required
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        font: "inherit",
+                        padding: "13px 14px"
+                      }}
+                      type="text"
+                      value={createTitle}
+                    />
+                  </label>
+
+                  <label
+                    style={{
+                      color: "#e2e8f0",
+                      display: "grid",
+                      fontWeight: 800,
+                      gap: "8px"
+                    }}
+                  >
+                    Data e hora
+
+                    <input
+                      onChange={(changeEvent) =>
+                        setCreateDate(
+                          changeEvent.target.value
+                        )
+                      }
+                      required
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        font: "inherit",
+                        padding: "13px 14px"
+                      }}
+                      type="datetime-local"
+                      value={createDate}
+                    />
+                  </label>
+
+                  <label
+                    style={{
+                      color: "#e2e8f0",
+                      display: "grid",
+                      fontWeight: 800,
+                      gap: "8px"
+                    }}
+                  >
+                    Capacidade
+
+                    <input
+                      min="1"
+                      onChange={(changeEvent) =>
+                        setCreateCapacity(
+                          changeEvent.target.value
+                        )
+                      }
+                      required
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        font: "inherit",
+                        padding: "13px 14px"
+                      }}
+                      type="number"
+                      value={createCapacity}
+                    />
+                  </label>
+
+                  <label
+                    style={{
+                      color: "#e2e8f0",
+                      display: "grid",
+                      fontWeight: 800,
+                      gap: "8px"
+                    }}
+                  >
+                    Valor
+
+                    <input
+                      min="0"
+                      onChange={(changeEvent) =>
+                        setCreatePrice(
+                          changeEvent.target.value
+                        )
+                      }
+                      required
+                      step="0.01"
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        font: "inherit",
+                        padding: "13px 14px"
+                      }}
+                      type="number"
+                      value={createPrice}
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <section
+                style={{
+                  background: "rgba(15, 23, 42, 0.72)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "22px",
+                  display: "grid",
+                  gap: "18px",
+                  padding: "24px"
+                }}
+              >
+                <h3
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "18px",
+                    margin: 0
+                  }}
+                >
+                  Publicação
+                </h3>
+
+                <label
+                  style={{
+                    alignItems: "center",
+                    color: "#e2e8f0",
+                    display: "flex",
+                    fontWeight: 800,
+                    gap: "10px"
+                  }}
+                >
+                  <input
+                    checked={createIsPublic}
+                    onChange={(changeEvent) =>
+                      setCreateIsPublic(
+                        changeEvent.target.checked
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  Evento público
+                </label>
+
+                <label
+                  style={{
+                    alignItems: "center",
+                    color: "#e2e8f0",
+                    display: "flex",
+                    fontWeight: 800,
+                    gap: "10px"
+                  }}
+                >
+                  <input
+                    checked={createPublicRegistrationEnabled}
+                    onChange={(changeEvent) =>
+                      setCreatePublicRegistrationEnabled(
+                        changeEvent.target.checked
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  Inscrições públicas abertas
+                </label>
+
+                <label
+                  style={{
+                    alignItems: "center",
+                    color: "#e2e8f0",
+                    display: "flex",
+                    fontWeight: 800,
+                    gap: "10px"
+                  }}
+                >
+                  <input
+                    checked={createWaitlistEnabled}
+                    onChange={(changeEvent) =>
+                      setCreateWaitlistEnabled(
+                        changeEvent.target.checked
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  Lista de espera habilitada
+                </label>
+              </section>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                  justifyContent: "flex-end"
+                }}
+              >
+                <button
+                  disabled={isCreatingEvent}
+                  onClick={closeCreateEventModal}
+                  style={{
+                    background:
+                      "rgba(15, 23, 42, 0.68)",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: "12px",
+                    color: "#e2e8f0",
+                    cursor: isCreatingEvent
+                      ? "not-allowed"
+                      : "pointer",
+                    fontWeight: 900,
+                    opacity: isCreatingEvent ? 0.72 : 1,
+                    padding: "12px 18px"
+                  }}
+                  type="button"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  disabled={isCreatingEvent}
+                  style={{
+                    background: "#2563eb",
+                    border: 0,
+                    borderRadius: "12px",
+                    color: "#ffffff",
+                    cursor: isCreatingEvent
+                      ? "not-allowed"
+                      : "pointer",
+                    fontWeight: 900,
+                    opacity: isCreatingEvent ? 0.72 : 1,
+                    padding: "12px 18px"
+                  }}
+                  type="submit"
+                >
+                  {isCreatingEvent
+                    ? "Criando..."
+                    : "Criar evento"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isDuplicateModalOpen && event ? (
+        <div
+          onClick={closeDuplicateEventModal}
+          style={{
+            alignItems: "center",
+            background: "rgba(2, 6, 23, 0.72)",
+            display: "flex",
+            inset: 0,
+            justifyContent: "center",
+            padding: "24px",
+            position: "fixed",
+            zIndex: 60
+          }}
+        >
+          <div
+            onClick={(clickEvent) =>
+              clickEvent.stopPropagation()
+            }
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+              border:
+                "1px solid rgba(148, 163, 184, 0.22)",
+              borderRadius: "28px",
+              boxShadow:
+                "0 28px 90px rgba(2, 6, 23, 0.48)",
+              display: "grid",
+              gap: "28px",
+              maxHeight: "calc(100vh - 48px)",
+              maxWidth: "640px",
+              overflow: "auto",
+              padding: "36px",
+              width: "100%"
+            }}
+          >
+            <header
+              style={{
+                display: "grid",
+                gap: "8px"
+              }}
+            >
+              <p
+                style={{
+                  color: "#60a5fa",
+                  fontSize: "13px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  margin: 0,
+                  textTransform: "uppercase"
+                }}
+              >
+                Informações
+              </p>
+
+              <h2
+                style={{
+                  color: "#ffffff",
+                  fontSize: "28px",
+                  letterSpacing: "-0.03em",
+                  margin: 0
+                }}
+              >
+                Duplicar evento
+              </h2>
+
+              <p
+                style={{
+                  color: "#94a3b8",
+                  lineHeight: 1.6,
+                  margin: 0
+                }}
+              >
+                Crie uma cópia administrativa do evento
+                atual com novo título, slug e data.
+              </p>
+            </header>
+
+            {duplicateError ? (
+              <p
+                style={{
+                  background: "rgba(127, 29, 29, 0.32)",
+                  border:
+                    "1px solid rgba(248, 113, 113, 0.28)",
+                  borderRadius: "14px",
+                  color: "#fecaca",
+                  margin: 0,
+                  padding: "14px"
+                }}
+              >
+                {duplicateError}
+              </p>
+            ) : null}
+
+            <form
+              onSubmit={handleDuplicateEvent}
+              style={{
+                display: "grid",
+                gap: "18px"
+              }}
+            >
+              <label
+                style={{
+                  color: "#e2e8f0",
+                  display: "grid",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
+                Título
+
+                <input
+                  onChange={(changeEvent) => {
+                    const nextTitle =
+                      changeEvent.target.value;
+
+                    setDuplicateTitle(nextTitle);
+
+                    if (!duplicateSlugTouched) {
+                      setDuplicateSlug(
+                        createSlug(nextTitle)
+                      );
+                    }
+                  }}
+                  required
+                  style={{
+                    background: "#0f172a",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: "12px",
+                    color: "#ffffff",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
+                  type="text"
+                  value={duplicateTitle}
+                />
+              </label>
+
+              <label
+                style={{
+                  color: "#e2e8f0",
+                  display: "grid",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
+                Slug
+
+                <input
+                  onChange={(changeEvent) => {
+                    setDuplicateSlugTouched(true);
+                    setDuplicateSlug(
+                      changeEvent.target.value
+                    );
+                  }}
+                  required
+                  style={{
+                    background: "#0f172a",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: "12px",
+                    color: "#ffffff",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
+                  type="text"
+                  value={duplicateSlug}
+                />
+              </label>
+
+              <label
+                style={{
+                  color: "#e2e8f0",
+                  display: "grid",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
+                Data e hora
+
+                <input
+                  onChange={(changeEvent) =>
+                    setDuplicateDate(
+                      changeEvent.target.value
+                    )
+                  }
+                  required
+                  style={{
+                    background: "#0f172a",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: "12px",
+                    color: "#ffffff",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
+                  type="datetime-local"
+                  value={duplicateDate}
+                />
+              </label>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                  justifyContent: "flex-end",
+                  marginTop: "8px"
+                }}
+              >
+                <button
+                  disabled={isDuplicatingEvent}
+                  onClick={closeDuplicateEventModal}
+                  style={{
+                    background:
+                      "rgba(15, 23, 42, 0.68)",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: "12px",
+                    color: "#e2e8f0",
+                    cursor: isDuplicatingEvent
+                      ? "not-allowed"
+                      : "pointer",
+                    fontWeight: 900,
+                    opacity: isDuplicatingEvent
+                      ? 0.72
+                      : 1,
+                    padding: "12px 18px"
+                  }}
+                  type="button"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  disabled={isDuplicatingEvent}
+                  style={{
+                    background: "#2563eb",
+                    border: 0,
+                    borderRadius: "12px",
+                    color: "#ffffff",
+                    cursor: isDuplicatingEvent
+                      ? "not-allowed"
+                      : "pointer",
+                    fontWeight: 900,
+                    opacity: isDuplicatingEvent
+                      ? 0.72
+                      : 1,
+                    padding: "12px 18px"
+                  }}
+                  type="submit"
+                >
+                  {isDuplicatingEvent
+                    ? "Duplicando..."
+                    : "Duplicar evento"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
