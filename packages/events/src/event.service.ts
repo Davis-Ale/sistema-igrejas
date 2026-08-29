@@ -153,7 +153,9 @@ export async function createEvent(
       price: input.price,
       isPublic: input.isPublic,
       isPaid: input.isPaid,
-      publicRegistrationEnabled: input.publicRegistrationEnabled,
+      publicRegistrationEnabled: input.isPublic
+        ? input.publicRegistrationEnabled
+        : false,
       waitlistEnabled: input.waitlistEnabled,
       trailStageId: input.trailStageId ?? null
     }
@@ -362,7 +364,9 @@ export async function updateEvent(
       churchId
     },
     select: {
-      id: true
+      id: true,
+      isPublic: true,
+      publicRegistrationEnabled: true
     }
   });
 
@@ -392,17 +396,31 @@ export async function updateEvent(
     data.price = input.price;
   }
 
+  const resultingIsPublic =
+    input.isPublic ?? event.isPublic;
+  let resultingRegistration =
+    input.publicRegistrationEnabled ??
+    event.publicRegistrationEnabled;
+
+  if (resultingIsPublic === false) {
+    resultingRegistration = false;
+  }
+
   if (input.isPublic !== undefined) {
-    data.isPublic = input.isPublic;
+    data.isPublic = resultingIsPublic;
   }
 
   if (input.isPaid !== undefined) {
     data.isPaid = input.isPaid;
   }
 
-  if (input.publicRegistrationEnabled !== undefined) {
+  if (
+    input.publicRegistrationEnabled !== undefined ||
+    resultingRegistration !==
+      event.publicRegistrationEnabled
+  ) {
     data.publicRegistrationEnabled =
-      input.publicRegistrationEnabled;
+      resultingRegistration;
   }
 
   if (input.waitlistEnabled !== undefined) {

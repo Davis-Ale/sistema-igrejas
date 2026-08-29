@@ -53,12 +53,25 @@ export const createEventSchema = z.object({
   trailStageId: z.string().trim().min(1).optional()
 });
 
-export const updateEventSchema = createEventSchema
-  .omit({
-    campusId: true,
-    trailStageId: true
+export const updateEventSchema = z
+  .object({
+    title: z.string().trim().min(1, "Título é obrigatório.").optional(),
+    slug: z.string().trim().min(1, "Slug é obrigatório.").optional(),
+    date: z.coerce.date().optional(),
+    capacity: z
+      .coerce.number()
+      .int()
+      .positive("Capacidade deve ser maior que zero.")
+      .optional(),
+    price: z
+      .coerce.number()
+      .min(0, "Preço não pode ser negativo.")
+      .optional(),
+    isPublic: z.boolean().optional(),
+    isPaid: z.boolean().optional(),
+    publicRegistrationEnabled: z.boolean().optional(),
+    waitlistEnabled: z.boolean().optional()
   })
-  .partial()
   .refine(
     (input) => Object.keys(input).length > 0,
     {

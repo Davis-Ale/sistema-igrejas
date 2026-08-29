@@ -274,6 +274,10 @@ export function EventWorkspaceClient({
     useState(false);
   const [isSavingInformation, setIsSavingInformation] =
     useState(false);
+  const [
+    isUpdatingPublicationState,
+    setIsUpdatingPublicationState
+  ] = useState(false);
   const [informationMessage, setInformationMessage] =
     useState<string | null>(null);
   const [tickets, setTickets] = useState<EventTicket[]>([]);
@@ -1837,9 +1841,6 @@ export function EventWorkspaceClient({
             capacity,
             price,
             isPaid: price > 0,
-            isPublic: formData.get("isPublic") === "on",
-            publicRegistrationEnabled:
-              formData.get("publicRegistrationEnabled") === "on",
             waitlistEnabled:
               formData.get("waitlistEnabled") === "on"
           }),
@@ -1884,6 +1885,71 @@ export function EventWorkspaceClient({
       );
     } finally {
       setIsSavingInformation(false);
+    }
+  }
+
+  async function handleUpdatePublicationState(
+    payload:
+      | { isPublic: boolean }
+      | { publicRegistrationEnabled: boolean }
+  ) {
+    if (!event || isUpdatingPublicationState) {
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setError(null);
+    setInformationMessage(null);
+    setIsUpdatingPublicationState(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${event.id}`,
+        {
+          body: JSON.stringify(payload),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventDetail
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar o evento."
+        );
+        return;
+      }
+
+      const updatedEvent = data as EventDetail;
+
+      setEvent((current) =>
+        current
+          ? {
+              ...current,
+              ...updatedEvent
+            }
+          : current
+      );
+    } catch {
+      setError(
+        "Não foi possível atualizar o evento agora."
+      );
+    } finally {
+      setIsUpdatingPublicationState(false);
     }
   }
 
@@ -2890,40 +2956,6 @@ export function EventWorkspaceClient({
                       }}
                     >
                       <input
-                        defaultChecked={event.isPublic}
-                        name="isPublic"
-                        type="checkbox"
-                      />
-                      Evento público
-                    </label>
-
-                    <label
-                      style={{
-                        alignItems: "center",
-                        color: "#e2e8f0",
-                        display: "flex",
-                        gap: "10px"
-                      }}
-                    >
-                      <input
-                        defaultChecked={
-                          event.publicRegistrationEnabled
-                        }
-                        name="publicRegistrationEnabled"
-                        type="checkbox"
-                      />
-                      Inscrições públicas abertas
-                    </label>
-
-                    <label
-                      style={{
-                        alignItems: "center",
-                        color: "#e2e8f0",
-                        display: "flex",
-                        gap: "10px"
-                      }}
-                    >
-                      <input
                         defaultChecked={event.waitlistEnabled}
                         name="waitlistEnabled"
                         type="checkbox"
@@ -2982,6 +3014,12 @@ export function EventWorkspaceClient({
                 <div
                   style={{
                     display: "grid",
+                    gap: "22px"
+                  }}
+                >
+                <div
+                  style={{
+                    display: "grid",
                     gap: "14px",
                     gridTemplateColumns:
                       "repeat(auto-fit, minmax(210px, 1fr))"
@@ -3026,6 +3064,166 @@ export function EventWorkspaceClient({
                         : "Rascunho"}
                     </p>
                   </article>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "14px",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(210px, 1fr))"
+                  }}
+                >
+                  <article
+                    style={{
+                      display: "grid",
+                      gap: "12px"
+                    }}
+                  >
+                    <strong style={{ color: "#94a3b8" }}>
+                      Publicação
+                    </strong>
+                    <p style={{ margin: 0 }}>
+                      Status:{" "}
+                      {event.isPublic
+                        ? "Publicado"
+                        : "Rascunho"}
+                    </p>
+                    {event.isPublic ? (
+                      <button
+                        disabled={isUpdatingPublicationState}
+                        onClick={() =>
+                          void handleUpdatePublicationState({
+                            isPublic: false
+                          })
+                        }
+                        style={{
+                          background:
+                            "rgba(15, 23, 42, 0.68)",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#e2e8f0",
+                          cursor: isUpdatingPublicationState
+                            ? "not-allowed"
+                            : "pointer",
+                          fontWeight: 900,
+                          justifySelf: "start",
+                          opacity: isUpdatingPublicationState
+                            ? 0.72
+                            : 1,
+                          padding: "11px 16px"
+                        }}
+                        type="button"
+                      >
+                        Despublicar evento
+                      </button>
+                    ) : (
+                      <button
+                        disabled={isUpdatingPublicationState}
+                        onClick={() =>
+                          void handleUpdatePublicationState({
+                            isPublic: true
+                          })
+                        }
+                        style={{
+                          background: "#2563eb",
+                          border: 0,
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          cursor: isUpdatingPublicationState
+                            ? "not-allowed"
+                            : "pointer",
+                          fontWeight: 900,
+                          justifySelf: "start",
+                          opacity: isUpdatingPublicationState
+                            ? 0.72
+                            : 1,
+                          padding: "11px 16px"
+                        }}
+                        type="button"
+                      >
+                        Publicar evento
+                      </button>
+                    )}
+                  </article>
+
+                  <article
+                    style={{
+                      display: "grid",
+                      gap: "12px"
+                    }}
+                  >
+                    <strong style={{ color: "#94a3b8" }}>
+                      Inscrições públicas
+                    </strong>
+                    <p style={{ margin: 0 }}>
+                      Status:{" "}
+                      {event.publicRegistrationEnabled
+                        ? "Abertas"
+                        : "Fechadas"}
+                    </p>
+                    {event.isPublic ? (
+                      event.publicRegistrationEnabled ? (
+                        <button
+                          disabled={isUpdatingPublicationState}
+                          onClick={() =>
+                            void handleUpdatePublicationState({
+                              publicRegistrationEnabled: false
+                            })
+                          }
+                          style={{
+                            background:
+                              "rgba(15, 23, 42, 0.68)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "12px",
+                            color: "#e2e8f0",
+                            cursor: isUpdatingPublicationState
+                              ? "not-allowed"
+                              : "pointer",
+                            fontWeight: 900,
+                            justifySelf: "start",
+                            opacity: isUpdatingPublicationState
+                              ? 0.72
+                              : 1,
+                            padding: "11px 16px"
+                          }}
+                          type="button"
+                        >
+                          Fechar inscrições
+                        </button>
+                      ) : (
+                        <button
+                          disabled={isUpdatingPublicationState}
+                          onClick={() =>
+                            void handleUpdatePublicationState({
+                              publicRegistrationEnabled: true
+                            })
+                          }
+                          style={{
+                            background: "#2563eb",
+                            border: 0,
+                            borderRadius: "12px",
+                            color: "#ffffff",
+                            cursor: isUpdatingPublicationState
+                              ? "not-allowed"
+                              : "pointer",
+                            fontWeight: 900,
+                            justifySelf: "start",
+                            opacity: isUpdatingPublicationState
+                              ? 0.72
+                              : 1,
+                            padding: "11px 16px"
+                          }}
+                          type="button"
+                        >
+                          Abrir inscrições
+                        </button>
+                      )
+                    ) : null}
+                  </article>
+                </div>
                 </div>
               )}
             </section>
@@ -5061,11 +5259,18 @@ export function EventWorkspaceClient({
                 >
                   <input
                     checked={createIsPublic}
-                    onChange={(changeEvent) =>
-                      setCreateIsPublic(
-                        changeEvent.target.checked
-                      )
-                    }
+                    onChange={(changeEvent) => {
+                      const checked =
+                        changeEvent.target.checked;
+
+                      setCreateIsPublic(checked);
+
+                      if (!checked) {
+                        setCreatePublicRegistrationEnabled(
+                          false
+                        );
+                      }
+                    }}
                     type="checkbox"
                   />
                   Evento público
