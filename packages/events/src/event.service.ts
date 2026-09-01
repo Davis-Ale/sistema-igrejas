@@ -609,7 +609,13 @@ export async function getPublicEventById(prisma: PrismaClient, eventId: string) 
             include: {
               _count: {
                 select: {
-                  registrations: true
+                  registrations: {
+                    where: {
+                      status: {
+                        not: "CANCELLED"
+                      }
+                    }
+                  }
                 }
               }
             },
@@ -813,7 +819,13 @@ export async function createPublicRegistration(
             include: {
               _count: {
                 select: {
-                  registrations: true
+                  registrations: {
+                    where: {
+                      status: {
+                        not: "CANCELLED"
+                      }
+                    }
+                  }
                 }
               }
             }

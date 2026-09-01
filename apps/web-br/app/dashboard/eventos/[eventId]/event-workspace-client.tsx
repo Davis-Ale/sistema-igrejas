@@ -262,6 +262,34 @@ function formatMoney(value: string | number) {
   }).format(Number.isFinite(numberValue) ? numberValue : 0);
 }
 
+type TicketBatchSaleStatus =
+  | "Esgotado"
+  | "Não iniciado"
+  | "Encerrado"
+  | "À venda";
+
+function getTicketBatchSaleStatus(
+  quantity: number,
+  salesStart: string,
+  salesEnd: string,
+  sold: number,
+  now = new Date()
+): TicketBatchSaleStatus {
+  if (sold >= quantity) {
+    return "Esgotado";
+  }
+
+  if (now < new Date(salesStart)) {
+    return "Não iniciado";
+  }
+
+  if (now > new Date(salesEnd)) {
+    return "Encerrado";
+  }
+
+  return "À venda";
+}
+
 export function EventWorkspaceClient({
   eventId
 }: EventWorkspaceClientProps) {
@@ -3507,7 +3535,9 @@ export function EventWorkspaceClient({
 
                 {!isLoadingTickets &&
                 tickets.length === 0 ? (
-                  <p>Nenhum ingresso cadastrado.</p>
+                  <p>
+                    Nenhum ingresso cadastrado neste evento.
+                  </p>
                 ) : null}
 
                 {tickets.map((ticket) => (
@@ -3523,6 +3553,9 @@ export function EventWorkspaceClient({
                     <h3 style={{ marginTop: 0 }}>
                       {ticket.name}
                     </h3>
+                    {ticket.description?.trim() ? (
+                      <p>{ticket.description}</p>
+                    ) : null}
                     <p>
                       {ticket.isFree ? "Gratuito" : "Pago"}
                       {" - "}
@@ -3531,6 +3564,12 @@ export function EventWorkspaceClient({
                         : "Oculto"}
                     </p>
 
+                    {ticket.batches.length === 0 ? (
+                      <p>
+                        Nenhum lote cadastrado neste ingresso.
+                      </p>
+                    ) : null}
+
                     {ticket.batches.map((batch) => {
                       const sold =
                         batch._count.registrations;
@@ -3538,6 +3577,13 @@ export function EventWorkspaceClient({
                         batch.quantity - sold,
                         0
                       );
+                      const saleStatus =
+                        getTicketBatchSaleStatus(
+                          batch.quantity,
+                          batch.salesStart,
+                          batch.salesEnd,
+                          sold
+                        );
 
                       return (
                         <div
@@ -3549,15 +3595,51 @@ export function EventWorkspaceClient({
                             padding: "14px"
                           }}
                         >
-                          <strong>{batch.name}</strong>
+                          <div
+                            style={{
+                              alignItems: "center",
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "10px"
+                            }}
+                          >
+                            <strong>{batch.name}</strong>
+                            <span
+                              style={{
+                                background:
+                                  saleStatus === "À venda"
+                                    ? "rgba(59, 130, 246, 0.14)"
+                                    : "rgba(148, 163, 184, 0.12)",
+                                border:
+                                  saleStatus === "À venda"
+                                    ? "1px solid rgba(59, 130, 246, 0.3)"
+                                    : "1px solid rgba(148, 163, 184, 0.22)",
+                                borderRadius: "999px",
+                                color:
+                                  saleStatus === "À venda"
+                                    ? "#93c5fd"
+                                    : "#cbd5e1",
+                                fontSize: "13px",
+                                fontWeight: 900,
+                                padding: "8px 12px"
+                              }}
+                            >
+                              {saleStatus}
+                            </span>
+                          </div>
                           <p>
                             {formatMoney(batch.price)}
                             {" - "}
                             {sold} vendidos
                             {" - "}
                             {available} disponíveis
+                            {" - "}
+                            {batch.isVisible
+                              ? "Visível"
+                              : "Oculto"}
                           </p>
                           <small>
+                            {"de "}
                             {formatDate(batch.salesStart)}
                             {" até "}
                             {formatDate(batch.salesEnd)}

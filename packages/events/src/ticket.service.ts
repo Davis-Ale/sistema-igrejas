@@ -46,7 +46,13 @@ export async function listEventTickets(
         include: {
           _count: {
             select: {
-              registrations: true
+              registrations: {
+                where: {
+                  status: {
+                    not: "CANCELLED"
+                  }
+                }
+              }
             }
           }
         },
@@ -56,7 +62,13 @@ export async function listEventTickets(
       },
       _count: {
         select: {
-          registrations: true
+          registrations: {
+            where: {
+              status: {
+                not: "CANCELLED"
+              }
+            }
+          }
         }
       }
     },
