@@ -9,12 +9,16 @@ import type {
 import { ZodError } from "zod";
 import {
   createEventTicketSchema,
-  createTicketBatchSchema
+  createTicketBatchSchema,
+  updateEventTicketSchema,
+  updateTicketBatchSchema
 } from "./ticket.schema.js";
 import {
   createEventTicket,
   createTicketBatch,
-  listEventTickets
+  listEventTickets,
+  updateEventTicket,
+  updateTicketBatch
 } from "./ticket.service.js";
 
 function getChurchId(request: FastifyRequest) {
@@ -77,6 +81,15 @@ async function sendTicketError(
       return;
     }
 
+    if (error.message === "TICKET_BATCH_NOT_FOUND") {
+      await reply.code(404).send({
+        error: "TICKET_BATCH_NOT_FOUND",
+        message:
+          "Lote não encontrado para este evento."
+      });
+      return;
+    }
+
     if (
       error.message === "FREE_TICKET_PRICE_NOT_ZERO"
     ) {
@@ -84,6 +97,24 @@ async function sendTicketError(
         error: "FREE_TICKET_PRICE_NOT_ZERO",
         message:
           "Um ingresso gratuito não pode possuir preço."
+      });
+      return;
+    }
+
+    if (error.message === "QUANTITY_BELOW_SOLD") {
+      await reply.code(400).send({
+        error: "QUANTITY_BELOW_SOLD",
+        message:
+          "A quantidade não pode ser menor que as unidades já vendidas."
+      });
+      return;
+    }
+
+    if (error.message === "SALES_WINDOW_INVALID") {
+      await reply.code(400).send({
+        error: "SALES_WINDOW_INVALID",
+        message:
+          "O término das vendas deve ser posterior ao início."
       });
       return;
     }
@@ -163,6 +194,62 @@ export async function registerTicketRoutes(
         );
 
         await reply.code(201).send(batch);
+      } catch (error) {
+        await sendTicketError(error, reply);
+      }
+    }
+  );
+
+  app.patch(
+    "/events/:eventId/tickets/:ticketId",
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const { eventId, ticketId } =
+          request.params as {
+            eventId: string;
+            ticketId: string;
+          };
+        const input =
+          updateEventTicketSchema.parse(request.body);
+
+        const ticket = await updateEventTicket(
+          prisma,
+          churchId,
+          eventId,
+          ticketId,
+          input
+        );
+
+        await reply.code(200).send(ticket);
+      } catch (error) {
+        await sendTicketError(error, reply);
+      }
+    }
+  );
+
+  app.patch(
+    "/events/:eventId/ticket-batches/:batchId",
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const { eventId, batchId } =
+          request.params as {
+            eventId: string;
+            batchId: string;
+          };
+        const input =
+          updateTicketBatchSchema.parse(request.body);
+
+        const batch = await updateTicketBatch(
+          prisma,
+          churchId,
+          eventId,
+          batchId,
+          input
+        );
+
+        await reply.code(200).send(batch);
       } catch (error) {
         await sendTicketError(error, reply);
       }

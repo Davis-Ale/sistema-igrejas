@@ -252,6 +252,13 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatDateTimeCompact(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 function formatMoney(value: string | number) {
   const numberValue =
     typeof value === "string" ? Number(value) : value;
@@ -290,6 +297,39 @@ function getTicketBatchSaleStatus(
   return "À venda";
 }
 
+function getTicketRowIdentity(
+  ticketName: string,
+  batchName: string | null,
+  eventTitle: string | null | undefined
+) {
+  const name = ticketName.trim();
+  const title = eventTitle?.trim() ?? "";
+  const typeLabel =
+    name &&
+    title &&
+    name.toLocaleLowerCase("pt-BR") ===
+      title.toLocaleLowerCase("pt-BR")
+      ? "Ingresso"
+      : name || "Ingresso";
+  return batchName
+    ? `${typeLabel} - ${batchName}`
+    : typeLabel;
+}
+
+const TICKET_LIST_COLUMNS =
+  "minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.1fr) minmax(0, 1fr) 76px";
+
+function getTicketBatchSoldPercent(
+  sold: number,
+  quantity: number
+) {
+  if (quantity <= 0) {
+    return 0;
+  }
+
+  return Math.min((sold / quantity) * 100, 100);
+}
+
 export function EventWorkspaceClient({
   eventId
 }: EventWorkspaceClientProps) {
@@ -317,10 +357,57 @@ export function EventWorkspaceClient({
     useState(false);
   const [ticketMessage, setTicketMessage] =
     useState<string | null>(null);
+  const [ticketError, setTicketError] =
+    useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] =
     useState("");
   const [ticketIsFree, setTicketIsFree] =
     useState(true);
+  const [editingTicketId, setEditingTicketId] =
+    useState<string | null>(null);
+  const [editingTicketName, setEditingTicketName] =
+    useState("");
+  const [
+    editingTicketDescription,
+    setEditingTicketDescription
+  ] = useState("");
+  const [editingTicketIsFree, setEditingTicketIsFree] =
+    useState(true);
+  const [
+    editingTicketIsVisible,
+    setEditingTicketIsVisible
+  ] = useState(true);
+  const [isSavingTicket, setIsSavingTicket] =
+    useState(false);
+  const [editingBatchId, setEditingBatchId] =
+    useState<string | null>(null);
+  const [editingBatchName, setEditingBatchName] =
+    useState("");
+  const [
+    editingBatchQuantity,
+    setEditingBatchQuantity
+  ] = useState("");
+  const [editingBatchPrice, setEditingBatchPrice] =
+    useState("");
+  const [
+    editingBatchSalesStart,
+    setEditingBatchSalesStart
+  ] = useState("");
+  const [
+    editingBatchSalesEnd,
+    setEditingBatchSalesEnd
+  ] = useState("");
+  const [
+    editingBatchIsVisible,
+    setEditingBatchIsVisible
+  ] = useState(true);
+  const [isSavingBatch, setIsSavingBatch] =
+    useState(false);
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [isCreateTicketOpen, setIsCreateTicketOpen] =
+    useState(false);
+  const [isCreateBatchOpen, setIsCreateBatchOpen] =
+    useState(false);
   const [activeSection, setActiveSection] =
     useState<EventWorkspaceSection>("overview");
   const [formFields, setFormFields] =
@@ -548,7 +635,7 @@ export function EventWorkspaceClient({
         | ApiErrorResponse;
 
       if (!response.ok) {
-        setError(
+        setTicketError(
           !Array.isArray(data) && data.message
             ? data.message
             : "Não foi possível carregar os ingressos."
@@ -563,7 +650,7 @@ export function EventWorkspaceClient({
         current || loadedTickets[0]?.id || ""
       );
     } catch {
-      setError(
+      setTicketError(
         "Não foi possível carregar os ingressos agora."
       );
     } finally {
@@ -637,13 +724,34 @@ export function EventWorkspaceClient({
 
     const form = formEvent.currentTarget;
     const formData = new FormData(form);
+    const salesStart = String(
+      formData.get("salesStart") ?? ""
+    );
+    const salesEnd = String(
+      formData.get("salesEnd") ?? ""
+    );
 
-    setError(null);
+    setTicketError(null);
     setTicketMessage(null);
+
+    if (
+      !salesStart ||
+      !salesEnd ||
+      new Date(salesEnd) <= new Date(salesStart)
+    ) {
+      setTicketError(
+        "O término das vendas deve ser posterior ao início."
+      );
+      return;
+    }
+
+    const isVisible =
+      formData.get("ticketVisible") === "on";
+
     setIsCreatingTicket(true);
 
     try {
-      const response = await fetch(
+      const ticketResponse = await fetch(
         `${API_BASE_URL}/api/events/${eventId}/tickets`,
         {
           body: JSON.stringify({
@@ -654,11 +762,8 @@ export function EventWorkspaceClient({
               String(
                 formData.get("ticketDescription") ?? ""
               ).trim() || undefined,
-            isFree:
-              String(formData.get("ticketType")) ===
-              "free",
-            isVisible:
-              formData.get("ticketVisible") === "on"
+            isFree: ticketIsFree,
+            isVisible
           }),
           headers: {
             Authorization: `Bearer ${token}`,
@@ -668,31 +773,73 @@ export function EventWorkspaceClient({
         }
       );
 
-      const data = await response.json() as
+      const ticketData = await ticketResponse.json() as
         | EventTicket
         | ApiErrorResponse;
 
-      if (!response.ok) {
-        setError(
-          "message" in data && data.message
-            ? data.message
+      if (!ticketResponse.ok) {
+        setTicketError(
+          "message" in ticketData && ticketData.message
+            ? ticketData.message
             : "Não foi possível criar o ingresso."
         );
         return;
       }
 
-      const createdTicket = data as EventTicket;
+      const createdTicket = ticketData as EventTicket;
 
-      setTickets((current) => [
-        ...current,
-        createdTicket
-      ]);
       setSelectedTicketId(createdTicket.id);
-      setTicketMessage("Ingresso criado.");
+
+      const batchResponse = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/ticket-batches`,
+        {
+          body: JSON.stringify({
+            ticketId: createdTicket.id,
+            name: String(
+              formData.get("batchName") ?? ""
+            ).trim(),
+            quantity: Number(
+              formData.get("batchQuantity")
+            ),
+            price: ticketIsFree
+              ? 0
+              : Number(formData.get("batchPrice")),
+            salesStart,
+            salesEnd,
+            isVisible
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const batchFailureMessage = batchResponse.ok
+        ? null
+        : ((await batchResponse
+            .json()
+            .catch(() => null)) as
+            | ApiErrorResponse
+            | null)?.message ??
+          "não foi possível criar o lote.";
+
+      await loadTickets();
+
+      if (batchFailureMessage) {
+        setTicketError(
+          `O ingresso "${createdTicket.name}" foi criado, mas o lote não: ${batchFailureMessage} Use "Adicionar lote" para cadastrar o lote deste ingresso.`
+        );
+        setIsCreateTicketOpen(false);
+        return;
+      }
+
+      setTicketMessage("Ingresso e lote criados.");
       form.reset();
-      setTicketIsFree(true);
+      setIsCreateTicketOpen(false);
     } catch {
-      setError(
+      setTicketError(
         "Não foi possível criar o ingresso agora."
       );
     } finally {
@@ -717,14 +864,32 @@ export function EventWorkspaceClient({
     const selectedTicket = tickets.find(
       (ticket) => ticket.id === selectedTicketId
     );
+    const salesStart = String(
+      formData.get("salesStart") ?? ""
+    );
+    const salesEnd = String(
+      formData.get("salesEnd") ?? ""
+    );
 
     if (!selectedTicket) {
-      setError("Selecione um ingresso.");
+      setTicketError("Selecione um ingresso.");
       return;
     }
 
-    setError(null);
+    setTicketError(null);
     setTicketMessage(null);
+
+    if (
+      !salesStart ||
+      !salesEnd ||
+      new Date(salesEnd) <= new Date(salesStart)
+    ) {
+      setTicketError(
+        "O término das vendas deve ser posterior ao início."
+      );
+      return;
+    }
+
     setIsCreatingBatch(true);
 
     try {
@@ -742,12 +907,8 @@ export function EventWorkspaceClient({
             price: selectedTicket.isFree
               ? 0
               : Number(formData.get("batchPrice")),
-            salesStart: String(
-              formData.get("salesStart") ?? ""
-            ),
-            salesEnd: String(
-              formData.get("salesEnd") ?? ""
-            ),
+            salesStart,
+            salesEnd,
             isVisible:
               formData.get("batchVisible") === "on"
           }),
@@ -764,7 +925,7 @@ export function EventWorkspaceClient({
         | ApiErrorResponse;
 
       if (!response.ok) {
-        setError(
+        setTicketError(
           "message" in data && data.message
             ? data.message
             : "Não foi possível criar o lote."
@@ -789,13 +950,246 @@ export function EventWorkspaceClient({
       );
       setTicketMessage("Lote criado.");
       form.reset();
+      setIsCreateBatchOpen(false);
     } catch {
-      setError(
+      setTicketError(
         "Não foi possível criar o lote agora."
       );
     } finally {
       setIsCreatingBatch(false);
     }
+  }
+
+  async function handleUpdateTicket() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return false;
+    }
+
+    if (!editingTicketId) {
+      return false;
+    }
+
+    setTicketError(null);
+    setTicketMessage(null);
+    setIsSavingTicket(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/tickets/${editingTicketId}`,
+        {
+          body: JSON.stringify({
+            name: editingTicketName.trim(),
+            description:
+              editingTicketDescription.trim(),
+            isFree: editingTicketIsFree,
+            isVisible: editingTicketIsVisible
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventTicket
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setTicketError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar o ingresso."
+        );
+        return false;
+      }
+
+      return true;
+    } catch {
+      setTicketError(
+        "Não foi possível atualizar o ingresso agora."
+      );
+      return false;
+    } finally {
+      setIsSavingTicket(false);
+    }
+  }
+
+  async function handleUpdateBatch() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return false;
+    }
+
+    if (!editingBatchId) {
+      return false;
+    }
+
+    setTicketError(null);
+    setTicketMessage(null);
+    setIsSavingBatch(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/ticket-batches/${editingBatchId}`,
+        {
+          body: JSON.stringify({
+            name: editingBatchName.trim(),
+            quantity: Number(editingBatchQuantity),
+            price: editingTicketIsFree
+              ? 0
+              : Number(editingBatchPrice),
+            salesStart: editingBatchSalesStart,
+            salesEnd: editingBatchSalesEnd,
+            isVisible: editingBatchIsVisible
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | TicketBatch
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setTicketError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar o lote."
+        );
+        return false;
+      }
+
+      return true;
+    } catch {
+      setTicketError(
+        "Não foi possível atualizar o lote agora."
+      );
+      return false;
+    } finally {
+      setIsSavingBatch(false);
+    }
+  }
+
+  function closeTicketEditor() {
+    setEditingTicketId(null);
+    setEditingBatchId(null);
+  }
+
+  function closeTicketDialog() {
+    setIsCreateTicketOpen(false);
+    setIsCreateBatchOpen(false);
+    setTicketIsFree(true);
+    setTicketError(null);
+    closeTicketEditor();
+  }
+
+  async function handleSaveTicketRow(
+    formEvent: React.FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const sold = editingBatch?._count.registrations ?? 0;
+    const nextQuantity = Number(editingBatchQuantity);
+    const nextPrice = editingTicketIsFree
+      ? 0
+      : Number(editingBatchPrice);
+
+    if (editingBatch) {
+      if (
+        !Number.isInteger(nextQuantity) ||
+        nextQuantity < 1 ||
+        nextQuantity < sold
+      ) {
+        setTicketError(
+          nextQuantity < sold
+            ? "A quantidade não pode ser menor que as unidades já vendidas."
+            : "Informe uma quantidade válida."
+        );
+        return;
+      }
+
+      if (
+        !editingBatchSalesStart ||
+        !editingBatchSalesEnd ||
+        new Date(editingBatchSalesEnd) <=
+          new Date(editingBatchSalesStart)
+      ) {
+        setTicketError(
+          "O término das vendas deve ser posterior ao início."
+        );
+        return;
+      }
+
+      if (
+        !editingTicketIsFree &&
+        (!Number.isFinite(nextPrice) || nextPrice < 0)
+      ) {
+        setTicketError("Informe um valor válido.");
+        return;
+      }
+    }
+
+    const shouldUpdateTicket =
+      editingTicket !== null &&
+      (editingTicketName.trim() !== editingTicket.name ||
+        editingTicketDescription.trim() !==
+          (editingTicket.description ?? "").trim() ||
+        editingTicketIsFree !== editingTicket.isFree ||
+        editingTicketIsVisible !==
+          editingTicket.isVisible);
+    const shouldUpdateBatch =
+      editingBatch !== null &&
+      (editingBatchName.trim() !== editingBatch.name ||
+        nextQuantity !== editingBatch.quantity ||
+        nextPrice !== Number(editingBatch.price) ||
+        editingBatchSalesStart !==
+          formatDateTimeLocal(editingBatch.salesStart) ||
+        editingBatchSalesEnd !==
+          formatDateTimeLocal(editingBatch.salesEnd) ||
+        editingBatchIsVisible !== editingBatch.isVisible);
+
+    if (!shouldUpdateTicket && !shouldUpdateBatch) {
+      closeTicketEditor();
+      return;
+    }
+
+    if (
+      shouldUpdateTicket &&
+      !(await handleUpdateTicket())
+    ) {
+      return;
+    }
+
+    if (
+      shouldUpdateBatch &&
+      !(await handleUpdateBatch())
+    ) {
+      if (shouldUpdateTicket) {
+        await loadTickets();
+      }
+      return;
+    }
+
+    await loadTickets();
+    setTicketMessage(
+      shouldUpdateTicket && shouldUpdateBatch
+        ? "Ingresso e lote atualizados."
+        : shouldUpdateTicket
+          ? "Ingresso atualizado."
+          : "Lote atualizado."
+    );
+    closeTicketEditor();
   }
 
   async function handleCreateFormField(
@@ -1980,6 +2374,54 @@ export function EventWorkspaceClient({
       setIsUpdatingPublicationState(false);
     }
   }
+
+  const editingTicket =
+    tickets.find((ticket) => ticket.id === editingTicketId) ??
+    null;
+  const editingBatch =
+    tickets
+      .flatMap((ticket) => ticket.batches)
+      .find((batch) => batch.id === editingBatchId) ??
+    null;
+
+  const isTicketDialogOpen =
+    isCreateTicketOpen ||
+    isCreateBatchOpen ||
+    editingTicket !== null ||
+    editingBatch !== null;
+
+  const ticketRows = tickets.flatMap((ticket) =>
+    ticket.batches.length > 0
+      ? ticket.batches.map((batch) => ({
+          batch: batch as TicketBatch | null,
+          key: `${ticket.id}:${batch.id}`,
+          ticket
+        }))
+      : [
+          {
+            batch: null as TicketBatch | null,
+            key: ticket.id,
+            ticket
+          }
+        ]
+  );
+
+  const normalizedTicketSearch = ticketSearch
+    .trim()
+    .toLowerCase();
+
+  const visibleTicketRows = normalizedTicketSearch
+    ? ticketRows.filter(
+        (row) =>
+          row.ticket.name
+            .toLowerCase()
+            .includes(normalizedTicketSearch) ||
+          (row.batch?.name
+            .toLowerCase()
+            .includes(normalizedTicketSearch) ??
+            false)
+      )
+    : ticketRows;
 
   return (
     <main
@@ -3259,6 +3701,7 @@ export function EventWorkspaceClient({
             ) : null}
 
             {activeSection === "tickets" ? (
+              <>
               <section
                 id="ingressos"
                 style={{
@@ -3271,28 +3714,104 @@ export function EventWorkspaceClient({
                   padding: "24px"
                 }}
               >
-                <header>
-                  <p
+                <header
+                  style={{
+                    display: "grid",
+                    gap: "18px"
+                  }}
+                >
+                  <div>
+                    <p
+                      style={{
+                        color: "#60a5fa",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        letterSpacing: "0.08em",
+                        margin: "0 0 8px",
+                        textTransform: "uppercase"
+                      }}
+                    >
+                      Ingressos
+                    </p>
+                    <h2
+                      style={{
+                        color: "#ffffff",
+                        fontSize: "24px",
+                        margin: 0
+                      }}
+                    >
+                      Gerenciar ingressos
+                    </h2>
+                  </div>
+                  <div
                     style={{
-                      color: "#60a5fa",
-                      fontSize: "13px",
-                      fontWeight: 900,
-                      letterSpacing: "0.08em",
-                      margin: "0 0 8px",
-                      textTransform: "uppercase"
+                      display: "grid",
+                      gap: "10px",
+                      justifyItems: "start"
                     }}
                   >
-                    Ingressos
-                  </p>
-                  <h2
-                    style={{
-                      color: "#ffffff",
-                      fontSize: "24px",
-                      margin: 0
-                    }}
-                  >
-                    Ingressos e lotes
-                  </h2>
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "14px",
+                        margin: 0
+                      }}
+                    >
+                      O que você deseja criar?
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px"
+                      }}
+                    >
+                      {(
+                        [
+                          {
+                            isFree: false,
+                            label: "Ingresso pago"
+                          },
+                          {
+                            isFree: true,
+                            label: "Ingresso gratuito"
+                          }
+                        ] as const
+                      ).map((action) => (
+                        <button
+                          key={action.label}
+                          onClick={() => {
+                            setIsCreateTicketOpen(true);
+                            setIsCreateBatchOpen(false);
+                            setEditingTicketId(null);
+                            setEditingBatchId(null);
+                            setTicketIsFree(action.isFree);
+                            setTicketMessage(null);
+                            setTicketError(null);
+                          }}
+                          style={{
+                            background: action.isFree
+                              ? "transparent"
+                              : "#2563eb",
+                            border: action.isFree
+                              ? "1px solid rgba(96, 165, 250, 0.45)"
+                              : "1px solid #2563eb",
+                            borderRadius: "10px",
+                            color: action.isFree
+                              ? "#93c5fd"
+                              : "#ffffff",
+                            flexShrink: 0,
+                            fontWeight: 900,
+                            padding: "8px 12px",
+                            whiteSpace: "nowrap"
+                          }}
+                          type="button"
+                        >
+                          + {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </header>
 
                 {ticketMessage ? (
@@ -3311,223 +3830,23 @@ export function EventWorkspaceClient({
                   </p>
                 ) : null}
 
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "18px",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(280px, 1fr))"
-                  }}
-                >
-                  <form
-                    onSubmit={handleCreateTicket}
+                {ticketError && !isTicketDialogOpen ? (
+                  <p
                     style={{
+                      background: "rgba(127, 29, 29, 0.32)",
                       border:
-                        "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "16px",
-                      display: "grid",
-                      gap: "12px",
-                      padding: "18px"
+                        "1px solid rgba(248, 113, 113, 0.28)",
+                      borderRadius: "12px",
+                      color: "#fecaca",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                      margin: 0,
+                      padding: "12px"
                     }}
                   >
-                    <h3 style={{ margin: 0 }}>
-                      Criar ingresso
-                    </h3>
-
-                    <input
-                      name="ticketName"
-                      placeholder="Nome do ingresso"
-                      required
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <textarea
-                      name="ticketDescription"
-                      placeholder="Descrição"
-                      rows={3}
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <select
-                      defaultValue="free"
-                      name="ticketType"
-                      onChange={(event) =>
-                        setTicketIsFree(
-                          event.target.value === "free"
-                        )
-                      }
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    >
-                      <option value="free">Gratuito</option>
-                      <option value="paid">Pago</option>
-                    </select>
-
-                    <label>
-                      <input
-                        defaultChecked
-                        name="ticketVisible"
-                        type="checkbox"
-                      />{" "}
-                      Visível para inscrição
-                    </label>
-
-                    <button
-                      disabled={isCreatingTicket}
-                      style={{
-                        background: "#2563eb",
-                        border: 0,
-                        borderRadius: "10px",
-                        color: "#ffffff",
-                        fontWeight: 900,
-                        padding: "12px"
-                      }}
-                      type="submit"
-                    >
-                      {isCreatingTicket
-                        ? "Criando..."
-                        : ticketIsFree
-                          ? "Criar ingresso gratuito"
-                          : "Criar ingresso pago"}
-                    </button>
-                  </form>
-
-                  <form
-                    onSubmit={handleCreateBatch}
-                    style={{
-                      border:
-                        "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "16px",
-                      display: "grid",
-                      gap: "12px",
-                      padding: "18px"
-                    }}
-                  >
-                    <h3 style={{ margin: 0 }}>Criar lote</h3>
-
-                    <select
-                      onChange={(event) =>
-                        setSelectedTicketId(
-                          event.target.value
-                        )
-                      }
-                      required
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                      value={selectedTicketId}
-                    >
-                      <option value="">Selecione o ingresso</option>
-                      {tickets.map((ticket) => (
-                        <option
-                          key={ticket.id}
-                          value={ticket.id}
-                        >
-                          {ticket.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      name="batchName"
-                      placeholder="Nome do lote"
-                      required
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <input
-                      min="1"
-                      name="batchQuantity"
-                      placeholder="Quantidade"
-                      required
-                      type="number"
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <input
-                      disabled={
-                        tickets.find(
-                          (ticket) =>
-                            ticket.id === selectedTicketId
-                        )?.isFree ?? true
-                      }
-                      min="0"
-                      name="batchPrice"
-                      placeholder="Preço"
-                      required
-                      step="0.01"
-                      type="number"
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <input
-                      name="salesStart"
-                      required
-                      type="datetime-local"
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <input
-                      name="salesEnd"
-                      required
-                      type="datetime-local"
-                      style={{
-                        borderRadius: "10px",
-                        padding: "12px"
-                      }}
-                    />
-
-                    <label>
-                      <input
-                        defaultChecked
-                        name="batchVisible"
-                        type="checkbox"
-                      />{" "}
-                      Lote visível
-                    </label>
-
-                    <button
-                      disabled={
-                        isCreatingBatch ||
-                        !selectedTicketId
-                      }
-                      style={{
-                        background: "#2563eb",
-                        border: 0,
-                        borderRadius: "10px",
-                        color: "#ffffff",
-                        fontWeight: 900,
-                        padding: "12px"
-                      }}
-                      type="submit"
-                    >
-                      {isCreatingBatch
-                        ? "Criando..."
-                        : "Criar lote"}
-                    </button>
-                  </form>
-                </div>
+                    {ticketError}
+                  </p>
+                ) : null}
 
                 {isLoadingTickets ? (
                   <p>Carregando ingressos...</p>
@@ -3540,70 +3859,164 @@ export function EventWorkspaceClient({
                   </p>
                 ) : null}
 
-                {tickets.map((ticket) => (
-                  <article
-                    key={ticket.id}
+                {tickets.length > 0 ? (
+                  <div
                     style={{
-                      border:
-                        "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "16px",
-                      padding: "18px"
+                      display: "grid",
+                      gap: "6px",
+                      maxWidth: "360px"
                     }}
                   >
-                    <h3 style={{ marginTop: 0 }}>
-                      {ticket.name}
-                    </h3>
-                    {ticket.description?.trim() ? (
-                      <p>{ticket.description}</p>
-                    ) : null}
-                    <p>
-                      {ticket.isFree ? "Gratuito" : "Pago"}
-                      {" - "}
-                      {ticket.isVisible
-                        ? "Visível"
-                        : "Oculto"}
-                    </p>
+                    <label
+                      htmlFor="ticket-search"
+                      style={{
+                        color: "#cbd5e1",
+                        fontSize: "13px",
+                        fontWeight: 700
+                      }}
+                    >
+                      Buscar ingressos
+                    </label>
+                    <input
+                      id="ticket-search"
+                      onChange={(searchEvent) =>
+                        setTicketSearch(
+                          searchEvent.target.value
+                        )
+                      }
+                      placeholder="Buscar..."
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        font: "inherit",
+                        padding: "11px 14px",
+                        width: "100%"
+                      }}
+                      type="search"
+                      value={ticketSearch}
+                    />
+                  </div>
+                ) : null}
 
-                    {ticket.batches.length === 0 ? (
-                      <p>
-                        Nenhum lote cadastrado neste ingresso.
+                {tickets.length > 0 ? (
+                  <div>
+                    <div
+                      style={{
+                        alignItems: "end",
+                        borderBottom:
+                          "1px solid rgba(148, 163, 184, 0.22)",
+                        color: "#94a3b8",
+                        display: "grid",
+                        fontSize: "12px",
+                        fontWeight: 900,
+                        gap: "12px",
+                        gridTemplateColumns:
+                          TICKET_LIST_COLUMNS,
+                        lineHeight: 1.3,
+                        padding: "0 0 10px"
+                      }}
+                    >
+                      {[
+                        "Tipo",
+                        "Vendidos/total",
+                        "Valor a receber",
+                        "Taxa",
+                        "Valor do comprador",
+                        "Visibilidade do ingresso"
+                      ].map((columnLabel) => (
+                        <span
+                          key={columnLabel}
+                          style={{
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                        >
+                          {columnLabel}
+                        </span>
+                      ))}
+                      <span style={{ minWidth: 0 }} />
+                    </div>
+
+                    {visibleTicketRows.length === 0 ? (
+                      <p
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: "13px",
+                          margin: "14px 0 0"
+                        }}
+                      >
+                        Nenhum ingresso encontrado para
+                        esta busca.
                       </p>
                     ) : null}
 
-                    {ticket.batches.map((batch) => {
-                      const sold =
-                        batch._count.registrations;
-                      const available = Math.max(
-                        batch.quantity - sold,
-                        0
-                      );
-                      const saleStatus =
-                        getTicketBatchSaleStatus(
-                          batch.quantity,
-                          batch.salesStart,
-                          batch.salesEnd,
-                          sold
-                        );
+                    {visibleTicketRows.map((row) => {
+                      const sold = row.batch
+                        ? row.batch._count.registrations
+                        : 0;
+                      const available = row.batch
+                        ? Math.max(
+                            row.batch.quantity - sold,
+                            0
+                          )
+                        : 0;
+                      const soldPercent = row.batch
+                        ? getTicketBatchSoldPercent(
+                            sold,
+                            row.batch.quantity
+                          )
+                        : 0;
+                      const saleStatus = row.batch
+                        ? getTicketBatchSaleStatus(
+                            row.batch.quantity,
+                            row.batch.salesStart,
+                            row.batch.salesEnd,
+                            sold
+                          )
+                        : null;
 
                       return (
-                        <div
-                          key={batch.id}
+                      <div
+                        key={row.key}
+                        style={{
+                          alignItems: "center",
+                          borderBottom:
+                            "1px solid rgba(148, 163, 184, 0.14)",
+                          display: "grid",
+                          gap: "12px",
+                          gridTemplateColumns:
+                            TICKET_LIST_COLUMNS,
+                          padding: "12px 0"
+                        }}
+                      >
+                        <span
                           style={{
-                            background: "#0f172a",
-                            borderRadius: "12px",
-                            marginTop: "10px",
-                            padding: "14px"
+                            display: "grid",
+                            gap: "4px",
+                            justifyItems: "start",
+                            minWidth: 0
                           }}
                         >
-                          <div
+                          <span
                             style={{
-                              alignItems: "center",
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "10px"
+                              color: "#ffffff",
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              lineHeight: 1.35,
+                              minWidth: 0,
+                              overflowWrap: "anywhere"
                             }}
                           >
-                            <strong>{batch.name}</strong>
+                            {getTicketRowIdentity(
+                              row.ticket.name,
+                              row.batch?.name ?? null,
+                              event?.title
+                            )}
+                          </span>
+                          {saleStatus ? (
                             <span
                               style={{
                                 background:
@@ -3619,37 +4032,1699 @@ export function EventWorkspaceClient({
                                   saleStatus === "À venda"
                                     ? "#93c5fd"
                                     : "#cbd5e1",
-                                fontSize: "13px",
+                                fontSize: "11px",
                                 fontWeight: 900,
-                                padding: "8px 12px"
+                                justifySelf: "start",
+                                lineHeight: 1.3,
+                                padding: "2px 8px",
+                                whiteSpace: "nowrap"
                               }}
                             >
                               {saleStatus}
                             </span>
-                          </div>
-                          <p>
-                            {formatMoney(batch.price)}
-                            {" - "}
-                            {sold} vendidos
-                            {" - "}
-                            {available} disponíveis
-                            {" - "}
-                            {batch.isVisible
-                              ? "Visível"
-                              : "Oculto"}
-                          </p>
-                          <small>
-                            {"de "}
-                            {formatDate(batch.salesStart)}
-                            {" até "}
-                            {formatDate(batch.salesEnd)}
-                          </small>
-                        </div>
+                          ) : null}
+                        </span>
+                        <span
+                          style={{
+                            display: "grid",
+                            gap: "4px",
+                            minWidth: 0
+                          }}
+                        >
+                          {row.batch ? (
+                            <>
+                              <span
+                                style={{
+                                  display: "block",
+                                  minWidth: 0,
+                                  position: "relative",
+                                  width: "100%"
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    background:
+                                      "rgba(148, 163, 184, 0.18)",
+                                    borderRadius: "999px",
+                                    display: "block",
+                                    height: "18px",
+                                    minWidth: 0,
+                                    width: "100%"
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      background: "#38bdf8",
+                                      borderRadius: "999px",
+                                      display: "block",
+                                      height: "100%",
+                                      width: `${soldPercent}%`
+                                    }}
+                                  />
+                                </span>
+                                <span
+                                  style={{
+                                    alignItems: "center",
+                                    color: "#f8fafc",
+                                    display: "flex",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    inset: 0,
+                                    justifyContent:
+                                      "space-between",
+                                    padding: "0 8px",
+                                    position: "absolute"
+                                  }}
+                                >
+                                  <span>{sold}</span>
+                                  <span>
+                                    {row.batch.quantity}
+                                  </span>
+                                </span>
+                              </span>
+                              <span
+                                style={{
+                                  color: "#94a3b8",
+                                  fontSize: "11px",
+                                  lineHeight: 1.3,
+                                  minWidth: 0,
+                                  overflowWrap: "anywhere"
+                                }}
+                              >
+                                {available} disponíveis
+                              </span>
+                            </>
+                          ) : (
+                            <span
+                              style={{
+                                color: "#cbd5e1",
+                                fontSize: "13px",
+                                lineHeight: 1.35
+                              }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "13px",
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                          title="Valor líquido do organizador não existe no domínio atual."
+                        >
+                          —
+                        </span>
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "13px",
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                          title="Taxa não existe no domínio atual."
+                        >
+                          —
+                        </span>
+                        <span
+                          style={{
+                            color: "#cbd5e1",
+                            fontSize: "13px",
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                        >
+                          {row.batch
+                            ? formatMoney(row.batch.price)
+                            : "—"}
+                        </span>
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "13px",
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                        >
+                          {(
+                            row.batch
+                              ? row.batch.isVisible
+                              : row.ticket.isVisible
+                          )
+                            ? "Visível"
+                            : "Oculto"}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditingTicketId(
+                              row.ticket.id
+                            );
+                            setEditingTicketName(
+                              row.ticket.name
+                            );
+                            setEditingTicketDescription(
+                              row.ticket.description ?? ""
+                            );
+                            setEditingTicketIsFree(
+                              row.ticket.isFree
+                            );
+                            setEditingTicketIsVisible(
+                              row.ticket.isVisible
+                            );
+                            setEditingBatchId(
+                              row.batch?.id ?? null
+                            );
+                            setEditingBatchName(
+                              row.batch?.name ?? ""
+                            );
+                            setEditingBatchQuantity(
+                              row.batch
+                                ? String(row.batch.quantity)
+                                : ""
+                            );
+                            setEditingBatchPrice(
+                              row.batch
+                                ? String(row.batch.price)
+                                : ""
+                            );
+                            setEditingBatchSalesStart(
+                              row.batch
+                                ? formatDateTimeLocal(
+                                    row.batch.salesStart
+                                  )
+                                : ""
+                            );
+                            setEditingBatchSalesEnd(
+                              row.batch
+                                ? formatDateTimeLocal(
+                                    row.batch.salesEnd
+                                  )
+                                : ""
+                            );
+                            setEditingBatchIsVisible(
+                              row.batch?.isVisible ?? true
+                            );
+                            setIsCreateTicketOpen(false);
+                            setIsCreateBatchOpen(false);
+                            setTicketMessage(null);
+                            setTicketError(null);
+                          }}
+                          style={{
+                            background: "transparent",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "10px",
+                            color: "#e2e8f0",
+                            fontSize: "12px",
+                            fontWeight: 900,
+                            justifySelf: "end",
+                            padding: "7px 10px",
+                            whiteSpace: "nowrap"
+                          }}
+                          type="button"
+                        >
+                          Editar
+                        </button>
+                      </div>
                       );
                     })}
-                  </article>
-                ))}
+                  </div>
+                ) : null}
+
+                <button
+                  disabled={tickets.length === 0}
+                  onClick={() => {
+                    setIsCreateBatchOpen(true);
+                    setIsCreateTicketOpen(false);
+                    setEditingTicketId(null);
+                    setEditingBatchId(null);
+                    setTicketMessage(null);
+                    setTicketError(null);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: 0,
+                    color: "#94a3b8",
+                    cursor:
+                      tickets.length === 0
+                        ? "not-allowed"
+                        : "pointer",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    justifySelf: "start",
+                    opacity:
+                      tickets.length === 0 ? 0.5 : 1,
+                    padding: "2px 0",
+                    textDecoration: "underline",
+                    whiteSpace: "nowrap"
+                  }}
+                  title="Adicionar um novo lote a um ingresso já existente"
+                  type="button"
+                >
+                  Adicionar lote
+                </button>
               </section>
+
+                {isTicketDialogOpen ? (
+                  <div
+                    onClick={closeTicketDialog}
+                    style={{
+                      alignItems: "center",
+                      background: "rgba(2, 6, 23, 0.72)",
+                      display: "flex",
+                      inset: 0,
+                      justifyContent: "center",
+                      padding: "24px",
+                      position: "fixed",
+                      zIndex: 60
+                    }}
+                  >
+                    <div
+                      onClick={(clickEvent) =>
+                        clickEvent.stopPropagation()
+                      }
+                      style={{
+                        background:
+                          "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "28px",
+                        boxShadow:
+                          "0 28px 90px rgba(2, 6, 23, 0.48)",
+                        display: "grid",
+                        gap: "20px",
+                        maxHeight: "calc(100vh - 48px)",
+                        maxWidth: "760px",
+                        overflow: "auto",
+                        padding: "28px",
+                        width: "100%"
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end"
+                        }}
+                      >
+                        <button
+                          aria-label="Fechar"
+                          onClick={closeTicketDialog}
+                          style={{
+                            background: "transparent",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "999px",
+                            color: "#e2e8f0",
+                            fontSize: "16px",
+                            fontWeight: 900,
+                            height: "32px",
+                            lineHeight: 1,
+                            width: "32px"
+                          }}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      {ticketError ? (
+                        <p
+                          style={{
+                            background:
+                              "rgba(127, 29, 29, 0.32)",
+                            border:
+                              "1px solid rgba(248, 113, 113, 0.28)",
+                            borderRadius: "12px",
+                            color: "#fecaca",
+                            fontSize: "13px",
+                            lineHeight: 1.5,
+                            margin: 0,
+                            padding: "12px"
+                          }}
+                        >
+                          {ticketError}
+                        </p>
+                      ) : null}
+
+                      {isCreateTicketOpen ? (
+                        <form
+                          onSubmit={handleCreateTicket}
+                          style={{
+                            display: "grid",
+                            gap: "18px"
+                          }}
+                        >
+                          <h2
+                            style={{
+                              color: "#ffffff",
+                              fontSize: "24px",
+                              letterSpacing: "-0.03em",
+                              margin: 0
+                            }}
+                          >
+                            {ticketIsFree
+                              ? "Criar ingresso gratuito"
+                              : "Criar ingresso pago"}
+                          </h2>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "12px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#60a5fa",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                                letterSpacing: "0.08em",
+                                margin: 0,
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              Sobre o ingresso
+                            </p>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-ticket-name"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Título do ingresso
+                              </label>
+                              <input
+                                id="create-ticket-name"
+                                maxLength={80}
+                                name="ticketName"
+                                placeholder="Ingresso"
+                                required
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-ticket-description"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Descrição
+                              </label>
+                              <textarea
+                                id="create-ticket-description"
+                                maxLength={500}
+                                name="ticketDescription"
+                                rows={3}
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "10px",
+                                gridTemplateColumns:
+                                  "repeat(auto-fit, minmax(180px, 1fr))"
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="create-batch-quantity"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Quantidade
+                                </label>
+                                <input
+                                  id="create-batch-quantity"
+                                  min="1"
+                                  name="batchQuantity"
+                                  required
+                                  step="1"
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  type="number"
+                                />
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="create-batch-price"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Valor do participante
+                                </label>
+                                {ticketIsFree ? (
+                                  <input
+                                    defaultValue="Grátis"
+                                    disabled
+                                    id="create-batch-price"
+                                    style={{
+                                      background:
+                                        "rgba(148, 163, 184, 0.12)",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.22)",
+                                      borderRadius: "12px",
+                                      color: "#94a3b8",
+                                      font: "inherit",
+                                      padding: "13px 14px"
+                                    }}
+                                  />
+                                ) : (
+                                  <input
+                                    id="create-batch-price"
+                                    min="0"
+                                    name="batchPrice"
+                                    required
+                                    step="0.01"
+                                    style={{
+                                      background: "#0f172a",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.3)",
+                                      borderRadius: "12px",
+                                      color: "#ffffff",
+                                      font: "inherit",
+                                      padding: "13px 14px"
+                                    }}
+                                    type="number"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "12px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#60a5fa",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                                letterSpacing: "0.08em",
+                                margin: 0,
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              Quando o ingresso será
+                              vendido
+                            </p>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "10px",
+                                gridTemplateColumns:
+                                  "repeat(auto-fit, minmax(220px, 1fr))"
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="create-batch-sales-start"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Data e hora de início
+                                </label>
+                                <input
+                                  id="create-batch-sales-start"
+                                  name="salesStart"
+                                  required
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  type="datetime-local"
+                                />
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="create-batch-sales-end"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Data e hora de término
+                                </label>
+                                <input
+                                  id="create-batch-sales-end"
+                                  name="salesEnd"
+                                  required
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  type="datetime-local"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "12px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#60a5fa",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                                letterSpacing: "0.08em",
+                                margin: 0,
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              Nome do lote
+                            </p>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-name"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Nome do lote
+                              </label>
+                              <input
+                                defaultValue="Primeiro lote"
+                                id="create-batch-name"
+                                maxLength={80}
+                                name="batchName"
+                                required
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <label
+                            htmlFor="create-ticket-visible"
+                            style={{
+                              alignItems: "center",
+                              color: "#e2e8f0",
+                              display: "flex",
+                              gap: "8px"
+                            }}
+                          >
+                            <input
+                              defaultChecked
+                              id="create-ticket-visible"
+                              name="ticketVisible"
+                              type="checkbox"
+                            />{" "}
+                            Visibilidade do ingresso
+                          </label>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px"
+                            }}
+                          >
+                            <button
+                              disabled={isCreatingTicket}
+                              onClick={closeTicketDialog}
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.3)",
+                                borderRadius: "10px",
+                                color: "#e2e8f0",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              disabled={isCreatingTicket}
+                              style={{
+                                background: "#2563eb",
+                                border: 0,
+                                borderRadius: "10px",
+                                color: "#ffffff",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="submit"
+                            >
+                              {isCreatingTicket
+                                ? "Salvando..."
+                                : "Salvar"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
+
+                      {isCreateBatchOpen ? (
+                        <form
+                          onSubmit={handleCreateBatch}
+                          style={{
+                            display: "grid",
+                            gap: "12px"
+                          }}
+                        >
+                          <h2
+                            style={{
+                              color: "#ffffff",
+                              fontSize: "24px",
+                              letterSpacing: "-0.03em",
+                              margin: 0
+                            }}
+                          >
+                            Adicionar lote
+                          </h2>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "10px",
+                              gridTemplateColumns:
+                                "repeat(auto-fit, minmax(180px, 1fr))"
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-ticket"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Ingresso
+                              </label>
+                              <select
+                                id="create-batch-ticket"
+                                onChange={(event) =>
+                                  setSelectedTicketId(
+                                    event.target.value
+                                  )
+                                }
+                                required
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                                value={selectedTicketId}
+                              >
+                                <option value="">
+                                  Selecione o ingresso
+                                </option>
+                                {tickets.map((ticket) => (
+                                  <option
+                                    key={ticket.id}
+                                    value={ticket.id}
+                                  >
+                                    {ticket.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-only-name"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Nome do lote
+                              </label>
+                              <input
+                                id="create-batch-only-name"
+                                name="batchName"
+                                required
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-only-quantity"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Quantidade
+                              </label>
+                              <input
+                                id="create-batch-only-quantity"
+                                min="1"
+                                name="batchQuantity"
+                                required
+                                type="number"
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-only-price"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Valor do participante
+                              </label>
+                              <input
+                                disabled={
+                                  tickets.find(
+                                    (ticket) =>
+                                      ticket.id ===
+                                      selectedTicketId
+                                  )?.isFree ?? true
+                                }
+                                id="create-batch-only-price"
+                                min="0"
+                                name="batchPrice"
+                                required
+                                step="0.01"
+                                type="number"
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-only-sales-start"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Data e hora de início das
+                                vendas
+                              </label>
+                              <input
+                                id="create-batch-only-sales-start"
+                                name="salesStart"
+                                required
+                                type="datetime-local"
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "6px"
+                              }}
+                            >
+                              <label
+                                htmlFor="create-batch-only-sales-end"
+                                style={{
+                                  color: "#cbd5e1",
+                                  fontSize: "13px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Data e hora de término das
+                                vendas
+                              </label>
+                              <input
+                                id="create-batch-only-sales-end"
+                                name="salesEnd"
+                                required
+                                type="datetime-local"
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "13px 14px"
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <label
+                            style={{
+                              alignItems: "center",
+                              color: "#e2e8f0",
+                              display: "flex",
+                              gap: "8px"
+                            }}
+                          >
+                            <input
+                              defaultChecked
+                              name="batchVisible"
+                              type="checkbox"
+                            />{" "}
+                            Lote visível
+                          </label>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px"
+                            }}
+                          >
+                            <button
+                              onClick={() =>
+                                setIsCreateBatchOpen(false)
+                              }
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.3)",
+                                borderRadius: "10px",
+                                color: "#e2e8f0",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              disabled={
+                                isCreatingBatch ||
+                                !selectedTicketId
+                              }
+                              style={{
+                                background: "#2563eb",
+                                border: 0,
+                                borderRadius: "10px",
+                                color: "#ffffff",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="submit"
+                            >
+                              {isCreatingBatch
+                                ? "Criando..."
+                                : "Criar lote"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
+
+                      {(editingTicket || editingBatch) &&
+                      !isCreateTicketOpen &&
+                      !isCreateBatchOpen ? (
+                        <form
+                          onSubmit={handleSaveTicketRow}
+                          style={{
+                            display: "grid",
+                            gap: "20px"
+                          }}
+                        >
+                          <h2
+                            style={{
+                              color: "#ffffff",
+                              fontSize: "24px",
+                              letterSpacing: "-0.03em",
+                              margin: 0
+                            }}
+                          >
+                            {editingTicket
+                              ? editingTicketIsFree
+                                ? "Editar ingresso gratuito"
+                                : "Editar ingresso pago"
+                              : "Editar lote"}
+                          </h2>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "12px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#60a5fa",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                                letterSpacing: "0.08em",
+                                margin: 0,
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              Sobre o ingresso
+                            </p>
+
+                            {editingTicket ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="edit-ticket-name"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Título do ingresso
+                                </label>
+                                <input
+                                  id="edit-ticket-name"
+                                  maxLength={80}
+                                  onChange={(event) =>
+                                    setEditingTicketName(
+                                      event.target.value
+                                    )
+                                  }
+                                  required
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  value={editingTicketName}
+                                />
+                              </div>
+                            ) : null}
+
+                            {editingTicket ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="edit-ticket-description"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Descrição
+                                </label>
+                                <textarea
+                                  id="edit-ticket-description"
+                                  maxLength={500}
+                                  onChange={(event) =>
+                                    setEditingTicketDescription(
+                                      event.target.value
+                                    )
+                                  }
+                                  rows={3}
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  value={
+                                    editingTicketDescription
+                                  }
+                                />
+                              </div>
+                            ) : null}
+
+                            {editingTicket ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="edit-ticket-type"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Tipo
+                                </label>
+                                <select
+                                  id="edit-ticket-type"
+                                  onChange={(event) =>
+                                    setEditingTicketIsFree(
+                                      event.target.value ===
+                                        "free"
+                                    )
+                                  }
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  value={
+                                    editingTicketIsFree
+                                      ? "free"
+                                      : "paid"
+                                  }
+                                >
+                                  <option value="paid">
+                                    Pago
+                                  </option>
+                                  <option value="free">
+                                    Gratuito
+                                  </option>
+                                </select>
+                              </div>
+                            ) : null}
+
+                            {editingBatch ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "10px",
+                                  gridTemplateColumns:
+                                    "repeat(auto-fit, minmax(180px, 1fr))"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "6px"
+                                  }}
+                                >
+                                  <label
+                                    htmlFor="edit-batch-quantity"
+                                    style={{
+                                      color: "#cbd5e1",
+                                      fontSize: "13px",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    Quantidade
+                                  </label>
+                                  <input
+                                    id="edit-batch-quantity"
+                                    min={Math.max(
+                                      editingBatch._count
+                                        .registrations,
+                                      1
+                                    )}
+                                    onChange={(event) =>
+                                      setEditingBatchQuantity(
+                                        event.target.value
+                                      )
+                                    }
+                                    required
+                                    step="1"
+                                    style={{
+                                      background: "#0f172a",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.3)",
+                                      borderRadius: "12px",
+                                      color: "#ffffff",
+                                      font: "inherit",
+                                      padding: "13px 14px"
+                                    }}
+                                    type="number"
+                                    value={
+                                      editingBatchQuantity
+                                    }
+                                  />
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "6px"
+                                  }}
+                                >
+                                  <label
+                                    htmlFor="edit-batch-price"
+                                    style={{
+                                      color: "#cbd5e1",
+                                      fontSize: "13px",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    Valor do participante
+                                  </label>
+                                  {editingTicketIsFree ? (
+                                    <input
+                                      disabled
+                                      id="edit-batch-price"
+                                      style={{
+                                        background:
+                                          "rgba(148, 163, 184, 0.12)",
+                                        border:
+                                          "1px solid rgba(148, 163, 184, 0.22)",
+                                        borderRadius: "12px",
+                                        color: "#94a3b8",
+                                        font: "inherit",
+                                        padding: "13px 14px"
+                                      }}
+                                      value="Grátis"
+                                    />
+                                  ) : (
+                                    <input
+                                      id="edit-batch-price"
+                                      min="0"
+                                      onChange={(event) =>
+                                        setEditingBatchPrice(
+                                          event.target.value
+                                        )
+                                      }
+                                      required
+                                      step="0.01"
+                                      style={{
+                                        background:
+                                          "#0f172a",
+                                        border:
+                                          "1px solid rgba(148, 163, 184, 0.3)",
+                                        borderRadius: "12px",
+                                        color: "#ffffff",
+                                        font: "inherit",
+                                        padding: "13px 14px"
+                                      }}
+                                      type="number"
+                                      value={
+                                        editingBatchPrice
+                                      }
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {editingBatch ? (
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "12px"
+                              }}
+                            >
+                              <p
+                                style={{
+                                  color: "#60a5fa",
+                                  fontSize: "12px",
+                                  fontWeight: 900,
+                                  letterSpacing: "0.08em",
+                                  margin: 0,
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                Quando o ingresso será
+                                vendido
+                              </p>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "10px",
+                                  gridTemplateColumns:
+                                    "repeat(auto-fit, minmax(220px, 1fr))"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "6px"
+                                  }}
+                                >
+                                  <label
+                                    htmlFor="edit-batch-sales-start"
+                                    style={{
+                                      color: "#cbd5e1",
+                                      fontSize: "13px",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    Data e hora de início
+                                  </label>
+                                  <input
+                                    id="edit-batch-sales-start"
+                                    onChange={(event) =>
+                                      setEditingBatchSalesStart(
+                                        event.target.value
+                                      )
+                                    }
+                                    required
+                                    style={{
+                                      background: "#0f172a",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.3)",
+                                      borderRadius: "12px",
+                                      color: "#ffffff",
+                                      font: "inherit",
+                                      padding: "13px 14px"
+                                    }}
+                                    type="datetime-local"
+                                    value={
+                                      editingBatchSalesStart
+                                    }
+                                  />
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "6px"
+                                  }}
+                                >
+                                  <label
+                                    htmlFor="edit-batch-sales-end"
+                                    style={{
+                                      color: "#cbd5e1",
+                                      fontSize: "13px",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    Data e hora de término
+                                  </label>
+                                  <input
+                                    id="edit-batch-sales-end"
+                                    onChange={(event) =>
+                                      setEditingBatchSalesEnd(
+                                        event.target.value
+                                      )
+                                    }
+                                    required
+                                    style={{
+                                      background: "#0f172a",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.3)",
+                                      borderRadius: "12px",
+                                      color: "#ffffff",
+                                      font: "inherit",
+                                      padding: "13px 14px"
+                                    }}
+                                    type="datetime-local"
+                                    value={
+                                      editingBatchSalesEnd
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {editingBatch ? (
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "12px"
+                              }}
+                            >
+                              <p
+                                style={{
+                                  color: "#60a5fa",
+                                  fontSize: "12px",
+                                  fontWeight: 900,
+                                  letterSpacing: "0.08em",
+                                  margin: 0,
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                Nome do lote
+                              </p>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px"
+                                }}
+                              >
+                                <label
+                                  htmlFor="edit-batch-name"
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  Nome do lote
+                                </label>
+                                <input
+                                  id="edit-batch-name"
+                                  maxLength={80}
+                                  onChange={(event) =>
+                                    setEditingBatchName(
+                                      event.target.value
+                                    )
+                                  }
+                                  required
+                                  style={{
+                                    background: "#0f172a",
+                                    border:
+                                      "1px solid rgba(148, 163, 184, 0.3)",
+                                    borderRadius: "12px",
+                                    color: "#ffffff",
+                                    font: "inherit",
+                                    padding: "13px 14px"
+                                  }}
+                                  value={editingBatchName}
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "10px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#60a5fa",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                                letterSpacing: "0.08em",
+                                margin: 0,
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              Visibilidade
+                            </p>
+
+                            {editingTicket ? (
+                              <label
+                                htmlFor="edit-ticket-visible"
+                                style={{
+                                  alignItems: "center",
+                                  color: "#e2e8f0",
+                                  display: "flex",
+                                  gap: "8px"
+                                }}
+                              >
+                                <input
+                                  checked={
+                                    editingTicketIsVisible
+                                  }
+                                  id="edit-ticket-visible"
+                                  onChange={(event) =>
+                                    setEditingTicketIsVisible(
+                                      event.target.checked
+                                    )
+                                  }
+                                  type="checkbox"
+                                />{" "}
+                                Visibilidade do ingresso
+                              </label>
+                            ) : null}
+
+                            {editingBatch ? (
+                              <label
+                                htmlFor="edit-batch-visible"
+                                style={{
+                                  alignItems: "center",
+                                  color: "#e2e8f0",
+                                  display: "flex",
+                                  gap: "8px"
+                                }}
+                              >
+                                <input
+                                  checked={
+                                    editingBatchIsVisible
+                                  }
+                                  id="edit-batch-visible"
+                                  onChange={(event) =>
+                                    setEditingBatchIsVisible(
+                                      event.target.checked
+                                    )
+                                  }
+                                  type="checkbox"
+                                />{" "}
+                                Visibilidade do lote
+                              </label>
+                            ) : null}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "4px"
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                margin: 0
+                              }}
+                            >
+                              Vendidos
+                            </p>
+                            <p
+                              style={{
+                                color: "#e2e8f0",
+                                fontSize: "14px",
+                                fontWeight: 700,
+                                margin: 0
+                              }}
+                            >
+                              {String(
+                                editingBatch
+                                  ? editingBatch._count
+                                      .registrations
+                                  : editingTicket?._count
+                                      .registrations ?? 0
+                              )}
+                            </p>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px"
+                            }}
+                          >
+                            <button
+                              disabled={
+                                isSavingTicket ||
+                                isSavingBatch
+                              }
+                              onClick={closeTicketEditor}
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.3)",
+                                borderRadius: "10px",
+                                color: "#e2e8f0",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              disabled={
+                                isSavingTicket ||
+                                isSavingBatch
+                              }
+                              style={{
+                                background: "#2563eb",
+                                border: 0,
+                                borderRadius: "10px",
+                                color: "#ffffff",
+                                fontWeight: 900,
+                                padding: "10px 12px"
+                              }}
+                              type="submit"
+                            >
+                              {isSavingTicket ||
+                              isSavingBatch
+                                ? "Salvando..."
+                                : "Salvar"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             {activeSection === "registration-form" ? (
