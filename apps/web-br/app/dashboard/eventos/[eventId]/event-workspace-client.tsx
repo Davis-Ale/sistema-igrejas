@@ -330,6 +330,145 @@ function getTicketBatchSoldPercent(
   return Math.min((sold / quantity) * 100, 100);
 }
 
+function formFieldTypeNeedsOptions(
+  type: EventFormFieldType
+) {
+  return (
+    type === "SELECT" ||
+    type === "SINGLE_CHOICE" ||
+    type === "MULTIPLE_CHOICE"
+  );
+}
+
+function EventFormPreviewControl({
+  field,
+  value,
+  onChange
+}: {
+  field: EventFormField;
+  value: string | string[];
+  onChange: (next: string | string[]) => void;
+}) {
+  const controlStyle = {
+    borderRadius: "10px",
+    padding: "12px"
+  };
+  const stringValue =
+    typeof value === "string" ? value : "";
+  const multiValue = Array.isArray(value) ? value : [];
+
+  if (field.type === "PARAGRAPH") {
+    return (
+      <textarea
+        onChange={(changeEvent) =>
+          onChange(changeEvent.target.value)
+        }
+        rows={3}
+        style={controlStyle}
+        value={stringValue}
+      />
+    );
+  }
+
+  if (field.type === "SELECT") {
+    return (
+      <select
+        onChange={(changeEvent) =>
+          onChange(changeEvent.target.value)
+        }
+        style={controlStyle}
+        value={stringValue}
+      >
+        <option value="">Selecione...</option>
+        {field.options.map((option) => (
+          <option
+            key={option.id}
+            value={option.value}
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.type === "SINGLE_CHOICE") {
+    return (
+      <div>
+        {field.options.map((option) => (
+          <label
+            key={option.id}
+            style={{
+              display: "block",
+              margin: "8px 0"
+            }}
+          >
+            <input
+              checked={stringValue === option.value}
+              name={`preview-${field.id}`}
+              onChange={() => onChange(option.value)}
+              type="radio"
+              value={option.value}
+            />{" "}
+            {option.label}
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  if (field.type === "MULTIPLE_CHOICE") {
+    return (
+      <div>
+        {field.options.map((option) => {
+          const isChecked = multiValue.includes(
+            option.value
+          );
+
+          return (
+            <label
+              key={option.id}
+              style={{
+                display: "block",
+                margin: "8px 0"
+              }}
+            >
+              <input
+                checked={isChecked}
+                onChange={() => {
+                  if (isChecked) {
+                    onChange(
+                      multiValue.filter(
+                        (entry) => entry !== option.value
+                      )
+                    );
+                    return;
+                  }
+
+                  onChange([...multiValue, option.value]);
+                }}
+                type="checkbox"
+                value={option.value}
+              />{" "}
+              {option.label}
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <input
+      onChange={(changeEvent) =>
+        onChange(changeEvent.target.value)
+      }
+      style={controlStyle}
+      value={stringValue}
+    />
+  );
+}
+
 export function EventWorkspaceClient({
   eventId
 }: EventWorkspaceClientProps) {
@@ -412,14 +551,52 @@ export function EventWorkspaceClient({
     useState<EventWorkspaceSection>("overview");
   const [formFields, setFormFields] =
     useState<EventFormField[]>([]);
+  const [previewBaseValues, setPreviewBaseValues] =
+    useState({
+      name: "",
+      phone: "",
+      email: "",
+      cpf: ""
+    });
+  const [previewFieldValues, setPreviewFieldValues] =
+    useState<Record<string, string | string[]>>({});
   const [isLoadingFormFields, setIsLoadingFormFields] =
     useState(true);
-  const [isCreatingFormField, setIsCreatingFormField] =
+  const [isSavingFormFieldOverlay, setIsSavingFormFieldOverlay] =
     useState(false);
   const [formFieldMessage, setFormFieldMessage] =
     useState<string | null>(null);
-  const [formFieldType, setFormFieldType] =
-    useState<EventFormFieldType>("TEXT");
+  const [
+    isFormFieldOverlayOpen,
+    setIsFormFieldOverlayOpen
+  ] = useState(false);
+  const [
+    editingFormFieldId,
+    setEditingFormFieldId
+  ] = useState<string | null>(null);
+  const [
+    overlayFormFieldType,
+    setOverlayFormFieldType
+  ] = useState<EventFormFieldType>("TEXT");
+  const [overlayFormFieldLabel, setOverlayFormFieldLabel] =
+    useState("");
+  const [
+    overlayFormFieldRequired,
+    setOverlayFormFieldRequired
+  ] = useState(false);
+  const [
+    overlayFormFieldSensitive,
+    setOverlayFormFieldSensitive
+  ] = useState(false);
+  const [
+    overlayTicketScopeEnabled,
+    setOverlayTicketScopeEnabled
+  ] = useState(false);
+  const [overlayTicketIds, setOverlayTicketIds] = useState<
+    string[]
+  >([]);
+  const [overlayFieldOptions, setOverlayFieldOptions] =
+    useState("");
   const [participantSearch, setParticipantSearch] =
     useState("");
   const [
@@ -709,6 +886,29 @@ export function EventWorkspaceClient({
   useEffect(() => {
     void loadFormFields();
   }, [eventId]);
+
+  useEffect(() => {
+    const validFieldIds = new Set(
+      formFields.map((field) => field.id)
+    );
+
+    setPreviewFieldValues((current) => {
+      let hasOrphan = false;
+      const next: Record<string, string | string[]> = {};
+
+      for (const [fieldId, fieldValue] of Object.entries(
+        current
+      )) {
+        if (validFieldIds.has(fieldId)) {
+          next[fieldId] = fieldValue;
+        } else {
+          hasOrphan = true;
+        }
+      }
+
+      return hasOrphan ? next : current;
+    });
+  }, [formFields]);
 
   async function handleCreateTicket(
     formEvent: React.FormEvent<HTMLFormElement>
@@ -1192,8 +1392,48 @@ export function EventWorkspaceClient({
     closeTicketEditor();
   }
 
-  async function handleCreateFormField(
-    formEvent: React.FormEvent<HTMLFormElement>
+  function closeFormFieldOverlay() {
+    setIsFormFieldOverlayOpen(false);
+    setEditingFormFieldId(null);
+  }
+
+  function openCreateFormFieldOverlay(
+    type: EventFormFieldType
+  ) {
+    setEditingFormFieldId(null);
+    setOverlayFormFieldType(type);
+    setOverlayFormFieldLabel("");
+    setOverlayFormFieldRequired(false);
+    setOverlayFormFieldSensitive(false);
+    setOverlayTicketScopeEnabled(false);
+    setOverlayTicketIds([]);
+    setOverlayFieldOptions("");
+    setIsFormFieldOverlayOpen(true);
+  }
+
+  function openEditFormFieldOverlay(field: EventFormField) {
+    const ticketIds = field.ticketScopes.map(
+      (scope) => scope.ticket.id
+    );
+    setEditingFormFieldId(field.id);
+    setOverlayFormFieldType(field.type);
+    setOverlayFormFieldLabel(field.label);
+    setOverlayFormFieldRequired(field.isRequired);
+    setOverlayFormFieldSensitive(field.isSensitive);
+    setOverlayTicketScopeEnabled(ticketIds.length > 0);
+    setOverlayTicketIds(ticketIds);
+    setOverlayFieldOptions(
+      field.options
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((option) => option.label)
+        .join("\n")
+    );
+    setIsFormFieldOverlayOpen(true);
+  }
+
+  async function handleSaveFormFieldOverlay(
+    formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
 
@@ -1204,11 +1444,7 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const form = formEvent.currentTarget;
-    const formData = new FormData(form);
-    const options = String(
-      formData.get("fieldOptions") ?? ""
-    )
+    const options = overlayFieldOptions
       .split("\n")
       .map((option) => option.trim())
       .filter(Boolean)
@@ -1216,7 +1452,7 @@ export function EventWorkspaceClient({
         label: option,
         value: option
           .normalize("NFD")
-          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/(^-|-$)/g, "")
@@ -1224,32 +1460,41 @@ export function EventWorkspaceClient({
 
     setError(null);
     setFormFieldMessage(null);
-    setIsCreatingFormField(true);
+    setIsSavingFormFieldOverlay(true);
 
     try {
+      const isEditing = editingFormFieldId !== null;
+      const payload = {
+        isRequired: overlayFormFieldRequired,
+        isSensitive: overlayFormFieldSensitive,
+        label: overlayFormFieldLabel.trim(),
+        options: formFieldTypeNeedsOptions(
+          overlayFormFieldType
+        )
+          ? options
+          : [],
+        ticketIds: overlayTicketScopeEnabled
+          ? overlayTicketIds
+          : [],
+        type: overlayFormFieldType
+      };
+      const requestPayload = isEditing
+        ? payload
+        : {
+            ...payload,
+            isActive: true
+          };
       const response = await fetch(
-        `${API_BASE_URL}/api/events/${eventId}/form-fields`,
+        isEditing
+          ? `${API_BASE_URL}/api/events/${eventId}/form-fields/${editingFormFieldId}`
+          : `${API_BASE_URL}/api/events/${eventId}/form-fields`,
         {
-          body: JSON.stringify({
-            label: String(
-              formData.get("fieldLabel") ?? ""
-            ).trim(),
-            type: formFieldType,
-            isRequired:
-              formData.get("fieldRequired") === "on",
-            isSensitive:
-              formData.get("fieldSensitive") === "on",
-            isActive: true,
-            ticketIds: formData
-              .getAll("fieldTicketIds")
-              .map(String),
-            options
-          }),
+          body: JSON.stringify(requestPayload),
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
-          method: "POST"
+          method: isEditing ? "PATCH" : "POST"
         }
       );
 
@@ -1261,24 +1506,38 @@ export function EventWorkspaceClient({
         setError(
           "message" in data && data.message
             ? data.message
-            : "Não foi possível criar o campo."
+            : isEditing
+              ? "Não foi possível atualizar o campo."
+              : "Não foi possível criar o campo."
         );
         return;
       }
 
-      setFormFields((current) => [
-        ...current,
-        data as EventFormField
-      ]);
-      setFormFieldMessage("Campo criado.");
-      setFormFieldType("TEXT");
-      form.reset();
+      if (isEditing) {
+        setFormFields((current) =>
+          current.map((field) =>
+            field.id === editingFormFieldId
+              ? (data as EventFormField)
+              : field
+          )
+        );
+        setFormFieldMessage("Campo atualizado.");
+      } else {
+        setFormFields((current) => [
+          ...current,
+          data as EventFormField
+        ]);
+        setFormFieldMessage("Campo criado.");
+      }
+      closeFormFieldOverlay();
     } catch {
       setError(
-        "Não foi possível criar o campo agora."
+        editingFormFieldId
+          ? "Não foi possível atualizar o campo agora."
+          : "Não foi possível criar o campo agora."
       );
     } finally {
-      setIsCreatingFormField(false);
+      setIsSavingFormFieldOverlay(false);
     }
   }
 
@@ -2422,6 +2681,30 @@ export function EventWorkspaceClient({
             false)
       )
     : ticketRows;
+
+  const customFieldActions: Array<{
+    label: string;
+    type: EventFormFieldType;
+  }> = [
+    { label: "Lista", type: "SELECT" },
+    {
+      label: "Múltipla escolha",
+      type: "SINGLE_CHOICE"
+    },
+    {
+      label: "Vários valores",
+      type: "MULTIPLE_CHOICE"
+    },
+    { label: "Texto", type: "TEXT" },
+    { label: "Parágrafo", type: "PARAGRAPH" }
+  ];
+  const formFieldsOrdered = formFields
+    .slice()
+    .sort((a, b) => a.order - b.order);
+  const overlayLabelCharsLeft = Math.max(
+    0,
+    150 - overlayFormFieldLabel.length
+  );
 
   return (
     <main
@@ -5728,177 +6011,854 @@ export function EventWorkspaceClient({
             ) : null}
 
             {activeSection === "registration-form" ? (
-  <section
-    style={{
-      background: "rgba(15, 23, 42, 0.82)",
-      border: "1px solid rgba(148, 163, 184, 0.18)",
-      borderRadius: "20px",
-      display: "grid",
-      gap: "20px",
-      padding: "24px"
-    }}
-  >
-    <header>
-      <p style={{ color: "#60a5fa", fontWeight: 900 }}>
-        FORMULÁRIO DE INSCRIÇÃO
-      </p>
-      <h2>Campos do participante</h2>
-    </header>
+              <section
+                style={{
+                  background: "rgba(15, 23, 42, 0.82)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "20px",
+                  display: "grid",
+                  gap: "22px",
+                  padding: "24px"
+                }}
+              >
+                <header>
+                  <p
+                    style={{
+                      color: "#60a5fa",
+                      fontSize: "13px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      margin: "0 0 8px",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    FORMULÁRIO DE INSCRIÇÃO
+                  </p>
+                  <h2
+                    style={{
+                      color: "#ffffff",
+                      fontSize: "24px",
+                      margin: 0
+                    }}
+                  >
+                    Campos do participante
+                  </h2>
+                </header>
 
-    {formFieldMessage ? <p>{formFieldMessage}</p> : null}
+                {formFieldMessage ? (
+                  <p
+                    style={{
+                      background: "rgba(5, 150, 105, 0.16)",
+                      border:
+                        "1px solid rgba(52, 211, 153, 0.26)",
+                      borderRadius: "12px",
+                      color: "#a7f3d0",
+                      margin: 0,
+                      padding: "12px"
+                    }}
+                  >
+                    {formFieldMessage}
+                  </p>
+                ) : null}
 
-    <form
-      onSubmit={(event) => {
-        setFormFieldType("TEXT");
-        void handleCreateFormField(event);
-      }}
-      style={{
-        display: "grid",
-        gap: "14px"
-      }}
-    >
-      <label
-        style={{
-          display: "grid",
-          gap: "8px"
-        }}
-      >
-        Campo do participante
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "18px",
+                    gridTemplateColumns:
+                      "minmax(240px, 0.9fr) minmax(0, 1.4fr)"
+                  }}
+                >
+                  <article
+                    style={{
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "16px",
+                      display: "grid",
+                      gap: "12px",
+                      padding: "18px"
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>
+                      Adicionar ao formulário
+                    </h3>
 
-        <input
-          name="fieldLabel"
-          required
-          style={{
-            borderRadius: "10px",
-            padding: "12px"
-          }}
-        />
-      </label>
+                    <h4
+                      style={{
+                        color: "#cbd5e1",
+                        fontSize: "14px",
+                        margin: "4px 0 0"
+                      }}
+                    >
+                      Campos pré-definidos
+                    </h4>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px"
+                      }}
+                    >
+                      {[
+                        "Nome completo",
+                        "Telefone",
+                        "E-mail",
+                        ...(event?.isPaid
+                          ? ["CPF"]
+                          : [])
+                      ].map((baseLabel) => (
+                        <span
+                          key={baseLabel}
+                          style={{
+                            background:
+                              "rgba(15, 23, 42, 0.68)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.22)",
+                            borderRadius: "999px",
+                            color: "#e2e8f0",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            padding: "8px 12px"
+                          }}
+                        >
+                          {baseLabel}
+                        </span>
+                      ))}
+                    </div>
 
-      <fieldset>
-        <legend>Aplicar aos ingressos</legend>
-        {tickets.length === 0 ? (
-          <p>Todos os ingressos</p>
-        ) : (
-          tickets.map((ticket) => (
-            <label
-              key={ticket.id}
-              style={{ display: "block", margin: "8px 0" }}
-            >
-              <input
-                name="fieldTicketIds"
-                type="checkbox"
-                value={ticket.id}
-              />{" "}
-              {ticket.name}
-            </label>
-          ))
-        )}
-      </fieldset>
+                    <h4
+                      style={{
+                        color: "#cbd5e1",
+                        fontSize: "14px",
+                        margin: "8px 0 0"
+                      }}
+                    >
+                      Campos personalizáveis
+                    </h4>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px"
+                      }}
+                    >
+                      {customFieldActions.map((action) => (
+                        <button
+                          key={action.type}
+                          onClick={() =>
+                            openCreateFormFieldOverlay(
+                              action.type
+                            )
+                          }
+                          style={{
+                            background:
+                              "rgba(15, 23, 42, 0.68)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.22)",
+                            borderRadius: "999px",
+                            color: "#e2e8f0",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            padding: "8px 12px"
+                          }}
+                          type="button"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  </article>
 
-      <label>
-        <input
-          name="fieldRequired"
-          type="checkbox"
-        />{" "}
-        Campo obrigatório
-      </label>
+                  <article
+                    style={{
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "16px",
+                      display: "grid",
+                      gap: "16px",
+                      padding: "18px"
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>
+                      Dados do participante
+                    </h3>
+                    {[
+                      {
+                        id: "base-name",
+                        isRequired: true,
+                        key: "name" as const,
+                        label: "Nome completo"
+                      },
+                      {
+                        id: "base-phone",
+                        isRequired: true,
+                        key: "phone" as const,
+                        label: "Telefone"
+                      },
+                      {
+                        id: "base-email",
+                        isRequired: true,
+                        key: "email" as const,
+                        label: "E-mail"
+                      },
+                      ...(event?.isPaid
+                        ? [
+                            {
+                              id: "base-cpf",
+                              isRequired: true,
+                              key: "cpf" as const,
+                              label: "CPF"
+                            }
+                          ]
+                        : [])
+                    ].map((baseField) => (
+                      <div
+                        key={baseField.id}
+                        style={{
+                          display: "grid",
+                          gap: "8px"
+                        }}
+                      >
+                        <div
+                          style={{
+                            alignItems: "center",
+                            display: "flex",
+                            gap: "8px",
+                            justifyContent: "space-between"
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color: "#f8fafc",
+                              fontSize: "14px"
+                            }}
+                          >
+                            {baseField.label}
+                          </strong>
+                          {baseField.isRequired ? (
+                            <span
+                              style={{
+                                color: "#f59e0b",
+                                fontSize: "12px",
+                                fontWeight: 800
+                              }}
+                            >
+                              Obrigatório
+                            </span>
+                          ) : null}
+                        </div>
+                        <input
+                          onChange={(changeEvent) =>
+                            setPreviewBaseValues(
+                              (current) => ({
+                                ...current,
+                                [baseField.key]:
+                                  changeEvent.target.value
+                              })
+                            )
+                          }
+                          style={{
+                            background:
+                              "rgba(15, 23, 42, 0.72)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.28)",
+                            borderRadius: "10px",
+                            color: "#e2e8f0",
+                            padding: "12px"
+                          }}
+                          value={
+                            previewBaseValues[baseField.key]
+                          }
+                        />
+                      </div>
+                    ))}
 
-      <label>
-        <input
-          name="fieldSensitive"
-          type="checkbox"
-        />{" "}
-        Dado sensível
-      </label>
+                    {formFieldsOrdered.map((field, index) => (
+                      <div
+                        key={field.id}
+                        style={{
+                          borderBottom:
+                            "1px solid rgba(148, 163, 184, 0.14)",
+                          display: "grid",
+                          gap: "10px",
+                          opacity: field.isActive ? 1 : 0.6,
+                          paddingBottom: "16px"
+                        }}
+                      >
+                        <div
+                          style={{
+                            alignItems: "center",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                            justifyContent: "space-between"
+                          }}
+                        >
+                          <div
+                            style={{
+                              alignItems: "center",
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color: "#f8fafc",
+                                fontSize: "14px"
+                              }}
+                            >
+                              {field.label}
+                              {field.isRequired ? (
+                                <span
+                                  style={{
+                                    color: "#f59e0b",
+                                    marginLeft: "4px"
+                                  }}
+                                >
+                                  *
+                                </span>
+                              ) : null}
+                            </strong>
+                            {field.isRequired ? (
+                              <span
+                                style={{
+                                  color: "#f59e0b",
+                                  fontSize: "12px",
+                                  fontWeight: 800
+                                }}
+                              >
+                                Obrigatório
+                              </span>
+                            ) : null}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "6px"
+                            }}
+                          >
+                            <button
+                              onClick={() =>
+                                openEditFormFieldOverlay(field)
+                              }
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.28)",
+                                borderRadius: "8px",
+                                color: "#cbd5e1",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                padding: "6px 10px"
+                              }}
+                              type="button"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() =>
+                                void handleToggleFormField(
+                                  field
+                                )
+                              }
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.28)",
+                                borderRadius: "8px",
+                                color: "#cbd5e1",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                padding: "6px 10px"
+                              }}
+                              type="button"
+                            >
+                              {field.isActive
+                                ? "Desativar"
+                                : "Ativar"}
+                            </button>
+                            <button
+                              disabled={index === 0}
+                              onClick={() =>
+                                void handleMoveFormField(
+                                  field.id,
+                                  -1
+                                )
+                              }
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.28)",
+                                borderRadius: "8px",
+                                color: "#cbd5e1",
+                                cursor:
+                                  index === 0
+                                    ? "not-allowed"
+                                    : "pointer",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                opacity:
+                                  index === 0 ? 0.45 : 1,
+                                padding: "6px 10px"
+                              }}
+                              type="button"
+                            >
+                              Subir
+                            </button>
+                            <button
+                              disabled={
+                                index ===
+                                formFieldsOrdered.length - 1
+                              }
+                              onClick={() =>
+                                void handleMoveFormField(
+                                  field.id,
+                                  1
+                                )
+                              }
+                              style={{
+                                background: "transparent",
+                                border:
+                                  "1px solid rgba(148, 163, 184, 0.28)",
+                                borderRadius: "8px",
+                                color: "#cbd5e1",
+                                cursor:
+                                  index ===
+                                  formFieldsOrdered.length - 1
+                                    ? "not-allowed"
+                                    : "pointer",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                opacity:
+                                  index ===
+                                  formFieldsOrdered.length - 1
+                                    ? 0.45
+                                    : 1,
+                                padding: "6px 10px"
+                              }}
+                              type="button"
+                            >
+                              Descer
+                            </button>
+                          </div>
+                        </div>
 
-      <button
-        disabled={isCreatingFormField}
-        style={{
-          background: "#2563eb",
-          border: 0,
-          borderRadius: "10px",
-          color: "#ffffff",
-          fontWeight: 900,
-          padding: "12px"
-        }}
-        type="submit"
-      >
-        {isCreatingFormField
-          ? "Criando..."
-          : "Adicionar campo"}
-      </button>
-    </form>
+                        <EventFormPreviewControl
+                          field={field}
+                          onChange={(nextValue) =>
+                            setPreviewFieldValues(
+                              (current) => ({
+                                ...current,
+                                [field.id]: nextValue
+                              })
+                            )
+                          }
+                          value={
+                            previewFieldValues[field.id] ??
+                            (field.type === "MULTIPLE_CHOICE"
+                              ? []
+                              : "")
+                          }
+                        />
+                      </div>
+                    ))}
+                  </article>
+                </div>
 
-    {isLoadingFormFields ? (
-      <p>Carregando campos...</p>
-    ) : null}
+                {isFormFieldOverlayOpen ? (
+                <form
+                  onSubmit={handleSaveFormFieldOverlay}
+                  style={{
+                    background: "rgba(2, 6, 23, 0.72)",
+                    inset: 0,
+                    position: "fixed",
+                    zIndex: 70,
+                    alignItems: "center",
+                    display: "grid",
+                    justifyItems: "center",
+                    padding: "24px"
+                  }}
+                >
+                  <section
+                    onClick={(clickEvent) =>
+                      clickEvent.stopPropagation()
+                    }
+                    style={{
+                      background:
+                        "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+                      border:
+                        "1px solid rgba(148, 163, 184, 0.22)",
+                      borderRadius: "20px",
+                      display: "grid",
+                      gap: "14px",
+                      maxWidth: "620px",
+                      padding: "22px",
+                      width: "100%"
+                    }}
+                  >
+                    <div
+                      style={{
+                        alignItems: "center",
+                        display: "flex",
+                        justifyContent: "space-between"
+                      }}
+                    >
+                      <h3
+                        style={{
+                          color: "#f8fafc",
+                          margin: 0
+                        }}
+                      >
+                        {editingFormFieldId
+                          ? "Editar campo"
+                          : "Adicionar campo"}
+                      </h3>
+                      <button
+                        aria-label="Fechar"
+                        onClick={closeFormFieldOverlay}
+                        style={{
+                          background: "transparent",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "999px",
+                          color: "#e2e8f0",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                          fontWeight: 900,
+                          height: "32px",
+                          lineHeight: 1,
+                          width: "32px"
+                        }}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </div>
 
-    {!isLoadingFormFields &&
-    formFields.length === 0 ? (
-      <p>Nenhum campo configurado.</p>
-    ) : null}
+                    <label
+                      style={{
+                        color: "#94a3b8",
+                        display: "grid",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        gap: "8px"
+                      }}
+                    >
+                      Título do campo / Pergunta
+                      <input
+                        maxLength={150}
+                        onChange={(changeEvent) =>
+                          setOverlayFormFieldLabel(
+                            changeEvent.target.value
+                          )
+                        }
+                        required
+                        style={{
+                          background:
+                            "rgba(15, 23, 42, 0.72)",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: "10px",
+                          color: "#e2e8f0",
+                          fontSize: "14px",
+                          padding: "12px"
+                        }}
+                        type="text"
+                        value={overlayFormFieldLabel}
+                      />
+                    </label>
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "12px",
+                        margin: 0,
+                        textAlign: "right"
+                      }}
+                    >
+                      {overlayLabelCharsLeft} caracteres restantes
+                    </p>
 
-    {formFields.map((field, index) => (
-      <article
-        key={field.id}
-        style={{
-          border:
-            "1px solid rgba(148, 163, 184, 0.2)",
-          borderRadius: "14px",
-          padding: "16px"
-        }}
-      >
-        <strong>{field.label}</strong>
+                    {formFieldTypeNeedsOptions(
+                      overlayFormFieldType
+                    ) ? (
+                    <label
+                      style={{
+                        color: "#94a3b8",
+                        display: "grid",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        gap: "8px"
+                      }}
+                    >
+                      Opções
+                      <textarea
+                        onChange={(changeEvent) =>
+                          setOverlayFieldOptions(
+                            changeEvent.target.value
+                          )
+                        }
+                        rows={4}
+                        style={{
+                          background:
+                            "rgba(15, 23, 42, 0.72)",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.28)",
+                          borderRadius: "10px",
+                          color: "#e2e8f0",
+                          fontSize: "14px",
+                          padding: "12px"
+                        }}
+                        value={overlayFieldOptions}
+                      />
+                    </label>
+                  ) : null}
 
-        <p>
-          {field.type}
-          {field.isRequired ? " - Obrigatório" : ""}
-          {field.isSensitive ? " - Dado sensível" : ""}
-        </p>
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        fontSize: "14px",
+                        gap: "8px"
+                      }}
+                    >
+                      <input
+                        checked={overlayFormFieldRequired}
+                        onChange={(changeEvent) =>
+                          setOverlayFormFieldRequired(
+                            changeEvent.target.checked
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Campo de preenchimento obrigatório
+                    </label>
 
-        <p>
-          {field.ticketScopes.length > 0
-            ? field.ticketScopes
-                .map((scope) => scope.ticket.name)
-                .join(", ")
-            : "Todos os ingressos"}
-        </p>
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        fontSize: "14px",
+                        gap: "8px"
+                      }}
+                    >
+                      <input
+                        checked={overlayTicketScopeEnabled}
+                        onChange={(changeEvent) => {
+                          const checked =
+                            changeEvent.target.checked;
+                          setOverlayTicketScopeEnabled(checked);
+                          if (!checked) {
+                            setOverlayTicketIds([]);
+                          }
+                        }}
+                        type="checkbox"
+                      />
+                      Mostrar este campo para tipos específicos de ingressos
+                    </label>
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            disabled={index === 0}
-            onClick={() =>
-              handleMoveFormField(field.id, -1)
-            }
-            type="button"
-          >
-            Subir
-          </button>
+                    {overlayTicketScopeEnabled ? (
+                      <fieldset
+                        style={{
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.24)",
+                          borderRadius: "12px",
+                          margin: 0,
+                          padding: "12px"
+                        }}
+                      >
+                        <legend
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            padding: "0 6px"
+                          }}
+                        >
+                          Ingressos
+                        </legend>
+                        {tickets.length === 0 ? (
+                          <p
+                            style={{
+                              color: "#cbd5e1",
+                              margin: 0
+                            }}
+                          >
+                            Sem ingressos cadastrados.
+                          </p>
+                        ) : (
+                          tickets.map((ticket) => (
+                            <label
+                              key={ticket.id}
+                              style={{
+                                color: "#e2e8f0",
+                                display: "block",
+                                fontSize: "14px",
+                                margin: "8px 0"
+                              }}
+                            >
+                              <input
+                                checked={overlayTicketIds.includes(
+                                  ticket.id
+                                )}
+                                onChange={(changeEvent) => {
+                                  setOverlayTicketIds(
+                                    (current) =>
+                                      changeEvent.target
+                                        .checked
+                                        ? [
+                                            ...current,
+                                            ticket.id
+                                          ]
+                                        : current.filter(
+                                            (id) =>
+                                              id !== ticket.id
+                                          )
+                                  );
+                                }}
+                                type="checkbox"
+                              />{" "}
+                              {ticket.name}
+                            </label>
+                          ))
+                        )}
+                      </fieldset>
+                    ) : null}
 
-          <button
-            disabled={index === formFields.length - 1}
-            onClick={() =>
-              handleMoveFormField(field.id, 1)
-            }
-            type="button"
-          >
-            Descer
-          </button>
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        fontSize: "14px",
+                        gap: "8px"
+                      }}
+                    >
+                      <input
+                        checked={overlayFormFieldSensitive}
+                        onChange={(changeEvent) =>
+                          setOverlayFormFieldSensitive(
+                            changeEvent.target.checked
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Tratar resposta como dado sensível
+                    </label>
+                    <div
+                      style={{
+                        alignItems: "flex-start",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "10px",
+                        display: "flex",
+                        gap: "10px",
+                        padding: "12px"
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          alignItems: "center",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.35)",
+                          borderRadius: "999px",
+                          color: "#94a3b8",
+                          display: "inline-flex",
+                          flexShrink: 0,
+                          fontSize: "12px",
+                          fontStyle: "italic",
+                          fontWeight: 800,
+                          height: "20px",
+                          justifyContent: "center",
+                          lineHeight: 1,
+                          width: "20px"
+                        }}
+                      >
+                        i
+                      </span>
+                      <p
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: "13px",
+                          lineHeight: 1.45,
+                          margin: 0
+                        }}
+                      >
+                        A resposta deste campo será tratada como dado protegido no painel.
+                      </p>
+                    </div>
 
-          <button
-            onClick={() =>
-              void handleToggleFormField(field)
-            }
-            type="button"
-          >
-            {field.isActive ? "Desativar" : "Ativar"}
-          </button>
-        </div>
-      </article>
-    ))}
-  </section>
-) : null}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        justifyContent: "flex-end",
+                        marginTop: "4px"
+                      }}
+                    >
+                      <button
+                        onClick={closeFormFieldOverlay}
+                        style={{
+                          background: "transparent",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "10px",
+                          color: "#e2e8f0",
+                          cursor: "pointer",
+                          fontWeight: 800,
+                          padding: "10px 14px"
+                        }}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        disabled={isSavingFormFieldOverlay}
+                        style={{
+                          background: "#2563eb",
+                          border: 0,
+                          borderRadius: "10px",
+                          color: "#ffffff",
+                          cursor: isSavingFormFieldOverlay
+                            ? "not-allowed"
+                            : "pointer",
+                          fontWeight: 800,
+                          opacity: isSavingFormFieldOverlay
+                            ? 0.7
+                            : 1,
+                          padding: "10px 14px"
+                        }}
+                        type="submit"
+                      >
+                        {isSavingFormFieldOverlay
+                          ? "Salvando..."
+                          : editingFormFieldId
+                            ? "Salvar"
+                            : "Adicionar"}
+                      </button>
+                    </div>
+                  </section>
+                </form>
+                ) : null}
+
+                {isLoadingFormFields ? (
+                  <p>Carregando campos...</p>
+                ) : null}
+
+                {!isLoadingFormFields &&
+                formFields.length === 0 ? (
+                  <p>Nenhum campo personalizado configurado.</p>
+                ) : null}
+              </section>
+            ) : null}
 
 {activeSection === "participants" ? (
   <section
