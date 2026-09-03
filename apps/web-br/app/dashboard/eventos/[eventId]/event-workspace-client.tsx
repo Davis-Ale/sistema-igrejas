@@ -81,6 +81,53 @@ type EventDetail = {
   }>;
 };
 
+type EventParticipantItem = {
+  id: string;
+  status: RegistrationStatus;
+  paymentStatus: string;
+  checkInToken: string | null;
+  person: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string | null;
+  } | null;
+  visitor: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string | null;
+  } | null;
+  ticket: {
+    id: string;
+    name: string;
+  } | null;
+  ticketBatch: {
+    id: string;
+    name: string;
+  } | null;
+  formAnswers: Array<{
+    id: string;
+    value: unknown;
+    field: {
+      id: string;
+      label: string;
+      isSensitive: boolean;
+      order: number;
+    };
+  }>;
+};
+
+type EventParticipantListResponse = {
+  items: EventParticipantItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 type ApiErrorResponse = {
   message?: string;
 };
@@ -609,6 +656,17 @@ export function EventWorkspaceClient({
     useState("ALL");
   const [participantTicket, setParticipantTicket] =
     useState("ALL");
+  const [participantItems, setParticipantItems] = useState<
+    EventParticipantItem[]
+  >([]);
+  const [participantPage, setParticipantPage] =
+    useState(1);
+  const [participantTotal, setParticipantTotal] =
+    useState(0);
+  const [participantTotalPages, setParticipantTotalPages] =
+    useState(0);
+  const [isLoadingParticipants, setIsLoadingParticipants] =
+    useState(false);
   const [checkInCode, setCheckInCode] =
     useState("");
   const [checkInSearch, setCheckInSearch] =
@@ -838,6 +896,98 @@ export function EventWorkspaceClient({
   useEffect(() => {
     void loadTickets();
   }, [eventId]);
+
+  useEffect(() => {
+    if (activeSection !== "participants") {
+      return;
+    }
+
+    async function loadParticipants() {
+      const token = getSessionToken();
+
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      setError(null);
+      setIsLoadingParticipants(true);
+
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(participantPage));
+        params.set("limit", "50");
+
+        if (participantSearch.trim()) {
+          params.set("search", participantSearch.trim());
+        }
+
+        if (participantStatus !== "ALL") {
+          params.set("status", participantStatus);
+        }
+
+        if (participantPayment !== "ALL") {
+          params.set("paymentStatus", participantPayment);
+        }
+
+        if (participantTicket !== "ALL") {
+          params.set("ticketId", participantTicket);
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/events/${eventId}/registrations?${params.toString()}`,
+          {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+
+        const data = (await response.json()) as
+          | EventParticipantListResponse
+          | ApiErrorResponse;
+
+        if (!response.ok) {
+          setError(
+            "message" in data && data.message
+              ? data.message
+              : "Não foi possível carregar os participantes."
+          );
+          setParticipantItems([]);
+          setParticipantTotal(0);
+          setParticipantTotalPages(0);
+          return;
+        }
+
+        const payload = data as EventParticipantListResponse;
+
+        setParticipantItems(payload.items);
+        setParticipantTotal(payload.pagination.total);
+        setParticipantTotalPages(payload.pagination.totalPages);
+      } catch {
+        setError(
+          "Não foi possível carregar os participantes agora."
+        );
+        setParticipantItems([]);
+        setParticipantTotal(0);
+        setParticipantTotalPages(0);
+      } finally {
+        setIsLoadingParticipants(false);
+      }
+    }
+
+    void loadParticipants();
+  }, [
+    activeSection,
+    eventId,
+    participantPage,
+    participantPayment,
+    participantSearch,
+    participantStatus,
+    participantTicket,
+    router
+  ]);
 
   async function loadFormFields() {
     const token = getSessionToken();
@@ -1704,55 +1854,6 @@ export function EventWorkspaceClient({
 
     return labels[status] ?? status;
   };
-
-  const filteredParticipants =
-    event?.registrations.filter((registration) => {
-      const participant =
-        registration.person ?? registration.visitor;
-
-      if (!participant) {
-        return false;
-      }
-
-      const search =
-        normalizeEventSearch(
-          participantSearch
-        );
-
-      const matchesSearch =
-        !search ||
-        [
-          participant.name,
-          participant.phone,
-          participant.email ?? "",
-          registration.checkInToken
-        ].some((value) =>
-          normalizeEventSearch(
-            value
-          ).includes(search)
-        );
-
-      const matchesStatus =
-        participantStatus === "ALL" ||
-        registration.status === participantStatus;
-
-      const matchesPayment =
-        participantPayment === "ALL" ||
-        registration.paymentStatus ===
-          participantPayment;
-
-      const matchesTicket =
-        participantTicket === "ALL" ||
-        registration.ticket?.id ===
-          participantTicket;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesPayment &&
-        matchesTicket
-      );
-    }) ?? [];
 
   async function handleCheckInByCode(
     formEvent: React.FormEvent<HTMLFormElement>
@@ -6912,6 +7013,7 @@ export function EventWorkspaceClient({
           setParticipantSearch(
             participantSearchInput.trim()
           );
+          setParticipantPage(1);
         }}
         style={{
           display: "grid",
@@ -6951,9 +7053,10 @@ export function EventWorkspaceClient({
       </form>
 
       <select
-        onChange={(event) =>
-          setParticipantStatus(event.target.value)
-        }
+        onChange={(event) => {
+          setParticipantStatus(event.target.value);
+          setParticipantPage(1);
+        }}
         style={{
           borderRadius: "10px",
           padding: "11px 12px"
@@ -6966,15 +7069,16 @@ export function EventWorkspaceClient({
         <option value="PENDING">Pendentes</option>
         <option value="CONFIRMED">Confirmadas</option>
         <option value="CHECKED_IN">
-          Check-in realizado
+          Presente
         </option>
         <option value="CANCELLED">Canceladas</option>
       </select>
 
       <select
-        onChange={(event) =>
-          setParticipantPayment(event.target.value)
-        }
+        onChange={(event) => {
+          setParticipantPayment(event.target.value);
+          setParticipantPage(1);
+        }}
         style={{
           borderRadius: "10px",
           padding: "11px 12px"
@@ -6993,9 +7097,10 @@ export function EventWorkspaceClient({
       </select>
 
       <select
-        onChange={(event) =>
-          setParticipantTicket(event.target.value)
-        }
+        onChange={(event) => {
+          setParticipantTicket(event.target.value);
+          setParticipantPage(1);
+        }}
         style={{
           borderRadius: "10px",
           padding: "11px 12px"
@@ -7022,7 +7127,9 @@ export function EventWorkspaceClient({
         margin: 0
       }}
     >
-      {filteredParticipants.length} participante(s)
+      {isLoadingParticipants
+        ? "Carregando participantes..."
+        : `${participantTotal} participante(s)`}
     </p>
 
     <div
@@ -7031,7 +7138,8 @@ export function EventWorkspaceClient({
         gap: "10px"
       }}
     >
-      {filteredParticipants.length === 0 ? (
+      {!isLoadingParticipants &&
+      participantItems.length === 0 ? (
         <p
           style={{
             color: "#94a3b8",
@@ -7042,7 +7150,7 @@ export function EventWorkspaceClient({
         </p>
       ) : null}
 
-      {filteredParticipants.map((registration) => {
+      {participantItems.map((registration) => {
         const participant =
           registration.person ??
           registration.visitor;
@@ -7103,9 +7211,11 @@ export function EventWorkspaceClient({
                 {registration.ticketBatch?.name ??
                   "Não informado"}
               </span>
-              <span>
-                Código: {registration.checkInToken}
-              </span>
+              {registration.checkInToken ? (
+                <span>
+                  Código: {registration.checkInToken}
+                </span>
+              ) : null}
 
               {registration.formAnswers.map(
                 (answer) => (
@@ -7118,7 +7228,7 @@ export function EventWorkspaceClient({
                         ? "Dado protegido"
                         : Array.isArray(answer.value)
                           ? answer.value.join(", ")
-                          : String(answer.value)}
+                          : String(answer.value ?? "")}
                     </p>
                   </div>
                 )
@@ -7128,6 +7238,81 @@ export function EventWorkspaceClient({
         );
       })}
     </div>
+
+    {participantTotalPages > 1 ? (
+      <div
+        style={{
+          alignItems: "center",
+          display: "flex",
+          gap: "12px",
+          justifyContent: "space-between"
+        }}
+      >
+        <button
+          disabled={
+            isLoadingParticipants ||
+            participantPage <= 1
+          }
+          onClick={() =>
+            setParticipantPage((current) =>
+              Math.max(1, current - 1)
+            )
+          }
+          style={{
+            background: "transparent",
+            border: "1px solid rgba(148, 163, 184, 0.28)",
+            borderRadius: "10px",
+            color: "#e2e8f0",
+            cursor:
+              participantPage <= 1
+                ? "not-allowed"
+                : "pointer",
+            fontWeight: 800,
+            padding: "10px 14px"
+          }}
+          type="button"
+        >
+          Anterior
+        </button>
+
+        <span
+          style={{
+            color: "#94a3b8",
+            fontSize: "13px"
+          }}
+        >
+          Página {participantPage} de{" "}
+          {participantTotalPages}
+        </span>
+
+        <button
+          disabled={
+            isLoadingParticipants ||
+            participantPage >= participantTotalPages
+          }
+          onClick={() =>
+            setParticipantPage((current) =>
+              current + 1
+            )
+          }
+          style={{
+            background: "transparent",
+            border: "1px solid rgba(148, 163, 184, 0.28)",
+            borderRadius: "10px",
+            color: "#e2e8f0",
+            cursor:
+              participantPage >= participantTotalPages
+                ? "not-allowed"
+                : "pointer",
+            fontWeight: 800,
+            padding: "10px 14px"
+          }}
+          type="button"
+        >
+          Próxima
+        </button>
+      </div>
+    ) : null}
   </section>
 ) : null}
 

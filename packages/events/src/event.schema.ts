@@ -141,6 +141,47 @@ export const checkInByTokenSchema = z.object({
   checkInToken: z.string().trim().min(1, "Código de check-in é obrigatório.")
 });
 
+const emptyToUndefined = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed === "ALL") {
+    return undefined;
+  }
+
+  return trimmed;
+};
+
+export const listEventRegistrationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.preprocess(
+    emptyToUndefined,
+    z.string().max(120).optional()
+  ),
+  status: z.preprocess(
+    emptyToUndefined,
+    registrationStatusSchema.optional()
+  ),
+  paymentStatus: z.preprocess(
+    emptyToUndefined,
+    z
+      .enum(["PAID", "PENDING", "NOT_REQUIRED", "CANCELLED"])
+      .optional()
+  ),
+  ticketId: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  )
+});
+
+export const eventIdParamsSchema = z.object({
+  eventId: z.string().trim().min(1, "Evento é obrigatório.")
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DuplicateEventInput = z.infer<typeof duplicateEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
@@ -148,3 +189,6 @@ export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
 export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;
 export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationStatusSchema>;
 export type CheckInByTokenInput = z.infer<typeof checkInByTokenSchema>;
+export type ListEventRegistrationsQuery = z.infer<
+  typeof listEventRegistrationsQuerySchema
+>;

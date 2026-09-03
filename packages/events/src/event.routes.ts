@@ -8,6 +8,8 @@ import {
   createEventSchema,
   duplicateEventSchema,
   createRegistrationSchema,
+  eventIdParamsSchema,
+  listEventRegistrationsQuerySchema,
   updateEventSchema,
   updateRegistrationStatusSchema
 } from "./event.schema.js";
@@ -21,6 +23,7 @@ import {
   updateEvent,
   updateRegistrationStatus
 } from "./event.service.js";
+import { listEventRegistrations } from "./registration-list.service.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -209,6 +212,25 @@ export async function registerEventRoutes(
       }
     }
   );
+
+  app.get("/events/:eventId/registrations", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = eventIdParamsSchema.parse(request.params);
+      const query = listEventRegistrationsQuerySchema.parse(
+        request.query
+      );
+
+      return await listEventRegistrations(
+        prisma,
+        churchId,
+        params.eventId,
+        query
+      );
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
 
   app.get("/events/:eventId", async (request, reply) => {
     try {
