@@ -530,6 +530,7 @@ export default function EventosPage() {
       const response = await fetch(`${API_BASE_URL}/api/events/registrations/status`, {
         body: JSON.stringify({
           registrationId,
+          eventId: selectedEventId,
           status
         }),
         headers: {

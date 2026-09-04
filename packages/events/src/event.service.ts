@@ -1197,12 +1197,15 @@ export async function updateRegistrationStatus(
     await prisma.registration.findFirst({
       where: {
         id: input.registrationId,
-        churchId
+        churchId,
+        eventId: input.eventId
       },
       select: {
         id: true,
+        status: true,
         paymentId: true,
         paymentStatus: true,
+        waitlistedAt: true,
         person: {
           select: {
             name: true,
@@ -1237,12 +1240,27 @@ export async function updateRegistrationStatus(
     throw new Error("REGISTRATION_NOT_FOUND");
   }
 
-  if (
-    input.status === "CHECKED_IN" &&
-    registration.event.isPaid &&
-    registration.paymentStatus !== "PAID"
-  ) {
-    throw new Error("PAYMENT_NOT_CONFIRMED");
+  if (input.status === "CHECKED_IN") {
+    if (registration.status === "CANCELLED") {
+      throw new Error("REGISTRATION_CANCELLED");
+    }
+
+    if (registration.status === "CHECKED_IN") {
+      throw new Error(
+        "REGISTRATION_ALREADY_CHECKED_IN"
+      );
+    }
+
+    if (registration.waitlistedAt) {
+      throw new Error("REGISTRATION_WAITLISTED");
+    }
+
+    if (
+      registration.event.isPaid &&
+      registration.paymentStatus !== "PAID"
+    ) {
+      throw new Error("PAYMENT_NOT_CONFIRMED");
+    }
   }
 
   const paymentId =
@@ -1665,11 +1683,13 @@ export async function applyEventPaymentProviderStatus(
         orderId: true,
         status: true,
         providerPaymentId: true,
+        eventId: true,
         order: {
           select: {
             registrations: {
               select: {
                 id: true,
+                eventId: true,
                 status: true,
                 waitlistedAt: true
               }
@@ -1759,6 +1779,7 @@ export async function applyEventPaymentProviderStatus(
         {
           registrationId:
             registration.id,
+          eventId: registration.eventId,
           status: "CONFIRMED",
           paymentId: payment.id
         }
@@ -1933,6 +1954,7 @@ export async function applyRegistrationPaymentStatus(
       {
         registrationId:
           registration.id,
+        eventId: registration.event.id,
         status: "CONFIRMED",
         paymentId:
           eventPayment?.id ??

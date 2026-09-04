@@ -669,12 +669,21 @@ export function EventWorkspaceClient({
     useState(false);
   const [checkInCode, setCheckInCode] =
     useState("");
-  const [checkInSearch, setCheckInSearch] =
-    useState("");
   const [
     checkInSearchInput,
     setCheckInSearchInput
   ] = useState("");
+  const [checkInItems, setCheckInItems] = useState<
+    EventParticipantItem[]
+  >([]);
+  const [
+    isLoadingCheckInSearch,
+    setIsLoadingCheckInSearch
+  ] = useState(false);
+  const [
+    checkInHasSearched,
+    setCheckInHasSearched
+  ] = useState(false);
   const [isCheckingIn, setIsCheckingIn] =
     useState(false);
   const [checkInMessage, setCheckInMessage] =
@@ -1817,16 +1826,6 @@ export function EventWorkspaceClient({
     }
   }
 
-  const normalizeEventSearch = (
-    value: string
-  ) =>
-    value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, " ");
-
   const getRegistrationStatusLabel = (
     status: string
   ) => {
@@ -1854,6 +1853,102 @@ export function EventWorkspaceClient({
 
     return labels[status] ?? status;
   };
+
+  async function loadCheckInSearch(
+    search: string
+  ) {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setError(null);
+    setCheckInMessage(null);
+    setIsLoadingCheckInSearch(true);
+    setCheckInHasSearched(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", "1");
+      params.set("limit", "50");
+
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/registrations?${params.toString()}`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = (await response.json()) as
+        | EventParticipantListResponse
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível pesquisar participantes."
+        );
+        setCheckInItems([]);
+        return;
+      }
+
+      const payload =
+        data as EventParticipantListResponse;
+
+      setCheckInItems(payload.items);
+    } catch {
+      setError(
+        "Não foi possível pesquisar participantes agora."
+      );
+      setCheckInItems([]);
+    } finally {
+      setIsLoadingCheckInSearch(false);
+    }
+  }
+
+  function markCheckInItemPresent(
+    registrationId: string
+  ) {
+    setCheckInItems((current) =>
+      current.map((item) =>
+        item.id === registrationId
+          ? {
+              ...item,
+              status: "CHECKED_IN"
+            }
+          : item
+      )
+    );
+
+    setEvent((current) =>
+      current
+        ? {
+            ...current,
+            registrations:
+              current.registrations.map(
+                (registration) =>
+                  registration.id ===
+                  registrationId
+                    ? {
+                        ...registration,
+                        status: "CHECKED_IN"
+                      }
+                    : registration
+              )
+          }
+        : current
+    );
+  }
 
   async function handleCheckInByCode(
     formEvent: React.FormEvent<HTMLFormElement>
@@ -1894,7 +1989,7 @@ export function EventWorkspaceClient({
       );
 
       const data = await response.json() as
-        | EventDetail["registrations"][number]
+        | { id: string; status?: string }
         | ApiErrorResponse;
 
       if (!response.ok) {
@@ -1906,26 +2001,13 @@ export function EventWorkspaceClient({
         return;
       }
 
-      const updatedRegistration =
-        data as EventDetail["registrations"][number];
+      const updatedRegistration = data as {
+        id: string;
+        status?: string;
+      };
 
-      setEvent((current) =>
-        current
-          ? {
-              ...current,
-              registrations:
-                current.registrations.map(
-                  (registration) =>
-                    registration.id ===
-                    updatedRegistration.id
-                      ? {
-                          ...registration,
-                          ...updatedRegistration
-                        }
-                      : registration
-                )
-            }
-          : current
+      markCheckInItemPresent(
+        updatedRegistration.id
       );
       setCheckInCode("");
       setCheckInMessage("Check-in realizado.");
@@ -1958,6 +2040,7 @@ export function EventWorkspaceClient({
         {
           body: JSON.stringify({
             registrationId,
+            eventId,
             status: "CHECKED_IN"
           }),
           headers: {
@@ -1969,7 +2052,7 @@ export function EventWorkspaceClient({
       );
 
       const data = await response.json() as
-        | EventDetail["registrations"][number]
+        | { id: string; status?: string }
         | ApiErrorResponse;
 
       if (!response.ok) {
@@ -1981,27 +2064,7 @@ export function EventWorkspaceClient({
         return;
       }
 
-      const updatedRegistration =
-        data as EventDetail["registrations"][number];
-
-      setEvent((current) =>
-        current
-          ? {
-              ...current,
-              registrations:
-                current.registrations.map(
-                  (registration) =>
-                    registration.id ===
-                    updatedRegistration.id
-                      ? {
-                          ...registration,
-                          ...updatedRegistration
-                        }
-                      : registration
-                )
-            }
-          : current
-      );
+      markCheckInItemPresent(registrationId);
       setCheckInMessage("Check-in realizado.");
     } catch {
       setError(
@@ -2011,35 +2074,6 @@ export function EventWorkspaceClient({
       setIsCheckingIn(false);
     }
   }
-
-  const checkInParticipants =
-    event?.registrations.filter((registration) => {
-      const participant =
-        registration.person ?? registration.visitor;
-
-      if (!participant) {
-        return false;
-      }
-
-      const search =
-        normalizeEventSearch(
-          checkInSearch
-        );
-
-      return (
-        !search ||
-        [
-          participant.name,
-          participant.phone,
-          participant.email ?? "",
-          registration.checkInToken
-        ].some((value) =>
-          normalizeEventSearch(
-            value
-          ).includes(search)
-        )
-      );
-    }) ?? [];
 
   function normalizeFinancialSearch(
     value: string
@@ -7434,7 +7468,7 @@ export function EventWorkspaceClient({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          setCheckInSearch(
+          void loadCheckInSearch(
             checkInSearchInput.trim()
           );
         }}
@@ -7460,18 +7494,23 @@ export function EventWorkspaceClient({
         />
 
         <button
+          disabled={isLoadingCheckInSearch}
           style={{
             background: "#2563eb",
             border: 0,
             borderRadius: "10px",
             color: "#ffffff",
-            cursor: "pointer",
+            cursor: isLoadingCheckInSearch
+              ? "not-allowed"
+              : "pointer",
             fontWeight: 900,
             padding: "12px 18px"
           }}
           type="submit"
         >
-          Pesquisar
+          {isLoadingCheckInSearch
+            ? "Pesquisando..."
+            : "Pesquisar"}
         </button>
       </form>
     </div>
@@ -7482,7 +7521,9 @@ export function EventWorkspaceClient({
         gap: "8px"
       }}
     >
-      {checkInParticipants.length === 0 ? (
+      {checkInHasSearched &&
+      !isLoadingCheckInSearch &&
+      checkInItems.length === 0 ? (
         <p
           style={{
             color: "#94a3b8",
@@ -7493,7 +7534,7 @@ export function EventWorkspaceClient({
         </p>
       ) : null}
 
-      {checkInParticipants.map(
+      {checkInItems.map(
         (registration) => {
           const participant =
             registration.person ??

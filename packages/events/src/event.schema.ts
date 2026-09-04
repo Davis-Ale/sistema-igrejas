@@ -132,6 +132,7 @@ export const createPublicRegistrationSchema = z.object({
 
 export const updateRegistrationStatusSchema = z.object({
   registrationId: z.string().trim().min(1, "Inscrição é obrigatória."),
+  eventId: z.string().trim().min(1, "Evento é obrigatório."),
   status: registrationStatusSchema,
   paymentId: z.string().trim().min(1).optional()
 });
