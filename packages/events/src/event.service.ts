@@ -5,6 +5,7 @@ import type {
   DuplicateEventInput,
   CreatePublicRegistrationInput,
   CreateRegistrationInput,
+  EventAnalyticsQuery,
   UpdateEventInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
@@ -436,50 +437,53 @@ export async function updateEvent(
 }
 
 export async function listEvents(prisma: PrismaClient, churchId: string) {
-  return prisma.event.findMany({
+  const events = await prisma.event.findMany({
     where: {
       churchId
     },
-    include: {
-      registrations: {
-        select: {
-          id: true,
-          status: true,
-          paymentStatus: true,
-          paymentId: true,
-          checkInToken: true,
-          checkedInAt: true,
-          confirmedAt: true,
-          waitlistedAt: true,
-          registrationSource: true,
-          person: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true
-            }
-          },
-          visitor: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true
-            }
-          }
-        }
-      },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      date: true,
+      capacity: true,
+      price: true,
+      isPublic: true,
+      isPaid: true,
+      publicRegistrationEnabled: true,
+      waitlistEnabled: true,
+      createdAt: true,
+      updatedAt: true,
       trailStage: {
         select: {
           id: true,
           label: true
+        }
+      },
+      _count: {
+        select: {
+          registrations: {
+            where: {
+              status: {
+                not: "CANCELLED"
+              }
+            }
+          }
         }
       }
     },
     orderBy: {
       date: "asc"
     }
+  });
+
+  return events.map((event) => {
+    const { _count, ...summary } = event;
+
+    return {
+      ...summary,
+      registrationCount: _count.registrations
+    };
   });
 }
 
@@ -560,6 +564,194 @@ export async function getEventById(
       waitlisted,
       pendingPayments
     }
+  };
+}
+
+function toAnalyticsDayKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function addUtcDays(dayKey: string, days: number) {
+  const parts = dayKey.split("-").map(Number);
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  const next = new Date(Date.UTC(year, month - 1, day));
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+export async function getEventAnalytics(
+  prisma: PrismaClient,
+  churchId: string,
+  eventId: string,
+  query: EventAnalyticsQuery
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      churchId
+    },
+    select: {
+      id: true,
+      createdAt: true
+    }
+  });
+
+  if (!event) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
+
+  const pricing = query.pricing ?? "ALL";
+
+  if (query.ticketId) {
+    const ticket = await prisma.eventTicket.findFirst({
+      where: {
+        id: query.ticketId,
+        churchId,
+        eventId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!ticket) {
+      throw new Error("TICKET_NOT_FOUND");
+    }
+  }
+
+  const createdAtFilter =
+    query.from || query.to
+      ? {
+          ...(query.from ? { gte: query.from } : {}),
+          ...(query.to ? { lte: query.to } : {})
+        }
+      : undefined;
+
+  const where: Prisma.RegistrationWhereInput = {
+    churchId,
+    eventId,
+    ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+    ...(query.ticketId ? { ticketId: query.ticketId } : {}),
+    ...(pricing === "FREE"
+      ? {
+          ticket: {
+            isFree: true
+          }
+        }
+      : {}),
+    ...(pricing === "PAID"
+      ? {
+          ticket: {
+            isFree: false
+          }
+        }
+      : {})
+  };
+
+  const [rows, tickets] = await Promise.all([
+    prisma.registration.findMany({
+      where,
+      select: {
+        status: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    }),
+    prisma.eventTicket.findMany({
+      where: {
+        churchId,
+        eventId
+      },
+      select: {
+        id: true,
+        name: true,
+        isFree: true
+      },
+      orderBy: {
+        name: "asc"
+      }
+    })
+  ]);
+
+  let confirmed = 0;
+  let pending = 0;
+  let cancelled = 0;
+  const countsByDay = new Map<string, number>();
+
+  for (const row of rows) {
+    if (row.status === "CANCELLED") {
+      cancelled += 1;
+    } else if (row.status === "PENDING") {
+      pending += 1;
+    } else if (
+      row.status === "CONFIRMED" ||
+      row.status === "CHECKED_IN"
+    ) {
+      confirmed += 1;
+    }
+
+    const dayKey = toAnalyticsDayKey(row.createdAt);
+    countsByDay.set(dayKey, (countsByDay.get(dayKey) ?? 0) + 1);
+  }
+
+  const firstRow = rows[0];
+  const lastRow = rows[rows.length - 1];
+
+  const rangeStart =
+    query.from != null
+      ? toAnalyticsDayKey(query.from)
+      : firstRow
+        ? toAnalyticsDayKey(firstRow.createdAt)
+        : toAnalyticsDayKey(event.createdAt);
+  const rangeEnd =
+    query.to != null
+      ? toAnalyticsDayKey(query.to)
+      : lastRow
+        ? toAnalyticsDayKey(lastRow.createdAt)
+        : toAnalyticsDayKey(new Date());
+
+  const series: Array<{ date: string; total: number }> = [];
+
+  if (rangeStart <= rangeEnd) {
+    let cursor = rangeStart;
+
+    while (cursor <= rangeEnd) {
+      series.push({
+        date: cursor,
+        total: countsByDay.get(cursor) ?? 0
+      });
+      cursor = addUtcDays(cursor, 1);
+
+      if (series.length > 400) {
+        break;
+      }
+    }
+  }
+
+  return {
+    eventId: event.id,
+    filters: {
+      from: query.from?.toISOString() ?? null,
+      to: query.to?.toISOString() ?? null,
+      ticketId: query.ticketId ?? null,
+      pricing
+    },
+    totals: {
+      confirmed,
+      pending,
+      cancelled
+    },
+    series,
+    tickets
   };
 }
 

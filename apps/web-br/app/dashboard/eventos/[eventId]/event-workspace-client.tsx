@@ -33,6 +33,38 @@ type EventRegistrationStats = {
   pendingPayments: number;
 };
 
+type EventAnalyticsPricing = "ALL" | "FREE" | "PAID";
+
+type EventAnalyticsPeriodPreset =
+  | "ALL"
+  | "LAST_7"
+  | "LAST_30"
+  | "CUSTOM";
+
+type EventAnalyticsResponse = {
+  eventId: string;
+  filters: {
+    from: string | null;
+    to: string | null;
+    ticketId: string | null;
+    pricing: EventAnalyticsPricing;
+  };
+  totals: {
+    confirmed: number;
+    pending: number;
+    cancelled: number;
+  };
+  series: Array<{
+    date: string;
+    total: number;
+  }>;
+  tickets: Array<{
+    id: string;
+    name: string;
+    isFree: boolean;
+  }>;
+};
+
 type EventDetail = {
   id: string;
   title: string;
@@ -682,6 +714,31 @@ export function EventWorkspaceClient({
     financialStatusFilter,
     setFinancialStatusFilter
   ] = useState("ALL");
+  const [eventAnalytics, setEventAnalytics] =
+    useState<EventAnalyticsResponse | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] =
+    useState(false);
+  const [analyticsError, setAnalyticsError] = useState<
+    string | null
+  >(null);
+  const [
+    analyticsPeriodPreset,
+    setAnalyticsPeriodPreset
+  ] = useState<EventAnalyticsPeriodPreset>("ALL");
+  const [analyticsFrom, setAnalyticsFrom] = useState("");
+  const [analyticsTo, setAnalyticsTo] = useState("");
+  const [
+    analyticsTicketId,
+    setAnalyticsTicketId
+  ] = useState("ALL");
+  const [
+    analyticsPricing,
+    setAnalyticsPricing
+  ] = useState<EventAnalyticsPricing>("ALL");
+  const [
+    isOverviewPublicStatusOpen,
+    setIsOverviewPublicStatusOpen
+  ] = useState(false);
   const [eventsList, setEventsList] = useState<
     EventSummaryOption[]
   >([]);
@@ -2365,6 +2422,118 @@ export function EventWorkspaceClient({
     }
   }, [activeSection, eventId]);
 
+  useEffect(() => {
+    setAnalyticsPeriodPreset("ALL");
+    setAnalyticsFrom("");
+    setAnalyticsTo("");
+    setAnalyticsTicketId("ALL");
+    setAnalyticsPricing("ALL");
+    setEventAnalytics(null);
+    setAnalyticsError(null);
+  }, [eventId]);
+
+  useEffect(() => {
+    if (activeSection !== "overview") {
+      return;
+    }
+
+    async function loadEventAnalytics() {
+      const token = getSessionToken();
+
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      const params = new URLSearchParams();
+
+      if (analyticsPeriodPreset === "LAST_7") {
+        const from = new Date();
+        from.setDate(from.getDate() - 6);
+        from.setHours(0, 0, 0, 0);
+        params.set("from", from.toISOString());
+      } else if (analyticsPeriodPreset === "LAST_30") {
+        const from = new Date();
+        from.setDate(from.getDate() - 29);
+        from.setHours(0, 0, 0, 0);
+        params.set("from", from.toISOString());
+      } else if (analyticsPeriodPreset === "CUSTOM") {
+        if (analyticsFrom) {
+          params.set(
+            "from",
+            new Date(analyticsFrom).toISOString()
+          );
+        }
+
+        if (analyticsTo) {
+          const to = new Date(analyticsTo);
+          to.setHours(23, 59, 59, 999);
+          params.set("to", to.toISOString());
+        }
+      }
+
+      if (analyticsTicketId !== "ALL") {
+        params.set("ticketId", analyticsTicketId);
+      }
+
+      if (analyticsPricing !== "ALL") {
+        params.set("pricing", analyticsPricing);
+      }
+
+      setIsLoadingAnalytics(true);
+      setAnalyticsError(null);
+
+      try {
+        const query = params.toString();
+        const response = await fetch(
+          `${API_BASE_URL}/api/events/${eventId}/analytics${
+            query ? `?${query}` : ""
+          }`,
+          {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+
+        const data = (await response.json()) as
+          | EventAnalyticsResponse
+          | ApiErrorResponse;
+
+        if (!response.ok) {
+          setEventAnalytics(null);
+          setAnalyticsError(
+            "message" in data && data.message
+              ? data.message
+              : "Não foi possível carregar o relatório de ingressos."
+          );
+          return;
+        }
+
+        setEventAnalytics(data as EventAnalyticsResponse);
+      } catch {
+        setEventAnalytics(null);
+        setAnalyticsError(
+          "Não foi possível carregar o relatório de ingressos agora."
+        );
+      } finally {
+        setIsLoadingAnalytics(false);
+      }
+    }
+
+    void loadEventAnalytics();
+  }, [
+    activeSection,
+    analyticsFrom,
+    analyticsPeriodPreset,
+    analyticsPricing,
+    analyticsTicketId,
+    analyticsTo,
+    eventId,
+    router
+  ]);
+
   const publicRegistrationUrl = event
     ? `${WEB_BASE_URL}/eventos/${event.id}?returnTo=${encodeURIComponent(`/dashboard/eventos/${event.id}`)}`
     : "#";
@@ -3338,201 +3507,970 @@ export function EventWorkspaceClient({
                   ))}
                 </div>
 
-                <div
+                <article
                   style={{
+                    background: "rgba(15, 23, 42, 0.82)",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.18)",
+                    borderRadius: "24px",
                     display: "grid",
                     gap: "18px",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(300px, 1fr))"
+                    padding: "22px"
                   }}
                 >
-                  <article
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border:
-                        "1px solid rgba(148, 163, 184, 0.18)",
-                      borderRadius: "24px",
-                      display: "grid",
-                      gap: "18px",
-                      padding: "22px"
-                    }}
-                  >
-                    <div>
-                      <strong
-                        style={{
-                          color: "#ffffff",
-                          fontSize: "18px"
-                        }}
-                      >
-                        Página pública do evento
-                      </strong>
-
-                      <p
-                        style={{
-                          color: "#94a3b8",
-                          lineHeight: 1.6,
-                          margin: "6px 0 0"
-                        }}
-                      >
-                        Link e QR Code para divulgação da página
-                        pública.
-                      </p>
-                    </div>
-
-                    {event.isPublic ? (
-                      <div
-                        style={{
-                          alignItems: "center",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "18px"
-                        }}
-                      >
-                        <div
-                          style={{
-                            background: "#ffffff",
-                            borderRadius: "16px",
-                            display: "grid",
-                            padding: "12px",
-                            placeItems: "center"
-                          }}
-                        >
-                          <QRCode
-                            size={112}
-                            value={publicRegistrationUrl}
-                          />
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gap: "10px",
-                            minWidth: 0
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: "#cbd5e1",
-                              fontSize: "13px",
-                              overflowWrap: "anywhere"
-                            }}
-                          >
-                            {publicRegistrationUrl}
-                          </span>
-
-                          <a
-                            href={publicRegistrationUrl}
-                            rel="noreferrer"
-                            style={{
-                              color: "#93c5fd",
-                              fontWeight: 900,
-                              textDecoration: "none"
-                            }}
-                            target="_blank"
-                          >
-                            Abrir página pública
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      <p
-                        style={{
-                          background:
-                            "rgba(245, 158, 11, 0.10)",
-                          border:
-                            "1px solid rgba(245, 158, 11, 0.22)",
-                          borderRadius: "14px",
-                          color: "#fde68a",
-                          lineHeight: 1.6,
-                          margin: 0,
-                          padding: "14px"
-                        }}
-                      >
-                        O evento está em rascunho. Publique-o para
-                        disponibilizar a página e o QR Code.
-                      </p>
-                    )}
-                  </article>
-
-                  <article
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border:
-                        "1px solid rgba(148, 163, 184, 0.18)",
-                      borderRadius: "24px",
-                      display: "grid",
-                      gap: "14px",
-                      padding: "22px"
-                    }}
-                  >
+                  <div>
                     <strong
                       style={{
                         color: "#ffffff",
                         fontSize: "18px"
                       }}
                     >
-                      Status operacional
+                      Evolução de ingressos
                     </strong>
 
-                    {[
-                      [
-                        "Publicação",
-                        event.isPublic
-                          ? "Publicado"
-                          : "Rascunho"
-                      ],
-                      [
-                        "Inscrições públicas",
-                        event.publicRegistrationEnabled
-                          ? "Abertas"
-                          : "Fechadas"
-                      ],
-                      [
-                        "Ingressos configurados",
-                        String(tickets.length)
-                      ],
-                      [
-                        "Participantes ativos",
-                        String(statistics.active)
-                      ],
-                      [
-                        "Credenciados",
-                        String(statistics.checkedIn)
-                      ]
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        lineHeight: 1.6,
+                        margin: "6px 0 0"
+                      }}
+                    >
+                      Série temporal agregada de inscrições por
+                      dia, com confirmados, pendentes e
+                      cancelados.
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "12px",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(180px, 1fr))"
+                    }}
+                  >
+                    <label
+                      style={{
+                        color: "#cbd5e1",
+                        display: "grid",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Período
+                      <select
+                        onChange={(changeEvent) => {
+                          setAnalyticsPeriodPreset(
+                            changeEvent.target
+                              .value as EventAnalyticsPeriodPreset
+                          );
+                        }}
                         style={{
-                          alignItems: "center",
-                          borderBottom:
-                            "1px solid rgba(148, 163, 184, 0.12)",
-                          display: "flex",
-                          gap: "16px",
-                          justifyContent: "space-between",
-                          paddingBottom: "12px"
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          font: "inherit",
+                          padding: "11px 12px"
+                        }}
+                        value={analyticsPeriodPreset}
+                      >
+                        <option value="ALL">
+                          Todo o período
+                        </option>
+                        <option value="LAST_7">
+                          Últimos 7 dias
+                        </option>
+                        <option value="LAST_30">
+                          Últimos 30 dias
+                        </option>
+                        <option value="CUSTOM">
+                          Período personalizado
+                        </option>
+                      </select>
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#cbd5e1",
+                        display: "grid",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Valor do ingresso
+                      <select
+                        onChange={(changeEvent) => {
+                          setAnalyticsPricing(
+                            changeEvent.target
+                              .value as EventAnalyticsPricing
+                          );
+                        }}
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          font: "inherit",
+                          padding: "11px 12px"
+                        }}
+                        value={analyticsPricing}
+                      >
+                        <option value="ALL">
+                          Gratuito e pago
+                        </option>
+                        <option value="FREE">
+                          Somente gratuito
+                        </option>
+                        <option value="PAID">
+                          Somente pago
+                        </option>
+                      </select>
+                    </label>
+
+                    <label
+                      style={{
+                        color: "#cbd5e1",
+                        display: "grid",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Tipo de ingresso
+                      <select
+                        onChange={(changeEvent) => {
+                          setAnalyticsTicketId(
+                            changeEvent.target.value
+                          );
+                        }}
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          font: "inherit",
+                          padding: "11px 12px"
+                        }}
+                        value={analyticsTicketId}
+                      >
+                        <option value="ALL">
+                          Todos os tipos
+                        </option>
+                        {(eventAnalytics?.tickets ?? []).map(
+                          (ticket) => (
+                            <option
+                              key={ticket.id}
+                              value={ticket.id}
+                            >
+                              {ticket.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  </div>
+
+                  {analyticsPeriodPreset === "CUSTOM" ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "12px",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(180px, 1fr))"
+                      }}
+                    >
+                      <label
+                        style={{
+                          color: "#cbd5e1",
+                          display: "grid",
+                          fontSize: "13px",
+                          fontWeight: 800,
+                          gap: "8px"
                         }}
                       >
-                        <span
-                          style={{
-                            color: "#94a3b8",
-                            fontSize: "14px"
+                        De
+                        <input
+                          onChange={(changeEvent) => {
+                            setAnalyticsFrom(
+                              changeEvent.target.value
+                            );
                           }}
-                        >
-                          {label}
-                        </span>
-
-                        <strong
                           style={{
+                            background: "#0f172a",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "12px",
                             color: "#ffffff",
-                            fontSize: "14px",
-                            textAlign: "right"
+                            font: "inherit",
+                            padding: "11px 12px"
+                          }}
+                          type="date"
+                          value={analyticsFrom}
+                        />
+                      </label>
+
+                      <label
+                        style={{
+                          color: "#cbd5e1",
+                          display: "grid",
+                          fontSize: "13px",
+                          fontWeight: 800,
+                          gap: "8px"
+                        }}
+                      >
+                        Até
+                        <input
+                          onChange={(changeEvent) => {
+                            setAnalyticsTo(
+                              changeEvent.target.value
+                            );
+                          }}
+                          style={{
+                            background: "#0f172a",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "12px",
+                            color: "#ffffff",
+                            font: "inherit",
+                            padding: "11px 12px"
+                          }}
+                          type="date"
+                          value={analyticsTo}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {analyticsError ? (
+                    <p
+                      style={{
+                        background: "rgba(239, 68, 68, 0.12)",
+                        border:
+                          "1px solid rgba(248, 113, 113, 0.24)",
+                        borderRadius: "14px",
+                        color: "#fecaca",
+                        margin: 0,
+                        padding: "12px 14px"
+                      }}
+                    >
+                      {analyticsError}
+                    </p>
+                  ) : null}
+
+                  {isLoadingAnalytics ? (
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        margin: 0
+                      }}
+                    >
+                      Carregando evolução de ingressos...
+                    </p>
+                  ) : null}
+
+                  {!isLoadingAnalytics && eventAnalytics ? (
+                    <>
+                      <div
+                        style={{
+                          background: "rgba(2, 6, 23, 0.35)",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.14)",
+                          borderRadius: "18px",
+                          padding: "16px"
+                        }}
+                      >
+                        {(() => {
+                          const series = eventAnalytics.series;
+                          const rawMax =
+                            series.length === 0
+                              ? 0
+                              : Math.max(
+                                  0,
+                                  ...series.map(
+                                    (point) => point.total
+                                  )
+                                );
+                          const hasChartData =
+                            series.length > 0 && rawMax > 0;
+
+                          if (!hasChartData) {
+                            return (
+                              <p
+                                style={{
+                                  color: "#94a3b8",
+                                  margin: 0,
+                                  padding: "28px 8px",
+                                  textAlign: "center"
+                                }}
+                              >
+                                Nenhuma inscrição encontrada
+                                para os filtros selecionados.
+                              </p>
+                            );
+                          }
+
+                          const targetTickCount = 4;
+                          const roughStep =
+                            rawMax / targetTickCount;
+                          const magnitude = Math.pow(
+                            10,
+                            Math.floor(
+                              Math.log10(
+                                Math.max(roughStep, 1)
+                              )
+                            )
+                          );
+                          const normalized =
+                            roughStep / magnitude;
+                          const niceNormalized =
+                            normalized <= 1
+                              ? 1
+                              : normalized <= 2
+                                ? 2
+                                : normalized <= 5
+                                  ? 5
+                                  : 10;
+                          const tickStep = Math.max(
+                            1,
+                            Math.round(
+                              niceNormalized * magnitude
+                            )
+                          );
+                          const niceMax =
+                            Math.ceil(rawMax / tickStep) *
+                            tickStep;
+                          const yTicks: number[] = [];
+
+                          for (
+                            let tick = 0;
+                            tick <= niceMax;
+                            tick += tickStep
+                          ) {
+                            yTicks.push(tick);
+                          }
+
+                          const labelStep = Math.max(
+                            1,
+                            Math.ceil(series.length / 8)
+                          );
+                          const plotHeight = 240;
+                          const yAxisWidth = 36;
+                          const viewW = 1000;
+                          const viewH = plotHeight;
+                          const padL = 12;
+                          const padR = 12;
+                          const padT = 28;
+                          const padB = 8;
+                          const plotW = viewW - padL - padR;
+                          const plotH = viewH - padT - padB;
+                          const pointCount = series.length;
+
+                          const getX = (index: number) =>
+                            pointCount === 1
+                              ? padL + plotW / 2
+                              : padL +
+                                (index / (pointCount - 1)) *
+                                  plotW;
+
+                          const getY = (total: number) =>
+                            padT +
+                            plotH -
+                            (niceMax === 0
+                              ? 0
+                              : (total / niceMax) * plotH);
+
+                          const linePath = series
+                            .map((point, index) => {
+                              const x = getX(index);
+                              const y = getY(point.total);
+                              return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+                            })
+                            .join(" ");
+
+                          const firstX = getX(0);
+                          const lastX = getX(pointCount - 1);
+                          const baselineY = padT + plotH;
+                          const areaPath = `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${firstX.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+
+                          return (
+                            <div
+                              aria-label="Gráfico de evolução de ingressos"
+                              role="img"
+                              style={{
+                                display: "grid",
+                                gap: "8px",
+                                gridTemplateColumns: `${yAxisWidth}px minmax(0, 1fr)`,
+                                padding: "4px 2px 0"
+                              }}
+                            >
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  height: `${plotHeight}px`,
+                                  justifyContent:
+                                    "space-between",
+                                  lineHeight: 1,
+                                  paddingBottom: "22px",
+                                  paddingTop: `${padT}px`,
+                                  boxSizing: "border-box",
+                                  textAlign: "right"
+                                }}
+                              >
+                                {[...yTicks]
+                                  .reverse()
+                                  .map((tick) => (
+                                    <span key={tick}>
+                                      {tick}
+                                    </span>
+                                  ))}
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "6px",
+                                  minWidth: 0
+                                }}
+                              >
+                                <svg
+                                  viewBox={`0 0 ${viewW} ${viewH}`}
+                                  width="100%"
+                                  height={plotHeight}
+                                  preserveAspectRatio="none"
+                                  style={{
+                                    display: "block",
+                                    overflow: "visible"
+                                  }}
+                                >
+                                  <defs>
+                                    <linearGradient
+                                      id="overview-ingressos-area"
+                                      x1="0"
+                                      y1="0"
+                                      x2="0"
+                                      y2="1"
+                                    >
+                                      <stop
+                                        offset="0%"
+                                        stopColor="#38bdf8"
+                                        stopOpacity="0.35"
+                                      />
+                                      <stop
+                                        offset="100%"
+                                        stopColor="#2563eb"
+                                        stopOpacity="0.02"
+                                      />
+                                    </linearGradient>
+                                  </defs>
+
+                                  {yTicks.map((tick) => {
+                                    const y = getY(tick);
+                                    return (
+                                      <line
+                                        key={`grid-${tick}`}
+                                        x1={padL}
+                                        x2={viewW - padR}
+                                        y1={y}
+                                        y2={y}
+                                        stroke={
+                                          tick === 0
+                                            ? "rgba(148, 163, 184, 0.28)"
+                                            : "rgba(148, 163, 184, 0.12)"
+                                        }
+                                        strokeWidth={1}
+                                        vectorEffect="non-scaling-stroke"
+                                      />
+                                    );
+                                  })}
+
+                                  <path
+                                    d={areaPath}
+                                    fill="url(#overview-ingressos-area)"
+                                  />
+
+                                  <path
+                                    d={linePath}
+                                    fill="none"
+                                    stroke="#38bdf8"
+                                    strokeWidth={2.5}
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                    vectorEffect="non-scaling-stroke"
+                                  />
+
+                                  {series.map(
+                                    (point, index) => {
+                                      const x = getX(index);
+                                      const y = getY(
+                                        point.total
+                                      );
+                                      const isActive =
+                                        point.total > 0;
+
+                                      return (
+                                        <g
+                                          key={point.date}
+                                        >
+                                          <circle
+                                            cx={x}
+                                            cy={y}
+                                            r={
+                                              isActive
+                                                ? 4.5
+                                                : 3
+                                            }
+                                            fill={
+                                              isActive
+                                                ? "#38bdf8"
+                                                : "#0f172a"
+                                            }
+                                            stroke="#38bdf8"
+                                            strokeWidth={
+                                              isActive
+                                                ? 0
+                                                : 1.5
+                                            }
+                                            vectorEffect="non-scaling-stroke"
+                                          >
+                                            <title>
+                                              {`${point.date}: ${point.total}`}
+                                            </title>
+                                          </circle>
+
+                                          {isActive ? (
+                                            <text
+                                              x={x}
+                                              y={y - 10}
+                                              fill="#94a3b8"
+                                              fontSize="11"
+                                              fontWeight="700"
+                                              textAnchor="middle"
+                                            >
+                                              {point.total}
+                                            </text>
+                                          ) : null}
+                                        </g>
+                                      );
+                                    }
+                                  )}
+                                </svg>
+
+                                <div
+                                  style={{
+                                    color: "#64748b",
+                                    display: "flex",
+                                    fontSize: "11px",
+                                    minWidth: 0
+                                  }}
+                                >
+                                  {series.map(
+                                    (point, index) => {
+                                      const showLabel =
+                                        index %
+                                          labelStep ===
+                                          0 ||
+                                        index ===
+                                          series.length - 1;
+                                      const label =
+                                        showLabel
+                                          ? new Intl.DateTimeFormat(
+                                              "pt-BR",
+                                              {
+                                                day: "2-digit",
+                                                month:
+                                                  "short",
+                                                timeZone:
+                                                  "America/Sao_Paulo"
+                                              }
+                                            ).format(
+                                              new Date(
+                                                `${point.date}T12:00:00`
+                                              )
+                                            )
+                                          : "";
+
+                                      return (
+                                        <span
+                                          key={point.date}
+                                          style={{
+                                            flex: "1 1 0",
+                                            minWidth: 0,
+                                            overflow:
+                                              "hidden",
+                                            textAlign:
+                                              "center",
+                                            textOverflow:
+                                              "ellipsis",
+                                            whiteSpace:
+                                              "nowrap"
+                                          }}
+                                        >
+                                          {label}
+                                        </span>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: "12px",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(160px, 1fr))"
+                        }}
+                      >
+                        {[
+                          {
+                            color: "#5eead4",
+                            label: "Ingressos confirmados",
+                            value:
+                              eventAnalytics.totals.confirmed
+                          },
+                          {
+                            color: "#fbbf24",
+                            label: "Ingressos pendentes",
+                            value:
+                              eventAnalytics.totals.pending
+                          },
+                          {
+                            color: "#e2e8f0",
+                            label: "Ingressos cancelados",
+                            value:
+                              eventAnalytics.totals.cancelled
+                          }
+                        ].map((item) => (
+                          <div
+                            key={item.label}
+                            style={{
+                              background:
+                                "rgba(2, 6, 23, 0.35)",
+                              border:
+                                "1px solid rgba(148, 163, 184, 0.14)",
+                              borderRadius: "16px",
+                              padding: "16px"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color: "#94a3b8",
+                                fontSize: "13px",
+                                fontWeight: 700
+                              }}
+                            >
+                              {item.label}
+                            </strong>
+
+                            <p
+                              style={{
+                                color: item.color,
+                                fontSize: "28px",
+                                fontWeight: 900,
+                                margin: "10px 0 0"
+                              }}
+                            >
+                              {item.value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                </article>
+
+                <div
+                  style={{
+                    background: "rgba(15, 23, 42, 0.82)",
+                    border:
+                      "1px solid rgba(148, 163, 184, 0.18)",
+                    borderRadius: "24px",
+                    overflow: "hidden"
+                  }}
+                >
+                  <button
+                    aria-expanded={isOverviewPublicStatusOpen}
+                    onClick={() => {
+                      setIsOverviewPublicStatusOpen(
+                        (current) => !current
+                      );
+                    }}
+                    style={{
+                      alignItems: "center",
+                      background: "transparent",
+                      border: 0,
+                      color: "#ffffff",
+                      cursor: "pointer",
+                      display: "flex",
+                      font: "inherit",
+                      gap: "12px",
+                      justifyContent: "space-between",
+                      padding: "16px 20px",
+                      textAlign: "left",
+                      width: "100%"
+                    }}
+                    type="button"
+                  >
+                    <strong
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 800
+                      }}
+                    >
+                      Página pública e status operacional
+                    </strong>
+
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        color: "#94a3b8",
+                        display: "inline-flex",
+                        fontSize: "18px",
+                        lineHeight: 1,
+                        transform: isOverviewPublicStatusOpen
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
+                        transition: "transform 0.2s ease"
+                      }}
+                    >
+                      ▾
+                    </span>
+                  </button>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateRows:
+                        isOverviewPublicStatusOpen
+                          ? "1fr"
+                          : "0fr",
+                      transition:
+                        "grid-template-rows 0.25s ease"
+                    }}
+                  >
+                    <div
+                      style={{
+                        minHeight: 0,
+                        overflow: "hidden"
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: "18px",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(300px, 1fr))",
+                          padding: "0 18px 18px"
+                        }}
+                      >
+                        <article
+                          style={{
+                            background:
+                              "rgba(2, 6, 23, 0.35)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.14)",
+                            borderRadius: "18px",
+                            display: "grid",
+                            gap: "18px",
+                            padding: "22px"
                           }}
                         >
-                          {value}
-                        </strong>
+                          <div>
+                            <strong
+                              style={{
+                                color: "#ffffff",
+                                fontSize: "18px"
+                              }}
+                            >
+                              Página pública do evento
+                            </strong>
+
+                            <p
+                              style={{
+                                color: "#94a3b8",
+                                lineHeight: 1.6,
+                                margin: "6px 0 0"
+                              }}
+                            >
+                              Link e QR Code para divulgação da
+                              página pública.
+                            </p>
+                          </div>
+
+                          {event.isPublic ? (
+                            <div
+                              style={{
+                                alignItems: "center",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "18px"
+                              }}
+                            >
+                              <div
+                                style={{
+                                  background: "#ffffff",
+                                  borderRadius: "16px",
+                                  display: "grid",
+                                  padding: "12px",
+                                  placeItems: "center"
+                                }}
+                              >
+                                <QRCode
+                                  size={112}
+                                  value={publicRegistrationUrl}
+                                />
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: "10px",
+                                  minWidth: 0
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    overflowWrap: "anywhere"
+                                  }}
+                                >
+                                  {publicRegistrationUrl}
+                                </span>
+
+                                <a
+                                  href={publicRegistrationUrl}
+                                  rel="noreferrer"
+                                  style={{
+                                    color: "#93c5fd",
+                                    fontWeight: 900,
+                                    textDecoration: "none"
+                                  }}
+                                  target="_blank"
+                                >
+                                  Abrir página pública
+                                </a>
+                              </div>
+                            </div>
+                          ) : (
+                            <p
+                              style={{
+                                background:
+                                  "rgba(245, 158, 11, 0.10)",
+                                border:
+                                  "1px solid rgba(245, 158, 11, 0.22)",
+                                borderRadius: "14px",
+                                color: "#fde68a",
+                                lineHeight: 1.6,
+                                margin: 0,
+                                padding: "14px"
+                              }}
+                            >
+                              O evento está em rascunho.
+                              Publique-o para disponibilizar a
+                              página e o QR Code.
+                            </p>
+                          )}
+                        </article>
+
+                        <article
+                          style={{
+                            background:
+                              "rgba(2, 6, 23, 0.35)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.14)",
+                            borderRadius: "18px",
+                            display: "grid",
+                            gap: "14px",
+                            padding: "22px"
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color: "#ffffff",
+                              fontSize: "18px"
+                            }}
+                          >
+                            Status operacional
+                          </strong>
+
+                          {[
+                            [
+                              "Publicação",
+                              event.isPublic
+                                ? "Publicado"
+                                : "Rascunho"
+                            ],
+                            [
+                              "Inscrições públicas",
+                              event.publicRegistrationEnabled
+                                ? "Abertas"
+                                : "Fechadas"
+                            ],
+                            [
+                              "Ingressos configurados",
+                              String(tickets.length)
+                            ],
+                            [
+                              "Participantes ativos",
+                              String(statistics.active)
+                            ],
+                            [
+                              "Credenciados",
+                              String(statistics.checkedIn)
+                            ]
+                          ].map(([label, value]) => (
+                            <div
+                              key={label}
+                              style={{
+                                alignItems: "center",
+                                borderBottom:
+                                  "1px solid rgba(148, 163, 184, 0.12)",
+                                display: "flex",
+                                gap: "16px",
+                                justifyContent:
+                                  "space-between",
+                                paddingBottom: "12px"
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: "#94a3b8",
+                                  fontSize: "14px"
+                                }}
+                              >
+                                {label}
+                              </span>
+
+                              <strong
+                                style={{
+                                  color: "#ffffff",
+                                  fontSize: "14px",
+                                  textAlign: "right"
+                                }}
+                              >
+                                {value}
+                              </strong>
+                            </div>
+                          ))}
+                        </article>
                       </div>
-                    ))}
-                  </article>
+                    </div>
+                  </div>
                 </div>
               </section>
             ) : null}

@@ -183,6 +183,35 @@ export const eventIdParamsSchema = z.object({
   eventId: z.string().trim().min(1, "Evento é obrigatório.")
 });
 
+export const eventAnalyticsPricingSchema = z.enum([
+  "ALL",
+  "FREE",
+  "PAID"
+]);
+
+export const eventAnalyticsQuerySchema = z
+  .object({
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    ticketId: z.preprocess(
+      emptyToUndefined,
+      z.string().min(1).optional()
+    ),
+    pricing: z.preprocess(
+      emptyToUndefined,
+      eventAnalyticsPricingSchema.optional()
+    )
+  })
+  .superRefine((input, context) => {
+    if (input.from && input.to && input.from > input.to) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A data inicial deve ser anterior à data final.",
+        path: ["from"]
+      });
+    }
+  });
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DuplicateEventInput = z.infer<typeof duplicateEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
@@ -193,3 +222,4 @@ export type CheckInByTokenInput = z.infer<typeof checkInByTokenSchema>;
 export type ListEventRegistrationsQuery = z.infer<
   typeof listEventRegistrationsQuerySchema
 >;
+export type EventAnalyticsQuery = z.infer<typeof eventAnalyticsQuerySchema>;

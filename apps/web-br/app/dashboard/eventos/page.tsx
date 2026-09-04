@@ -1,30 +1,14 @@
 "use client";
 
-
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 
 type LoginSession = {
   token: string;
 };
 
-type RegistrationStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "CHECKED_IN";
-
-type ParticipantType = "member" | "visitor";
-
-type Participant = {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-};
-
-type Member = Participant;
-
-type Visitor = Participant;
-
-type EventSummary = {
+type EventListItem = {
   id: string;
   title: string;
   slug: string;
@@ -35,41 +19,7 @@ type EventSummary = {
   isPaid: boolean;
   publicRegistrationEnabled: boolean;
   waitlistEnabled: boolean;
-  registrations: Array<{
-    id: string;
-    status: RegistrationStatus;
-    paymentStatus: string;
-    checkInToken: string;
-    checkedInAt: string | null;
-    waitlistedAt: string | null;
-    registrationSource: string;
-    person: Participant | null;
-    visitor: Participant | null;
-  }>;
-  trailStage: {
-    id: string;
-    label: string;
-  } | null;
-};
-
-type EventDetail = Omit<EventSummary, "registrations"> & {
-  registrationStats?: {
-    active: number;
-    checkedIn: number;
-    waitlisted: number;
-    pendingPayments: number;
-  };
-  registrations?: Array<{
-    id: string;
-    status: RegistrationStatus;
-    paymentStatus: string;
-    checkInToken: string;
-    checkedInAt: string | null;
-    waitlistedAt: string | null;
-    registrationSource: string;
-    person: Participant | null;
-    visitor: Participant | null;
-  }>;
+  registrationCount?: number;
 };
 
 type ApiErrorResponse = {
@@ -77,46 +27,8 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
-const WEB_BASE_URL = process.env.NEXT_PUBLIC_WEB_BASE_URL ?? "http://localhost:3000";
-
-const statusLabels: Record<RegistrationStatus, string> = {
-  PENDING: "Pendente",
-  CONFIRMED: "Confirmada",
-  CANCELLED: "Cancelada",
-  CHECKED_IN: "Check-in realizado"
-};
-
-const participantTypeLabels: Record<ParticipantType, string> = {
-  member: "Membro",
-  visitor: "Visitante"
-};
-
-const paymentStatusLabels: Record<string, string> = {
-  NOT_REQUIRED: "Não exige pagamento",
-  PAID: "Pago",
-  PENDING: "Pagamento pendente",
-  PENDING_PAYMENT: "Pagamento pendente",
-  WAITING_PAYMENT: "Aguardando pagamento",
-  WAITLISTED: "Lista de espera"
-};
-
-const registrationSourceLabels: Record<string, string> = {
-  ADMIN: "Equipe",
-  PUBLIC: "Página pública"
-};
-
-function formatPaymentStatus(paymentStatus: string) {
-  return paymentStatusLabels[paymentStatus] ?? paymentStatus;
-}
-
-function getPublicEventLink(eventId: string) {
-  return `/eventos/`;
-}
-
-function formatRegistrationSource(registrationSource: string) {
-  return registrationSourceLabels[registrationSource] ?? registrationSource;
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
 function getSessionToken() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
@@ -145,105 +57,32 @@ function createSlug(title: string) {
     .replace(/(^-|-$)+/g, "");
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
-function formatMoney(value: string | number) {
-  const numberValue = typeof value === "string" ? Number(value) : value;
-
-  return new Intl.NumberFormat("pt-BR", {
-    currency: "BRL",
-    style: "currency"
-  }).format(Number.isFinite(numberValue) ? numberValue : 0);
-}
-
-function getRegistrationParticipant(registration: {
-  person: Participant | null;
-  visitor: Participant | null;
-}) {
-  return registration.person ?? registration.visitor;
-}
-
-function getRegistrationParticipantType(registration: {
-  person: Participant | null;
-  visitor: Participant | null;
-}) {
-  return registration.person ? "Membro" : "Visitante";
-}
-
-function getRegistrationStats(registrations: Array<{
-  status: RegistrationStatus;
-  paymentStatus: string;
-  waitlistedAt: string | null;
-  visitor: Participant | null;
-}>) {
-  const active = registrations.filter((registration) => registration.status !== "CANCELLED");
-  const checkedIn = registrations.filter((registration) => registration.status === "CHECKED_IN");
-  const visitors = registrations.filter((registration) => registration.visitor);
-  const waitlisted = registrations.filter((registration) => registration.waitlistedAt);
-  const pendingPayment = registrations.filter((registration) => registration.paymentStatus === "PENDING" || registration.paymentStatus === "WAITING_PAYMENT");
-
-  return {
-    active: active.length,
-    checkedIn: checkedIn.length,
-    visitors: visitors.length,
-    waitlisted: waitlisted.length,
-    pendingPayment: pendingPayment.length
-  };
-}
-
 export default function EventosPage() {
-  const [events, setEvents] =
-    useState<EventSummary[]>([]);
-
-  const [
-    eventsResolved,
-    setEventsResolved
-  ] = useState(false);
-
-  useEffect(() => {
-    const firstEvent =
-      events[0];
-
-    if (!firstEvent) {
-      return;
-    }
-
-    window.location.replace(
-      `/dashboard/eventos/${firstEvent.id}`
-    );
-  }, [events]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState("");
-  const [selectedEvent, setSelectedEvent] = useState<EventDetail | null>(null);
-  const [participantType, setParticipantType] = useState<ParticipantType>("member");
-  const [selectedParticipantId, setSelectedParticipantId] = useState("");
-  const [checkInToken, setCheckInToken] = useState("");
+  const [events, setEvents] = useState<EventListItem[]>([]);
+  const [eventsResolved, setEventsResolved] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState("50");
   const [price, setPrice] = useState("0");
   const [isPublic, setIsPublic] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const selectedEventSummary = useMemo(
-    () => events.find((event) => event.id === selectedEventId) ?? null,
-    [events, selectedEventId]
-  );
+  useEffect(() => {
+    const firstEvent = events[0];
 
-  const selectableParticipants = participantType === "member" ? members : visitors;
+    if (!firstEvent) {
+      return;
+    }
 
-  async function loadEventsMembersAndVisitors() {
+    window.location.replace(`/dashboard/eventos/${firstEvent.id}`);
+  }, [events]);
+
+  async function loadEvents() {
     const token = getSessionToken();
 
     if (!token) {
@@ -256,23 +95,11 @@ export default function EventosPage() {
     setIsLoading(true);
 
     try {
-      const [eventsResponse, membersResponse, visitorsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/events`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${API_BASE_URL}/api/members`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${API_BASE_URL}/api/visitors`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        })
-      ]);
+      const eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
 
       if (!eventsResponse.ok) {
         const data = (await eventsResponse.json()) as ApiErrorResponse;
@@ -281,67 +108,13 @@ export default function EventosPage() {
         return;
       }
 
-      if (!membersResponse.ok) {
-        const data = (await membersResponse.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível carregar os membros.");
-        return;
-      }
-
-      if (!visitorsResponse.ok) {
-        const data = (await visitorsResponse.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível carregar os visitantes.");
-        return;
-      }
-
-      const eventsData = (await eventsResponse.json()) as EventSummary[];
-      const membersData = (await membersResponse.json()) as Member[];
-      const visitorsData = (await visitorsResponse.json()) as Visitor[];
+      const eventsData = (await eventsResponse.json()) as EventListItem[];
 
       setEvents(eventsData);
-      setMembers(membersData);
-      setVisitors(visitorsData);
-
-      const firstEvent = eventsData[0];
-
-      if (!selectedEventId && firstEvent) {
-        setSelectedEventId(firstEvent.id);
-      }
     } catch {
       setError("Não foi possível carregar os dados de eventos agora.");
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  async function loadSelectedEvent(eventId: string) {
-    const token = getSessionToken();
-
-    if (!token || !eventId) {
-      setSelectedEvent(null);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível carregar os detalhes do evento.");
-        return;
-      }
-
-      const data = (await response.json()) as EventDetail;
-
-      setSelectedEvent(data);
-    } catch {
-      setError("Não foi possível carregar os detalhes do evento agora.");
     }
   }
 
@@ -386,20 +159,25 @@ export default function EventosPage() {
         method: "POST"
       });
 
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
+      const data = (await response.json()) as
+        | { id: string }
+        | ApiErrorResponse;
 
-        setError(data.message ?? "Não foi possível cadastrar o evento.");
+      if (!response.ok) {
+        setError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível cadastrar o evento."
+        );
         return;
       }
 
-      setTitle("");
-      setDate("");
-      setCapacity("50");
-      setPrice("0");
-      setIsPublic(false);
-      setSuccessMessage("Evento cadastrado com sucesso.");
-      await loadEventsMembersAndVisitors();
+      if (!("id" in data) || !data.id) {
+        setError("Não foi possível cadastrar o evento.");
+        return;
+      }
+
+      window.location.replace(`/dashboard/eventos/${data.id}`);
     } catch {
       setError("Não foi possível cadastrar o evento agora.");
     } finally {
@@ -407,187 +185,21 @@ export default function EventosPage() {
     }
   }
 
-  async function handleCreateRegistration(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    if (!selectedEventId) {
-      setError("Selecione um evento para fazer a inscrição.");
-      return;
-    }
-
-    if (!selectedParticipantId) {
-      setError("Selecione um membro ou visitante para fazer a inscrição.");
-      return;
-    }
-
-    setError(null);
-    setSuccessMessage(null);
-    setIsRegistering(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/events/registrations`, {
-        body: JSON.stringify({
-          eventId: selectedEventId,
-          personId: participantType === "member" ? selectedParticipantId : undefined,
-          visitorId: participantType === "visitor" ? selectedParticipantId : undefined
-        }),
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível fazer a inscrição.");
-        return;
-      }
-
-      setSelectedParticipantId("");
-      setSuccessMessage("Inscrição realizada com sucesso.");
-      await loadEventsMembersAndVisitors();
-      await loadSelectedEvent(selectedEventId);
-    } catch {
-      setError("Não foi possível fazer a inscrição agora.");
-    } finally {
-      setIsRegistering(false);
-    }
-  }
-
-  async function handleCheckInByToken(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    if (!selectedEventId) {
-      setError("Selecione um evento para validar o check-in.");
-      return;
-    }
-
-    const normalizedToken = checkInToken.trim();
-
-    if (!normalizedToken) {
-      setError("Informe o código de check-in.");
-      return;
-    }
-
-    setError(null);
-    setSuccessMessage(null);
-    setIsUpdatingStatus(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/events/registrations/check-in-token`, {
-        body: JSON.stringify({
-          checkInToken: normalizedToken,
-          eventId: selectedEventId
-        }),
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível validar o código de check-in.");
-        return;
-      }
-
-      setCheckInToken("");
-      setSuccessMessage("Check-in por código realizado com sucesso.");
-      await loadEventsMembersAndVisitors();
-      await loadSelectedEvent(selectedEventId);
-    } catch {
-      setError("Não foi possível validar o código de check-in agora.");
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  }
-
-  async function updateRegistrationStatus(registrationId: string, status: RegistrationStatus) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
-    setError(null);
-    setSuccessMessage(null);
-    setIsUpdatingStatus(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/events/registrations/status`, {
-        body: JSON.stringify({
-          registrationId,
-          eventId: selectedEventId,
-          status
-        }),
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as ApiErrorResponse;
-
-        setError(data.message ?? "Não foi possível atualizar a inscrição.");
-        return;
-      }
-
-      setSuccessMessage(
-        status === "CHECKED_IN" ? "Check-in realizado com sucesso." : "Inscrição atualizada."
-      );
-      await loadEventsMembersAndVisitors();
-      await loadSelectedEvent(selectedEventId);
-    } catch {
-      setError("Não foi possível atualizar a inscrição agora.");
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  }
-
   useEffect(() => {
     let active = true;
 
-    void loadEventsMembersAndVisitors()
-      .finally(() => {
-        if (active) {
-          setEventsResolved(true);
-        }
-      });
+    void loadEvents().finally(() => {
+      if (active) {
+        setEventsResolved(true);
+      }
+    });
 
     return () => {
       active = false;
     };
   }, []);
 
-  useEffect(() => {
-    void loadSelectedEvent(selectedEventId);
-  }, [selectedEventId]);
-
-  if (
-    !eventsResolved ||
-    events.length > 0
-  ) {
+  if (!eventsResolved || events.length > 0) {
     return (
       <DashboardAuthGuard>
         <main
@@ -628,7 +240,7 @@ export default function EventosPage() {
             display: "grid",
             gap: "28px",
             margin: "0 auto",
-            maxWidth: "1120px",
+            maxWidth: "720px",
             padding: "28px"
           }}
         >
@@ -647,7 +259,26 @@ export default function EventosPage() {
               Voltar ao painel
             </Link>
 
+            <h1
+              style={{
+                color: "#ffffff",
+                fontSize: "28px",
+                margin: "0 0 8px"
+              }}
+            >
+              Eventos
+            </h1>
 
+            <p
+              style={{
+                color: "#94a3b8",
+                lineHeight: 1.6,
+                margin: 0
+              }}
+            >
+              Nenhum evento cadastrado ainda. Crie o primeiro para abrir o
+              workspace.
+            </p>
           </div>
 
           <form
@@ -661,7 +292,13 @@ export default function EventosPage() {
               padding: "22px"
             }}
           >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
+            <h2
+              style={{
+                color: "#ffffff",
+                fontSize: "20px",
+                margin: 0
+              }}
+            >
               Cadastrar evento
             </h2>
 
@@ -672,54 +309,116 @@ export default function EventosPage() {
                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
               }}
             >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label
+                style={{
+                  color: "#cbd5e1",
+                  display: "grid",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
                 Título
                 <input
                   onChange={(event) => setTitle(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  style={{
+                    border: "1px solid rgba(148, 163, 184, 0.38)",
+                    borderRadius: "14px",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
                   type="text"
                   value={title}
                 />
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label
+                style={{
+                  color: "#cbd5e1",
+                  display: "grid",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
                 Data e hora
                 <input
                   onChange={(event) => setDate(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  style={{
+                    border: "1px solid rgba(148, 163, 184, 0.38)",
+                    borderRadius: "14px",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
                   type="datetime-local"
                   value={date}
                 />
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label
+                style={{
+                  color: "#cbd5e1",
+                  display: "grid",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
                 Capacidade
                 <input
                   min="1"
                   onChange={(event) => setCapacity(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  style={{
+                    border: "1px solid rgba(148, 163, 184, 0.38)",
+                    borderRadius: "14px",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
                   type="number"
                   value={capacity}
                 />
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label
+                style={{
+                  color: "#cbd5e1",
+                  display: "grid",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  gap: "8px"
+                }}
+              >
                 Valor
                 <input
                   min="0"
                   onChange={(event) => setPrice(event.target.value)}
                   required
                   step="0.01"
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  style={{
+                    border: "1px solid rgba(148, 163, 184, 0.38)",
+                    borderRadius: "14px",
+                    font: "inherit",
+                    padding: "13px 14px"
+                  }}
                   type="number"
                   value={price}
                 />
               </label>
 
-              <label style={{ alignItems: "center", color: "#cbd5e1", display: "flex", fontSize: "14px", fontWeight: 800, gap: "10px", paddingTop: "28px" }}>
+              <label
+                style={{
+                  alignItems: "center",
+                  color: "#cbd5e1",
+                  display: "flex",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  gap: "10px",
+                  paddingTop: "28px"
+                }}
+              >
                 <input
                   checked={isPublic}
                   onChange={(event) => setIsPublic(event.target.checked)}
@@ -730,17 +429,18 @@ export default function EventosPage() {
             </div>
 
             <button
-              disabled={isCreating}
+              disabled={isCreating || isLoading}
               style={{
                 background: "#2563eb",
                 border: 0,
                 borderRadius: "14px",
                 color: "#ffffff",
-                cursor: isCreating ? "not-allowed" : "pointer",
+                cursor:
+                  isCreating || isLoading ? "not-allowed" : "pointer",
                 font: "inherit",
                 fontWeight: 900,
                 justifySelf: "start",
-                opacity: isCreating ? 0.72 : 1,
+                opacity: isCreating || isLoading ? 0.72 : 1,
                 padding: "13px 18px"
               }}
               type="submit"
@@ -749,341 +449,36 @@ export default function EventosPage() {
             </button>
           </form>
 
-          <form
-            onSubmit={handleCreateRegistration}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Inscrever participante
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
-              }}
-            >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Evento
-                <select
-                  onChange={(event) => setSelectedEventId(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={selectedEventId}
-                >
-                  <option value="">Selecione um evento</option>
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Tipo de participante
-                <select
-                  onChange={(event) => {
-                    setParticipantType(event.target.value as ParticipantType);
-                    setSelectedParticipantId("");
-                  }}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={participantType}
-                >
-                  <option value="member">Membro</option>
-                  <option value="visitor">Visitante</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                {participantTypeLabels[participantType]}
-                <select
-                  onChange={(event) => setSelectedParticipantId(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={selectedParticipantId}
-                >
-                  <option value="">
-                    {participantType === "member" ? "Selecione um membro" : "Selecione um visitante"}
-                  </option>
-                  {selectableParticipants.map((participant) => (
-                    <option key={participant.id} value={participant.id}>
-                      {participant.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <button
-              disabled={isRegistering || events.length === 0 || selectableParticipants.length === 0}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isRegistering || events.length === 0 || selectableParticipants.length === 0 ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isRegistering || events.length === 0 || selectableParticipants.length === 0 ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isRegistering ? "Inscrevendo..." : "Inscrever participante"}
-            </button>
-          </form>
-
           {error ? (
-            <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
+            <p
+              style={{
+                background: "rgba(239, 68, 68, 0.14)",
+                border: "1px solid rgba(248, 113, 113, 0.26)",
+                borderRadius: "14px",
+                color: "#fecaca",
+                fontSize: "14px",
+                margin: 0,
+                padding: "12px 14px"
+              }}
+            >
               {error}
             </p>
           ) : null}
 
           {successMessage ? (
-            <p style={{ background: "rgba(34, 197, 94, 0.14)", border: "1px solid rgba(74, 222, 128, 0.26)", borderRadius: "14px", color: "#bbf7d0", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
-              {successMessage}
-            </p>
-          ) : null}
-
-          <section
-            style={{
-              background: "rgba(15, 23, 42, 0.58)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "14px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Eventos cadastrados
-            </h2>
-
-            {isLoading ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando eventos...</p>
-            ) : null}
-
-            {!isLoading && events.length === 0 ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhum evento cadastrado ainda.
-              </p>
-            ) : null}
-
-            {!isLoading && events.length > 0 ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                {events.map((event) => {
-                  const stats = getRegistrationStats(event.registrations);
-
-                  return (
-                    <article
-                      key={event.id}
-                      style={{
-                        background: "rgba(15, 23, 42, 0.82)",
-                        border: "1px solid rgba(148, 163, 184, 0.16)",
-                        borderRadius: "18px",
-                        display: "grid",
-                        gap: "10px",
-                        padding: "16px"
-                      }}
-                    >
-                      <div style={{ alignItems: "start", display: "flex", gap: "12px", justifyContent: "space-between" }}>
-                        <div>
-                          <h3 style={{ color: "#ffffff", fontSize: "17px", margin: "0 0 6px" }}>
-                            {event.title}
-                          </h3>
-
-                          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
-                            {formatDate(event.date)} - {formatMoney(event.price)}
-                          </p>
-
-                          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
-                            Slug: {event.slug} - {event.isPublic ? "Público" : "Interno"}
-                          </p>
-                        </div>
-
-                        <span style={{ background: "rgba(37, 99, 235, 0.18)", border: "1px solid rgba(96, 165, 250, 0.22)", borderRadius: "999px", color: "#bfdbfe", fontSize: "12px", fontWeight: 900, padding: "6px 10px", whiteSpace: "nowrap" }}>
-                          {stats.active}/{event.capacity} inscritos
-                        </span>
-                      </div>
-
-                      <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                        Check-ins: {stats.checkedIn} - Visitantes inscritos: {stats.visitors} - Lista de espera: {stats.waitlisted} - Pagamento pendente: {stats.pendingPayment}
-                      </p>
-
-                      <Link
-                        href={"/dashboard/eventos/" + event.id}
-                        style={{
-                          background: "#2563eb",
-                          borderRadius: "12px",
-                          color: "#ffffff",
-                          fontSize: "14px",
-                          fontWeight: 900,
-                          justifySelf: "start",
-                          padding: "10px 14px",
-                          textDecoration: "none"
-                        }}
-                      >
-                        Gerenciar evento
-                      </Link>
-
-                      {event.isPublic && event.publicRegistrationEnabled ? (
-                        <div style={{ background: "rgba(37, 99, 235, 0.12)", border: "1px solid rgba(96, 165, 250, 0.2)", borderRadius: "14px", display: "grid", gap: "8px", padding: "12px" }}>
-                          <p style={{ color: "#bfdbfe", fontSize: "13px", fontWeight: 900, margin: 0 }}>
-                            Link público de inscrição
-                          </p>
-
-                          <Link href={"/eventos/" + event.id} style={{ color: "#93c5fd", fontSize: "14px", fontWeight: 800, textDecoration: "none", wordBreak: "break-all" }}>
-                            {getPublicEventLink(event.id)}
-                          </Link>
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            ) : null}
-          </section>
-
-          {selectedEventSummary ? (
-            <section
+            <p
               style={{
-                background: "rgba(15, 23, 42, 0.58)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "22px",
-                display: "grid",
-                gap: "14px",
-                padding: "22px"
+                background: "rgba(34, 197, 94, 0.14)",
+                border: "1px solid rgba(74, 222, 128, 0.26)",
+                borderRadius: "14px",
+                color: "#bbf7d0",
+                fontSize: "14px",
+                margin: 0,
+                padding: "12px 14px"
               }}
             >
-              <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-                Check-in: {selectedEventSummary.title}
-              </h2>
-
-              <form
-                onSubmit={handleCheckInByToken}
-                style={{
-                  background: "rgba(2, 6, 23, 0.28)",
-                  border: "1px solid rgba(148, 163, 184, 0.16)",
-                  borderRadius: "18px",
-                  display: "grid",
-                  gap: "12px",
-                  padding: "14px"
-                }}
-              >
-                <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                  Código de check-in
-                  <input
-                    onChange={(event) => setCheckInToken(event.target.value)}
-                    placeholder="Cole o código apresentado pelo participante"
-                    style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                    type="text"
-                    value={checkInToken}
-                  />
-                </label>
-
-                <button
-                  disabled={isUpdatingStatus || !checkInToken.trim()}
-                  style={{
-                    background: "#16a34a",
-                    border: 0,
-                    borderRadius: "14px",
-                    color: "#ffffff",
-                    cursor: isUpdatingStatus || !checkInToken.trim() ? "not-allowed" : "pointer",
-                    font: "inherit",
-                    fontWeight: 900,
-                    justifySelf: "start",
-                    opacity: isUpdatingStatus || !checkInToken.trim() ? 0.72 : 1,
-                    padding: "11px 16px"
-                  }}
-                  type="submit"
-                >
-                  {isUpdatingStatus ? "Validando..." : "Validar código e fazer check-in"}
-                </button>
-              </form>
-
-              {!selectedEvent ||
-              (selectedEvent.registrations?.length ?? 0) ===
-                0 ? (
-                <p style={{ color: "#cbd5e1", margin: 0 }}>
-                  Nenhuma inscrição neste evento ainda.
-                </p>
-              ) : null}
-
-              {selectedEvent?.registrations &&
-              selectedEvent.registrations.length > 0 ? (
-                <div style={{ display: "grid", gap: "10px" }}>
-                  {selectedEvent.registrations.map((registration) => {
-                    const participant = getRegistrationParticipant(registration);
-
-                    if (!participant) {
-                      return null;
-                    }
-
-                    return (
-                      <article
-                        key={registration.id}
-                        style={{
-                          alignItems: "center",
-                          background: "rgba(15, 23, 42, 0.82)",
-                          border: "1px solid rgba(148, 163, 184, 0.16)",
-                          borderRadius: "18px",
-                          display: "flex",
-                          gap: "12px",
-                          justifyContent: "space-between",
-                          padding: "14px"
-                        }}
-                      >
-                        <div>
-                          <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
-                            {participant.name}
-                          </h3>
-
-                          <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                            {getRegistrationParticipantType(registration)} - {participant.phone} - {statusLabels[registration.status]}
-                          </p>
-
-                          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "6px 0 0" }}>
-                            Código: {registration.checkInToken} - Origem: {formatRegistrationSource(registration.registrationSource)} - Pagamento: {formatPaymentStatus(registration.paymentStatus)}
-                            {registration.waitlistedAt ? " - Lista de espera" : ""}
-                          </p>
-                        </div>
-
-                        <button
-                          disabled={isUpdatingStatus || registration.status === "CHECKED_IN"}
-                          onClick={() => updateRegistrationStatus(registration.id, "CHECKED_IN")}
-                          style={{
-                            background: registration.status === "CHECKED_IN" ? "#16a34a" : "#2563eb",
-                            border: 0,
-                            borderRadius: "14px",
-                            color: "#ffffff",
-                            cursor: isUpdatingStatus || registration.status === "CHECKED_IN" ? "not-allowed" : "pointer",
-                            font: "inherit",
-                            fontWeight: 900,
-                            opacity: isUpdatingStatus ? 0.72 : 1,
-                            padding: "10px 14px",
-                            whiteSpace: "nowrap"
-                          }}
-                          type="button"
-                        >
-                          {registration.status === "CHECKED_IN" ? "Presente" : "Fazer check-in"}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </section>
+              {successMessage}
+            </p>
           ) : null}
         </section>
       </main>

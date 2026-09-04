@@ -8,6 +8,7 @@ import {
   createEventSchema,
   duplicateEventSchema,
   createRegistrationSchema,
+  eventAnalyticsQuerySchema,
   eventIdParamsSchema,
   listEventRegistrationsQuerySchema,
   updateEventSchema,
@@ -18,6 +19,7 @@ import {
   createEvent,
   duplicateEvent,
   createRegistration,
+  getEventAnalytics,
   getEventById,
   listEvents,
   updateEvent,
@@ -75,6 +77,14 @@ async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void
     await reply.code(404).send({
       error: "EVENT_NOT_FOUND",
       message: "Evento não encontrado."
+    });
+    return;
+  }
+
+  if (error.message === "TICKET_NOT_FOUND") {
+    await reply.code(404).send({
+      error: "TICKET_NOT_FOUND",
+      message: "Ingresso não encontrado para este evento."
     });
     return;
   }
@@ -222,6 +232,23 @@ export async function registerEventRoutes(
       );
 
       return await listEventRegistrations(
+        prisma,
+        churchId,
+        params.eventId,
+        query
+      );
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.get("/events/:eventId/analytics", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = eventIdParamsSchema.parse(request.params);
+      const query = eventAnalyticsQuerySchema.parse(request.query);
+
+      return await getEventAnalytics(
         prisma,
         churchId,
         params.eventId,
