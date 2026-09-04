@@ -53,7 +53,13 @@ type EventSummary = {
 };
 
 type EventDetail = Omit<EventSummary, "registrations"> & {
-  registrations: Array<{
+  registrationStats?: {
+    active: number;
+    checkedIn: number;
+    waitlisted: number;
+    pendingPayments: number;
+  };
+  registrations?: Array<{
     id: string;
     status: RegistrationStatus;
     paymentStatus: string;
@@ -1006,13 +1012,16 @@ export default function EventosPage() {
                 </button>
               </form>
 
-              {!selectedEvent || selectedEvent.registrations.length === 0 ? (
+              {!selectedEvent ||
+              (selectedEvent.registrations?.length ?? 0) ===
+                0 ? (
                 <p style={{ color: "#cbd5e1", margin: 0 }}>
                   Nenhuma inscrição neste evento ainda.
                 </p>
               ) : null}
 
-              {selectedEvent && selectedEvent.registrations.length > 0 ? (
+              {selectedEvent?.registrations &&
+              selectedEvent.registrations.length > 0 ? (
                 <div style={{ display: "grid", gap: "10px" }}>
                   {selectedEvent.registrations.map((registration) => {
                     const participant = getRegistrationParticipant(registration);

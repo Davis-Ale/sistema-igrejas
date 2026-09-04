@@ -235,7 +235,7 @@ export async function registerEventRoutes(
   app.get("/events/:eventId", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
-      const params = request.params as { eventId: string };
+      const params = eventIdParamsSchema.parse(request.params);
 
       return await getEventById(prisma, churchId, params.eventId);
     } catch (error) {

@@ -494,58 +494,6 @@ export async function getEventById(
       churchId
     },
     include: {
-      registrations: {
-        include: {
-          person: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true
-            }
-          },
-          visitor: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true
-            }
-          },
-          ticket: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          ticketBatch: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          formAnswers: {
-            include: {
-              field: {
-                select: {
-                  id: true,
-                  label: true,
-                  isSensitive: true,
-                  order: true
-                }
-              }
-            },
-            orderBy: {
-              field: {
-                order: "asc"
-              }
-            }
-          }
-        },
-        orderBy: {
-          createdAt: "asc"
-        }
-      },
       church: {
         select: {
           name: true,
@@ -565,7 +513,54 @@ export async function getEventById(
     throw new Error("EVENT_NOT_FOUND");
   }
 
-  return event;
+  const registrationScope = {
+    churchId,
+    eventId
+  };
+
+  const [active, checkedIn, waitlisted, pendingPayments] =
+    await Promise.all([
+      prisma.registration.count({
+        where: {
+          ...registrationScope,
+          status: {
+            not: "CANCELLED"
+          }
+        }
+      }),
+      prisma.registration.count({
+        where: {
+          ...registrationScope,
+          status: "CHECKED_IN"
+        }
+      }),
+      prisma.registration.count({
+        where: {
+          ...registrationScope,
+          waitlistedAt: {
+            not: null
+          }
+        }
+      }),
+      prisma.registration.count({
+        where: {
+          ...registrationScope,
+          paymentStatus: {
+            in: ["PENDING", "WAITING_PAYMENT"]
+          }
+        }
+      })
+    ]);
+
+  return {
+    ...event,
+    registrationStats: {
+      active,
+      checkedIn,
+      waitlisted,
+      pendingPayments
+    }
+  };
 }
 
 export async function getPublicEventById(prisma: PrismaClient, eventId: string) {

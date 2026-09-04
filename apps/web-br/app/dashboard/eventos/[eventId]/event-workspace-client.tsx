@@ -26,6 +26,13 @@ type RegistrationStatus =
   | "CANCELLED"
   | "CHECKED_IN";
 
+type EventRegistrationStats = {
+  active: number;
+  checkedIn: number;
+  waitlisted: number;
+  pendingPayments: number;
+};
+
 type EventDetail = {
   id: string;
   title: string;
@@ -41,44 +48,7 @@ type EventDetail = {
     name: string;
     slug: string;
   };
-  registrations: Array<{
-    id: string;
-    status: RegistrationStatus;
-    paymentStatus: string;
-    checkInToken: string;
-    checkedInAt: string | null;
-    waitlistedAt: string | null;
-    person: {
-      id: string;
-      name: string;
-      phone: string;
-      email: string | null;
-    } | null;
-    visitor: {
-      id: string;
-      name: string;
-      phone: string;
-      email: string | null;
-    } | null;
-    ticket: {
-      id: string;
-      name: string;
-    } | null;
-    ticketBatch: {
-      id: string;
-      name: string;
-    } | null;
-    formAnswers: Array<{
-      id: string;
-      value: unknown;
-      field: {
-        id: string;
-        label: string;
-        isSensitive: boolean;
-        order: number;
-      };
-    }>;
-  }>;
+  registrationStats: EventRegistrationStats;
 };
 
 type EventParticipantItem = {
@@ -754,23 +724,13 @@ export function EventWorkspaceClient({
   >(null);
 
   const statistics = useMemo(() => {
-    const registrations = event?.registrations ?? [];
+    const stats = event?.registrationStats;
 
     return {
-      active: registrations.filter(
-        (registration) => registration.status !== "CANCELLED"
-      ).length,
-      checkedIn: registrations.filter(
-        (registration) => registration.status === "CHECKED_IN"
-      ).length,
-      pendingPayments: registrations.filter(
-        (registration) =>
-          registration.paymentStatus === "PENDING" ||
-          registration.paymentStatus === "WAITING_PAYMENT"
-      ).length,
-      waitlisted: registrations.filter(
-        (registration) => registration.waitlistedAt
-      ).length
+      active: stats?.active ?? 0,
+      checkedIn: stats?.checkedIn ?? 0,
+      pendingPayments: stats?.pendingPayments ?? 0,
+      waitlisted: stats?.waitlisted ?? 0
     };
   }, [event]);
 
@@ -1919,6 +1879,12 @@ export function EventWorkspaceClient({
   function markCheckInItemPresent(
     registrationId: string
   ) {
+    const previousItem = checkInItems.find(
+      (item) => item.id === registrationId
+    );
+    const wasCheckedIn =
+      previousItem?.status === "CHECKED_IN";
+
     setCheckInItems((current) =>
       current.map((item) =>
         item.id === registrationId
@@ -1930,21 +1896,19 @@ export function EventWorkspaceClient({
       )
     );
 
+    if (wasCheckedIn) {
+      return;
+    }
+
     setEvent((current) =>
       current
         ? {
             ...current,
-            registrations:
-              current.registrations.map(
-                (registration) =>
-                  registration.id ===
-                  registrationId
-                    ? {
-                        ...registration,
-                        status: "CHECKED_IN"
-                      }
-                    : registration
-              )
+            registrationStats: {
+              ...current.registrationStats,
+              checkedIn:
+                current.registrationStats.checkedIn + 1
+            }
           }
         : current
     );
@@ -2687,7 +2651,10 @@ export function EventWorkspaceClient({
         current
           ? {
               ...current,
-              ...updatedEvent
+              ...updatedEvent,
+              registrationStats:
+                updatedEvent.registrationStats ??
+                current.registrationStats
             }
           : current
       );
@@ -2756,7 +2723,10 @@ export function EventWorkspaceClient({
         current
           ? {
               ...current,
-              ...updatedEvent
+              ...updatedEvent,
+              registrationStats:
+                updatedEvent.registrationStats ??
+                current.registrationStats
             }
           : current
       );
