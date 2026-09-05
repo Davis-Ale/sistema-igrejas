@@ -88,6 +88,7 @@ type EventParticipantItem = {
   status: RegistrationStatus;
   paymentStatus: string;
   checkInToken: string | null;
+  waitlistedAt: string | null;
   person: {
     id: string;
     name: string;
@@ -688,8 +689,15 @@ export function EventWorkspaceClient({
   ] = useState(false);
   const [isCheckingIn, setIsCheckingIn] =
     useState(false);
-  const [checkInMessage, setCheckInMessage] =
-    useState<string | null>(null);
+  const [checkInSuccess, setCheckInSuccess] =
+    useState<{
+      name: string;
+      registrationId: string;
+    } | null>(null);
+  const [
+    checkInSelectedId,
+    setCheckInSelectedId
+  ] = useState<string | null>(null);
   const [
     financialTransactions,
     setFinancialTransactions
@@ -1871,6 +1879,155 @@ export function EventWorkspaceClient({
     return labels[status] ?? status;
   };
 
+  const getParticipantCheckInLabel = (status: string) =>
+    status === "CHECKED_IN" ? "Presente" : "Não realizado";
+
+  const getRegistrationBadgeTone = (
+    status: string
+  ): "success" | "warning" | "danger" | "muted" => {
+    if (status === "CONFIRMED" || status === "CHECKED_IN") {
+      return "success";
+    }
+    if (status === "PENDING") {
+      return "warning";
+    }
+    if (status === "CANCELLED") {
+      return "danger";
+    }
+    return "muted";
+  };
+
+  const getPaymentBadgeTone = (
+    status: string
+  ): "success" | "warning" | "danger" | "muted" => {
+    if (status === "PAID") {
+      return "success";
+    }
+    if (status === "PENDING" || status === "WAITING_PAYMENT") {
+      return "warning";
+    }
+    if (status === "CANCELLED" || status === "REFUNDED") {
+      return "danger";
+    }
+    return "muted";
+  };
+
+  const formatParticipantCountLabel = (total: number) => {
+    if (total === 1) {
+      return "1 participante";
+    }
+    return `${total} participantes`;
+  };
+
+  const formatShowingRegistrationsLabel = (count: number) => {
+    if (count === 1) {
+      return "Mostrando 1 inscrição";
+    }
+    return `Mostrando ${count} inscrições`;
+  };
+
+  type CheckInEligibility = {
+    canCheckIn: boolean;
+    stateLabel: string;
+    tone: "success" | "warning" | "danger" | "action" | "muted";
+  };
+
+  function getCheckInParticipantName(
+    registration: {
+      person?: { name: string } | null;
+      visitor?: { name: string } | null;
+    }
+  ) {
+    return (
+      registration.person?.name ??
+      registration.visitor?.name ??
+      null
+    );
+  }
+
+  function getCheckInEligibility(
+    registration: EventParticipantItem,
+    isPaidEvent: boolean
+  ): CheckInEligibility {
+    if (registration.status === "CHECKED_IN") {
+      return {
+        canCheckIn: false,
+        stateLabel: "Já credenciado",
+        tone: "success"
+      };
+    }
+
+    if (registration.status === "CANCELLED") {
+      return {
+        canCheckIn: false,
+        stateLabel: "Cancelada",
+        tone: "danger"
+      };
+    }
+
+    if (registration.waitlistedAt) {
+      return {
+        canCheckIn: false,
+        stateLabel: "Lista de espera",
+        tone: "warning"
+      };
+    }
+
+    if (
+      isPaidEvent &&
+      registration.paymentStatus !== "PAID"
+    ) {
+      return {
+        canCheckIn: false,
+        stateLabel: "Pagamento pendente",
+        tone: "warning"
+      };
+    }
+
+    return {
+      canCheckIn: true,
+      stateLabel: "Apto para check-in",
+      tone: "action"
+    };
+  }
+
+  function getCheckInToneStyles(
+    tone: CheckInEligibility["tone"]
+  ) {
+    switch (tone) {
+      case "success":
+        return {
+          background: "rgba(5, 150, 105, 0.16)",
+          border: "1px solid rgba(52, 211, 153, 0.28)",
+          color: "#a7f3d0"
+        };
+      case "warning":
+        return {
+          background: "rgba(217, 119, 6, 0.14)",
+          border: "1px solid rgba(251, 191, 36, 0.28)",
+          color: "#fde68a"
+        };
+      case "danger":
+        return {
+          background: "rgba(185, 28, 28, 0.16)",
+          border: "1px solid rgba(248, 113, 113, 0.28)",
+          color: "#fecaca"
+        };
+      case "action":
+        return {
+          background: "rgba(37, 99, 235, 0.16)",
+          border: "1px solid rgba(96, 165, 250, 0.28)",
+          color: "#bfdbfe"
+        };
+      default:
+        return {
+          background: "rgba(148, 163, 184, 0.1)",
+          border: "1px solid rgba(148, 163, 184, 0.22)",
+          color: "#cbd5e1"
+        };
+    }
+  }
+
   async function loadCheckInSearch(
     search: string
   ) {
@@ -1882,7 +2039,8 @@ export function EventWorkspaceClient({
     }
 
     setError(null);
-    setCheckInMessage(null);
+    setCheckInSuccess(null);
+    setCheckInSelectedId(null);
     setIsLoadingCheckInSearch(true);
     setCheckInHasSearched(true);
 
@@ -1916,6 +2074,7 @@ export function EventWorkspaceClient({
             : "Não foi possível pesquisar participantes."
         );
         setCheckInItems([]);
+        setCheckInSelectedId(null);
         return;
       }
 
@@ -1923,11 +2082,17 @@ export function EventWorkspaceClient({
         data as EventParticipantListResponse;
 
       setCheckInItems(payload.items);
+      const soleItem =
+        payload.items.length === 1
+          ? payload.items[0]
+          : undefined;
+      setCheckInSelectedId(soleItem?.id ?? null);
     } catch {
       setError(
         "Não foi possível pesquisar participantes agora."
       );
       setCheckInItems([]);
+      setCheckInSelectedId(null);
     } finally {
       setIsLoadingCheckInSearch(false);
     }
@@ -1990,7 +2155,7 @@ export function EventWorkspaceClient({
     }
 
     setError(null);
-    setCheckInMessage(null);
+    setCheckInSuccess(null);
     setIsCheckingIn(true);
 
     try {
@@ -2009,8 +2174,13 @@ export function EventWorkspaceClient({
         }
       );
 
-      const data = await response.json() as
-        | { id: string; status?: string }
+      const data = (await response.json()) as
+        | {
+            id: string;
+            status?: string;
+            person?: { name: string } | null;
+            visitor?: { name: string } | null;
+          }
         | ApiErrorResponse;
 
       if (!response.ok) {
@@ -2025,13 +2195,30 @@ export function EventWorkspaceClient({
       const updatedRegistration = data as {
         id: string;
         status?: string;
+        person?: { name: string } | null;
+        visitor?: { name: string } | null;
       };
+
+      const participantName =
+        getCheckInParticipantName(
+          updatedRegistration
+        ) ??
+        getCheckInParticipantName(
+          checkInItems.find(
+            (item) => item.id === updatedRegistration.id
+          ) ?? {}
+        ) ??
+        "Participante";
 
       markCheckInItemPresent(
         updatedRegistration.id
       );
       setCheckInCode("");
-      setCheckInMessage("Check-in realizado.");
+      setCheckInSelectedId(updatedRegistration.id);
+      setCheckInSuccess({
+        name: participantName,
+        registrationId: updatedRegistration.id
+      });
     } catch {
       setError(
         "Não foi possível realizar o check-in agora."
@@ -2052,7 +2239,7 @@ export function EventWorkspaceClient({
     }
 
     setError(null);
-    setCheckInMessage(null);
+    setCheckInSuccess(null);
     setIsCheckingIn(true);
 
     try {
@@ -2072,8 +2259,13 @@ export function EventWorkspaceClient({
         }
       );
 
-      const data = await response.json() as
-        | { id: string; status?: string }
+      const data = (await response.json()) as
+        | {
+            id: string;
+            status?: string;
+            person?: { name: string } | null;
+            visitor?: { name: string } | null;
+          }
         | ApiErrorResponse;
 
       if (!response.ok) {
@@ -2085,8 +2277,30 @@ export function EventWorkspaceClient({
         return;
       }
 
+      const updatedRegistration = data as {
+        id: string;
+        status?: string;
+        person?: { name: string } | null;
+        visitor?: { name: string } | null;
+      };
+
+      const participantName =
+        getCheckInParticipantName(
+          updatedRegistration
+        ) ??
+        getCheckInParticipantName(
+          checkInItems.find(
+            (item) => item.id === registrationId
+          ) ?? {}
+        ) ??
+        "Participante";
+
       markCheckInItemPresent(registrationId);
-      setCheckInMessage("Check-in realizado.");
+      setCheckInSelectedId(registrationId);
+      setCheckInSuccess({
+        name: participantName,
+        registrationId
+      });
     } catch {
       setError(
         "Não foi possível realizar o check-in agora."
@@ -3016,7 +3230,8 @@ export function EventWorkspaceClient({
           </p>
         ) : null}
 
-        {error ? (
+        {error &&
+        !(activeSection === "check-in" && event) ? (
           <section
             style={{
               background: "rgba(127, 29, 29, 0.32)",
@@ -8264,272 +8479,863 @@ export function EventWorkspaceClient({
       background: "rgba(15, 23, 42, 0.82)",
       border:
         "1px solid rgba(148, 163, 184, 0.18)",
-      borderRadius: "20px",
+      borderRadius: "18px",
       display: "grid",
-      gap: "18px",
-      padding: "24px"
+      gap: "12px",
+      padding: "14px 16px"
     }}
   >
-    <header>
-      <p
-        style={{
-          color: "#60a5fa",
-          fontSize: "13px",
-          fontWeight: 900,
-          margin: "0 0 6px",
-          textTransform: "uppercase"
-        }}
-      >
-        Check-in
-      </p>
-
-      <h2 style={{ margin: 0 }}>
-        Credenciamento
-      </h2>
-
-      <p
-        style={{
-          color: "#94a3b8",
-          margin: "8px 0 0"
-        }}
-      >
-        Use a credencial para o check-in ou pesquise o participante manualmente.
-      </p>
-    </header>
-
-    {checkInMessage ? (
-      <p
-        style={{
-          background: "rgba(5, 150, 105, 0.16)",
-          border:
-            "1px solid rgba(52, 211, 153, 0.26)",
-          borderRadius: "12px",
-          color: "#a7f3d0",
-          margin: 0,
-          padding: "12px"
-        }}
-      >
-        {checkInMessage}
-      </p>
-    ) : null}
-
-    <div>
-      <strong
-        style={{
-          display: "block",
-          marginBottom: "8px"
-        }}
-      >
-        Check-in por credencial
-      </strong>
-
-      <form
-      onSubmit={handleCheckInByCode}
-      style={{
-        display: "grid",
-        gap: "10px",
-        gridTemplateColumns:
-          "minmax(220px, 1fr) auto"
-      }}
-    >
-      <input
-        onChange={(event) =>
-          setCheckInCode(event.target.value)
+    <style>{`
+      .checkin-ops-actions {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      }
+      @media (max-width: 720px) {
+        .checkin-ops-actions {
+          grid-template-columns: 1fr;
         }
-        placeholder="Código da credencial"
-        style={{
-          borderRadius: "10px",
-          padding: "12px"
-        }}
-        value={checkInCode}
-      />
+      }
+      .checkin-ops-meta {
+        display: grid;
+        gap: 6px 16px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+      }
+      @media (max-width: 520px) {
+        .checkin-ops-meta {
+          grid-template-columns: minmax(88px, 0.9fr) minmax(0, 1.4fr);
+        }
+      }
+    `}</style>
 
-      <button
-        disabled={isCheckingIn}
-        style={{
-          background: "#2563eb",
-          border: 0,
-          borderRadius: "10px",
-          color: "#ffffff",
-          fontWeight: 900,
-          padding: "12px 18px"
-        }}
-        type="submit"
-      >
-        {isCheckingIn
-          ? "Validando..."
-          : "Fazer check-in"}
-      </button>
-    </form>
-    </div>
-
-    <div>
-      <strong
-        style={{
-          display: "block",
-          marginBottom: "8px"
-        }}
-      >
-        Busca manual
-      </strong>
-
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void loadCheckInSearch(
-            checkInSearchInput.trim()
-          );
-        }}
-        style={{
-          display: "grid",
-          gap: "10px",
-          gridTemplateColumns:
-            "minmax(220px, 1fr) auto"
-        }}
-      >
-        <input
-          onChange={(event) =>
-            setCheckInSearchInput(
-              event.target.value
-            )
-          }
-          placeholder="Nome, e-mail, telefone ou código"
-          style={{
-            borderRadius: "10px",
-            padding: "12px"
-          }}
-          value={checkInSearchInput}
-        />
-
-        <button
-          disabled={isLoadingCheckInSearch}
-          style={{
-            background: "#2563eb",
-            border: 0,
-            borderRadius: "10px",
-            color: "#ffffff",
-            cursor: isLoadingCheckInSearch
-              ? "not-allowed"
-              : "pointer",
-            fontWeight: 900,
-            padding: "12px 18px"
-          }}
-          type="submit"
-        >
-          {isLoadingCheckInSearch
-            ? "Pesquisando..."
-            : "Pesquisar"}
-        </button>
-      </form>
-    </div>
-
-    <div
+    <header
       style={{
-        display: "grid",
-        gap: "8px"
+        alignItems: "center",
+        display: "flex",
+        gap: "10px",
+        minHeight: 0
       }}
     >
-      {checkInHasSearched &&
-      !isLoadingCheckInSearch &&
-      checkInItems.length === 0 ? (
+      <span
+        aria-hidden="true"
+        style={{
+          alignItems: "center",
+          background: "rgba(37, 99, 235, 0.14)",
+          border: "1px solid rgba(96, 165, 250, 0.28)",
+          borderRadius: "10px",
+          color: "#93c5fd",
+          display: "inline-flex",
+          flexShrink: 0,
+          height: "32px",
+          justifyContent: "center",
+          width: "32px"
+        }}
+      >
+        <svg
+          fill="none"
+          height="17"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+          viewBox="0 0 24 24"
+          width="17"
+        >
+          <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+          <path d="m8.5 12 2.4 2.4L15.8 9.5" />
+        </svg>
+      </span>
+
+      <div style={{ minWidth: 0 }}>
+        <p
+          style={{
+            color: "#60a5fa",
+            fontSize: "11px",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            margin: 0,
+            textTransform: "uppercase"
+          }}
+        >
+          Check-in
+        </p>
+        <h2
+          style={{
+            fontSize: "20px",
+            fontWeight: 800,
+            lineHeight: 1.2,
+            margin: "2px 0 0"
+          }}
+        >
+          Credenciamento
+        </h2>
         <p
           style={{
             color: "#94a3b8",
-            margin: 0
+            fontSize: "13px",
+            margin: "2px 0 0",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
           }}
         >
-          Nenhum participante encontrado.
+          Valide a credencial ou busque o participante
+          para registrar a entrada.
         </p>
-      ) : null}
+      </div>
+    </header>
 
-      {checkInItems.map(
-        (registration) => {
-          const participant =
-            registration.person ??
-            registration.visitor;
+    <div className="checkin-ops-actions">
+      <div
+        style={{
+          background: "rgba(37, 99, 235, 0.1)",
+          border: "1px solid rgba(96, 165, 250, 0.36)",
+          borderRadius: "12px",
+          display: "grid",
+          gap: "8px",
+          padding: "12px 12px 11px"
+        }}
+      >
+        <strong
+          style={{
+            color: "#e2e8f0",
+            fontSize: "13px",
+            fontWeight: 800
+          }}
+        >
+          Credencial rápida
+        </strong>
 
-          if (!participant) {
-            return null;
-          }
+        <form
+          onSubmit={handleCheckInByCode}
+          style={{
+            display: "grid",
+            gap: "8px"
+          }}
+        >
+          <input
+            onChange={(event) =>
+              setCheckInCode(event.target.value)
+            }
+            placeholder="Código da credencial"
+            style={{
+              background: "rgba(15, 23, 42, 0.72)",
+              border: "1px solid rgba(96, 165, 250, 0.32)",
+              borderRadius: "10px",
+              color: "#f8fafc",
+              fontSize: "15px",
+              fontWeight: 600,
+              padding: "12px 14px"
+            }}
+            value={checkInCode}
+          />
 
-          const checkedIn =
-            registration.status ===
-            "CHECKED_IN";
+          <button
+            disabled={isCheckingIn}
+            style={{
+              background: "#2563eb",
+              border: 0,
+              borderRadius: "10px",
+              color: "#ffffff",
+              cursor: isCheckingIn
+                ? "not-allowed"
+                : "pointer",
+              fontSize: "14px",
+              fontWeight: 900,
+              padding: "11px 14px",
+              width: "100%"
+            }}
+            type="submit"
+          >
+            {isCheckingIn
+              ? "Validando..."
+              : "Fazer check-in"}
+          </button>
+        </form>
+      </div>
 
-          return (
-            <div
-              key={registration.id}
+      <div
+        style={{
+          background: "rgba(15, 23, 42, 0.35)",
+          border: "1px solid rgba(148, 163, 184, 0.14)",
+          borderRadius: "12px",
+          display: "grid",
+          gap: "8px",
+          padding: "12px 12px 11px"
+        }}
+      >
+        <strong
+          style={{
+            color: "#cbd5e1",
+            fontSize: "13px",
+            fontWeight: 700
+          }}
+        >
+          Buscar participante
+        </strong>
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void loadCheckInSearch(
+              checkInSearchInput.trim()
+            );
+          }}
+          style={{
+            display: "grid",
+            gap: "8px",
+            gridTemplateColumns:
+              "minmax(0, 1fr) auto"
+          }}
+        >
+          <input
+            onChange={(event) =>
+              setCheckInSearchInput(
+                event.target.value
+              )
+            }
+            placeholder="Nome, e-mail, telefone ou código"
+            style={{
+              background: "rgba(15, 23, 42, 0.55)",
+              border: "1px solid rgba(148, 163, 184, 0.2)",
+              borderRadius: "10px",
+              color: "#e2e8f0",
+              fontSize: "14px",
+              padding: "10px 12px"
+            }}
+            value={checkInSearchInput}
+          />
+
+          <button
+            disabled={isLoadingCheckInSearch}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(96, 165, 250, 0.4)",
+              borderRadius: "10px",
+              color: "#bfdbfe",
+              cursor: isLoadingCheckInSearch
+                ? "not-allowed"
+                : "pointer",
+              fontWeight: 800,
+              padding: "10px 14px",
+              whiteSpace: "nowrap"
+            }}
+            type="submit"
+          >
+            {isLoadingCheckInSearch
+              ? "Pesquisando..."
+              : "Pesquisar"}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {(() => {
+      const selectedRegistration =
+        checkInItems.find(
+          (item) => item.id === checkInSelectedId
+        ) ?? null;
+      const selectedParticipant =
+        selectedRegistration?.person ??
+        selectedRegistration?.visitor ??
+        null;
+      const selectedEligibility =
+        selectedRegistration
+          ? getCheckInEligibility(
+              selectedRegistration,
+              Boolean(event?.isPaid)
+            )
+          : null;
+      const selectedToneStyles =
+        selectedEligibility
+          ? getCheckInToneStyles(
+              selectedEligibility.tone
+            )
+          : null;
+      const showSelectedPayment =
+        selectedRegistration
+          ? Boolean(event?.isPaid) ||
+            selectedRegistration.paymentStatus !==
+              "NOT_REQUIRED"
+          : false;
+      const selectedContactParts =
+        selectedParticipant
+          ? [
+              selectedParticipant.email,
+              selectedParticipant.phone
+            ].filter(Boolean)
+          : [];
+      const showResultList =
+        checkInHasSearched &&
+        !isLoadingCheckInSearch &&
+        checkInItems.length > 1;
+      const hasTokenSuccessOnly =
+        Boolean(checkInSuccess) &&
+        !selectedRegistration &&
+        checkInSuccess?.registrationId ===
+          checkInSelectedId;
+      const isSelectedSuccess =
+        Boolean(checkInSuccess) &&
+        selectedRegistration !== null &&
+        checkInSuccess?.registrationId ===
+          selectedRegistration.id;
+      const selectedCheckInLabel =
+        selectedRegistration && selectedEligibility
+          ? selectedRegistration.status ===
+              "CHECKED_IN" || isSelectedSuccess
+            ? "Presente"
+            : selectedEligibility.canCheckIn
+              ? "Pendente"
+              : selectedEligibility.stateLabel
+          : null;
+
+      const metaRow = (
+        label: string,
+        value: string
+      ) => (
+        <>
+          <span
+            style={{
+              color: "#64748b",
+              fontSize: "12px",
+              fontWeight: 700
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              color: "#e2e8f0",
+              fontSize: "13px",
+              fontWeight: 600
+            }}
+          >
+            {value}
+          </span>
+        </>
+      );
+
+      return (
+        <div
+          style={{
+            border:
+              "1px solid rgba(148, 163, 184, 0.16)",
+            borderRadius: "12px",
+            display: "grid",
+            gap: "10px",
+            padding: "12px 14px"
+          }}
+        >
+          <strong
+            style={{
+              color: "#cbd5e1",
+              fontSize: "12px",
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase"
+            }}
+          >
+            Resultado operacional
+          </strong>
+
+          {isLoadingCheckInSearch ? (
+            <p
               style={{
-                alignItems: "center",
-                border:
-                  "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "12px",
-                display: "grid",
-                gap: "12px",
-                gridTemplateColumns:
-                  "minmax(180px, 2fr) minmax(130px, 1fr) auto",
-                padding: "13px 15px"
+                color: "#93c5fd",
+                fontSize: "13px",
+                margin: 0
               }}
             >
-              <div>
-                <strong>
-                  {participant.name}
-                </strong>
+              Pesquisando...
+            </p>
+          ) : null}
 
+          {!isLoadingCheckInSearch &&
+          isCheckingIn ? (
+            <p
+              style={{
+                color: "#93c5fd",
+                fontSize: "13px",
+                margin: 0
+              }}
+            >
+              {checkInCode.trim()
+                ? "Validando credencial..."
+                : "Processando check-in..."}
+            </p>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          error ? (
+            <div
+              style={{
+                background:
+                  "rgba(185, 28, 28, 0.14)",
+                border:
+                  "1px solid rgba(248, 113, 113, 0.26)",
+                borderRadius: "10px",
+                color: "#fecaca",
+                padding: "10px 12px"
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "13px",
+                  marginBottom: "2px"
+                }}
+              >
+                Falha no credenciamento
+              </strong>
+              <span style={{ fontSize: "13px" }}>
+                {error}
+              </span>
+            </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          checkInHasSearched &&
+          checkInItems.length === 0 &&
+          !checkInSuccess ? (
+            <div
+              style={{
+                color: "#94a3b8",
+                display: "grid",
+                gap: "2px"
+              }}
+            >
+              <strong
+                style={{
+                  color: "#e2e8f0",
+                  fontSize: "14px"
+                }}
+              >
+                Nenhum participante encontrado
+              </strong>
+              <span style={{ fontSize: "12px" }}>
+                Tente outro nome, e-mail, telefone
+                ou código da credencial.
+              </span>
+            </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          showResultList ? (
+            <div
+              style={{
+                display: "grid",
+                gap: "4px",
+                maxHeight: "148px",
+                overflowY: "auto"
+              }}
+            >
+              {checkInItems.map((registration) => {
+                const participant =
+                  registration.person ??
+                  registration.visitor;
+
+                if (!participant) {
+                  return null;
+                }
+
+                const eligibility =
+                  getCheckInEligibility(
+                    registration,
+                    Boolean(event?.isPaid)
+                  );
+                const toneStyles =
+                  getCheckInToneStyles(
+                    eligibility.tone
+                  );
+                const isSelected =
+                  registration.id ===
+                  checkInSelectedId;
+
+                return (
+                  <button
+                    key={registration.id}
+                    onClick={() => {
+                      setCheckInSelectedId(
+                        registration.id
+                      );
+                      setCheckInSuccess(null);
+                      setError(null);
+                    }}
+                    style={{
+                      background: isSelected
+                        ? "rgba(37, 99, 235, 0.16)"
+                        : "transparent",
+                      border: isSelected
+                        ? "1px solid rgba(96, 165, 250, 0.4)"
+                        : "1px solid rgba(148, 163, 184, 0.12)",
+                      borderRadius: "8px",
+                      color: "#e2e8f0",
+                      cursor: "pointer",
+                      display: "grid",
+                      gap: "1px",
+                      padding: "8px 10px",
+                      textAlign: "left"
+                    }}
+                    type="button"
+                  >
+                    <span
+                      style={{
+                        alignItems: "center",
+                        display: "flex",
+                        gap: "8px",
+                        justifyContent:
+                          "space-between"
+                      }}
+                    >
+                      <strong
+                        style={{
+                          fontSize: "13px"
+                        }}
+                      >
+                        {participant.name}
+                      </strong>
+                      <span
+                        style={{
+                          ...toneStyles,
+                          borderRadius: "999px",
+                          fontSize: "10px",
+                          fontWeight: 800,
+                          padding: "2px 7px",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {eligibility.stateLabel}
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "11px"
+                      }}
+                    >
+                      {registration.ticket?.name ??
+                        "Sem ingresso"}
+                      {registration.ticketBatch
+                        ?.name
+                        ? ` · ${registration.ticketBatch.name}`
+                        : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          selectedRegistration &&
+          selectedParticipant &&
+          selectedEligibility &&
+          selectedToneStyles ? (
+            <div
+              style={{
+                display: "grid",
+                gap: "10px"
+              }}
+            >
+              {isSelectedSuccess &&
+              checkInSuccess ? (
+                <div
+                  style={{
+                    background:
+                      "rgba(5, 150, 105, 0.2)",
+                    border:
+                      "1px solid rgba(52, 211, 153, 0.4)",
+                    borderRadius: "10px",
+                    color: "#a7f3d0",
+                    padding: "10px 12px"
+                  }}
+                >
+                  <strong
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "2px"
+                    }}
+                  >
+                    Check-in realizado
+                  </strong>
+                  <span style={{ fontSize: "13px" }}>
+                    {checkInSuccess.name}
+                  </span>
+                </div>
+              ) : null}
+
+              <div
+                style={{
+                  alignItems: "flex-start",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  justifyContent: "space-between"
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <strong
+                    style={{
+                      display: "block",
+                      fontSize: "17px",
+                      fontWeight: 800,
+                      lineHeight: 1.25
+                    }}
+                  >
+                    {selectedParticipant.name}
+                  </strong>
+
+                  {selectedContactParts.length >
+                  0 ? (
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "12px",
+                        margin: "3px 0 0"
+                      }}
+                    >
+                      {selectedContactParts.join(
+                        " · "
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+
+                <span
+                  style={{
+                    ...selectedToneStyles,
+                    borderRadius: "999px",
+                    display: "inline-flex",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    height: "fit-content",
+                    padding: "4px 9px"
+                  }}
+                >
+                  {selectedEligibility.stateLabel}
+                </span>
+              </div>
+
+              <div className="checkin-ops-meta">
+                {metaRow(
+                  "Ingresso",
+                  `${selectedRegistration.ticket?.name ?? "Sem ingresso"}${
+                    selectedRegistration.ticketBatch
+                      ?.name
+                      ? ` · ${selectedRegistration.ticketBatch.name}`
+                      : ""
+                  }`
+                )}
+                {metaRow(
+                  "Inscrição",
+                  getRegistrationStatusLabel(
+                    selectedRegistration.status
+                  )
+                )}
+                {showSelectedPayment
+                  ? metaRow(
+                      "Pagamento",
+                      getPaymentStatusLabel(
+                        selectedRegistration.paymentStatus
+                      )
+                    )
+                  : null}
+                {selectedCheckInLabel
+                  ? metaRow(
+                      "Check-in",
+                      selectedCheckInLabel
+                    )
+                  : null}
+              </div>
+
+              {!isSelectedSuccess &&
+              !selectedEligibility.canCheckIn ? (
                 <p
                   style={{
                     color: "#94a3b8",
-                    margin: "4px 0 0"
+                    fontSize: "12px",
+                    margin: 0
                   }}
                 >
-                  {registration.ticket?.name ??
-                    "Sem ingresso"}
-                  {registration.ticketBatch
-                    ?.name
-                    ? " - " + registration.ticketBatch.name
-                    : ""}
+                  {selectedEligibility.stateLabel}
                 </p>
-              </div>
+              ) : null}
 
-              <span>
-                {checkedIn
-                  ? "Presente"
-                  : "Pendente"}
-              </span>
-
-              <button
-                disabled={
-                  checkedIn ||
-                  isCheckingIn
-                }
-                onClick={() =>
-                  void handleParticipantCheckIn(
-                    registration.id
-                  )
-                }
-                style={{
-                  background: checkedIn
-                    ? "rgba(5, 150, 105, 0.2)"
-                    : "#2563eb",
-                  border: 0,
-                  borderRadius: "9px",
-                  color: checkedIn
-                    ? "#a7f3d0"
-                    : "#ffffff",
-                  fontWeight: 900,
-                  padding: "10px 14px"
-                }}
-                type="button"
-              >
-                {checkedIn
-                  ? "Check-in realizado"
-                  : "Fazer check-in"}
-              </button>
+              {!isSelectedSuccess &&
+              selectedEligibility.canCheckIn ? (
+                <>
+                  <div
+                    style={{
+                      background:
+                        "rgba(148, 163, 184, 0.12)",
+                      height: "1px",
+                      width: "100%"
+                    }}
+                  />
+                  <button
+                    disabled={isCheckingIn}
+                    onClick={() =>
+                      void handleParticipantCheckIn(
+                        selectedRegistration.id
+                      )
+                    }
+                    style={{
+                      background: "#2563eb",
+                      border: 0,
+                      borderRadius: "10px",
+                      color: "#ffffff",
+                      cursor: isCheckingIn
+                        ? "not-allowed"
+                        : "pointer",
+                      fontWeight: 900,
+                      justifySelf: "start",
+                      minWidth: "168px",
+                      padding: "11px 18px"
+                    }}
+                    type="button"
+                  >
+                    Fazer check-in
+                  </button>
+                </>
+              ) : null}
             </div>
-          );
-        }
-      )}
-    </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          hasTokenSuccessOnly &&
+          checkInSuccess ? (
+            <div
+              style={{
+                display: "grid",
+                gap: "8px"
+              }}
+            >
+              <div
+                style={{
+                  background:
+                    "rgba(5, 150, 105, 0.2)",
+                  border:
+                    "1px solid rgba(52, 211, 153, 0.4)",
+                  borderRadius: "10px",
+                  color: "#a7f3d0",
+                  padding: "10px 12px"
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    marginBottom: "2px"
+                  }}
+                >
+                  Check-in realizado
+                </strong>
+                <span style={{ fontSize: "13px" }}>
+                  {checkInSuccess.name}
+                </span>
+              </div>
+              <span
+                style={{
+                  ...getCheckInToneStyles(
+                    "success"
+                  ),
+                  borderRadius: "999px",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  justifySelf: "start",
+                  padding: "4px 9px"
+                }}
+              >
+                Já credenciado
+              </span>
+            </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          !error &&
+          !checkInHasSearched &&
+          !checkInSuccess &&
+          !selectedRegistration ? (
+            <div
+              style={{
+                alignItems: "flex-start",
+                color: "#94a3b8",
+                display: "flex",
+                gap: "10px"
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  color: "#64748b",
+                  display: "inline-flex",
+                  flexShrink: 0,
+                  marginTop: "1px"
+                }}
+              >
+                <svg
+                  fill="none"
+                  height="18"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.8"
+                  viewBox="0 0 24 24"
+                  width="18"
+                >
+                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+                  <path d="m8.5 12 2.4 2.4L15.8 9.5" />
+                </svg>
+              </span>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "2px"
+                }}
+              >
+                <strong
+                  style={{
+                    color: "#e2e8f0",
+                    fontSize: "13px"
+                  }}
+                >
+                  Nenhum participante selecionado
+                </strong>
+                <span style={{ fontSize: "12px" }}>
+                  Use uma credencial ou pesquise uma
+                  inscrição.
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {!isLoadingCheckInSearch &&
+          !isCheckingIn &&
+          checkInHasSearched &&
+          checkInItems.length > 1 &&
+          !selectedRegistration &&
+          !checkInSuccess ? (
+            <p
+              style={{
+                color: "#94a3b8",
+                fontSize: "12px",
+                margin: 0
+              }}
+            >
+              Selecione um participante na lista
+              para ver o detalhe e credenciar.
+            </p>
+          ) : null}
+        </div>
+      );
+    })()}
   </section>
 ) : null}
 

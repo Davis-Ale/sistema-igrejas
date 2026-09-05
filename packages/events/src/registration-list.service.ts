@@ -240,6 +240,7 @@ export async function listEventRegistrations(
         checkInToken: canRevealCheckInToken(registration)
           ? registration.checkInToken
           : null,
+        waitlistedAt: registration.waitlistedAt,
         person: registration.person,
         visitor: registration.visitor,
         ticket: registration.ticket,
