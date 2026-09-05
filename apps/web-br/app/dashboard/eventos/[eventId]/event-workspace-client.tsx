@@ -369,6 +369,9 @@ function getTicketRowIdentity(
 const TICKET_LIST_COLUMNS =
   "minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.1fr) minmax(0, 1fr) 76px";
 
+const PARTICIPANT_LIST_COLUMNS =
+  "minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.95fr)";
+
 function getTicketBatchSoldPercent(
   sold: number,
   quantity: number
@@ -1858,6 +1861,25 @@ export function EventWorkspaceClient({
       PENDING: "Pendente",
       CONFIRMED: "Confirmada",
       CHECKED_IN: "Presente",
+      CANCELLED: "Cancelada"
+    };
+
+    return labels[status] ?? status;
+  };
+
+  /** Labels da coluna Inscrição em Participantes (check-in usa getRegistrationStatusLabel). */
+  const getParticipantRegistrationListLabel = (
+    status: string,
+    waitlistedAt: string | null
+  ) => {
+    if (waitlistedAt) {
+      return "Lista de espera";
+    }
+
+    const labels: Record<string, string> = {
+      PENDING: "Pendente",
+      CONFIRMED: "Confirmada",
+      CHECKED_IN: "Confirmada",
       CANCELLED: "Cancelada"
     };
 
@@ -8125,185 +8147,341 @@ export function EventWorkspaceClient({
       border: "1px solid rgba(148, 163, 184, 0.18)",
       borderRadius: "20px",
       display: "grid",
-      gap: "18px",
-      padding: "24px"
+      gap: "16px",
+      padding: "22px 24px"
     }}
   >
+    <style>{`
+      .participants-filters {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr;
+      }
+      .participants-filters-row-search {
+        min-width: 0;
+      }
+      .participants-filters-row-selects {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .participants-filter-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+      .participants-filter-label {
+        color: #cbd5e1;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .participants-search-form {
+        align-items: stretch;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+      .participants-filter-select {
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 10px;
+        color: #ffffff;
+        font: inherit;
+        padding: 10px 12px;
+        width: 100%;
+      }
+      .participants-list-header {
+        align-items: end;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        color: #94a3b8;
+        display: grid;
+        font-size: 11px;
+        font-weight: 900;
+        gap: 12px;
+        grid-template-columns: ${PARTICIPANT_LIST_COLUMNS};
+        letter-spacing: 0.04em;
+        line-height: 1.3;
+        padding: 0 4px 10px;
+        text-transform: uppercase;
+      }
+      .participants-list-row {
+        align-items: center;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        display: grid;
+        gap: 12px;
+        grid-template-columns: ${PARTICIPANT_LIST_COLUMNS};
+        padding: 11px 4px;
+        transition: background 0.12s ease;
+      }
+      summary.participants-list-row {
+        cursor: pointer;
+        list-style: none;
+      }
+      summary.participants-list-row::-webkit-details-marker {
+        display: none;
+      }
+      summary.participants-list-row::marker {
+        content: "";
+      }
+      .participants-list-row:hover {
+        background: rgba(148, 163, 184, 0.06);
+      }
+      .participants-col-label {
+        display: none;
+      }
+      @media (max-width: 820px) {
+        .participants-filters-row-selects {
+          grid-template-columns: 1fr;
+        }
+        .participants-list-header {
+          display: none;
+        }
+        .participants-list-row {
+          align-items: start;
+          gap: 8px;
+          grid-template-columns: 1fr;
+          padding: 12px 2px;
+        }
+        .participants-col-label {
+          color: #64748b;
+          display: inline;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          margin-right: 6px;
+          text-transform: uppercase;
+        }
+      }
+    `}</style>
+
     <header>
       <p
         style={{
           color: "#60a5fa",
-          fontSize: "13px",
-          fontWeight: 900,
-          margin: "0 0 6px",
+          fontSize: "11px",
+          fontWeight: 800,
+          letterSpacing: "0.08em",
+          margin: "0 0 4px",
           textTransform: "uppercase"
         }}
       >
         Participantes
       </p>
 
-      <h2 style={{ margin: 0 }}>
+      <h2
+        style={{
+          fontSize: "20px",
+          fontWeight: 800,
+          margin: 0
+        }}
+      >
         Inscrições do evento
       </h2>
 
       <p
         style={{
           color: "#94a3b8",
-          margin: "8px 0 0"
+          fontSize: "13px",
+          margin: "6px 0 0"
         }}
       >
-        Pesquise participantes e refine pelos filtros disponíveis.
+        Pesquise participantes e acompanhe inscrição,
+        pagamento e check-in.
       </p>
     </header>
 
-    <div
-      style={{
-        display: "grid",
-        gap: "10px",
-        gridTemplateColumns:
-          "minmax(220px, 2fr) repeat(3, minmax(145px, 1fr))"
-      }}
-    >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          setParticipantSearch(
-            participantSearchInput.trim()
-          );
-          setParticipantPage(1);
-        }}
-        style={{
-          display: "grid",
-          gap: "8px",
-          gridTemplateColumns:
-            "minmax(140px, 1fr) auto"
-        }}
-      >
-        <input
-          onChange={(event) =>
-            setParticipantSearchInput(
-              event.target.value
-            )
-          }
-          placeholder="Nome, e-mail, telefone ou código"
-          style={{
-            borderRadius: "10px",
-            padding: "11px 12px"
-          }}
-          value={participantSearchInput}
-        />
-
-        <button
-          style={{
-            background: "#2563eb",
-            border: 0,
-            borderRadius: "10px",
-            color: "#ffffff",
-            cursor: "pointer",
-            fontWeight: 900,
-            padding: "11px 16px"
-          }}
-          type="submit"
-        >
-          Pesquisar
-        </button>
-      </form>
-
-      <select
-        onChange={(event) => {
-          setParticipantStatus(event.target.value);
-          setParticipantPage(1);
-        }}
-        style={{
-          borderRadius: "10px",
-          padding: "11px 12px"
-        }}
-        value={participantStatus}
-      >
-        <option value="ALL">
-          Todas as inscrições
-        </option>
-        <option value="PENDING">Pendentes</option>
-        <option value="CONFIRMED">Confirmadas</option>
-        <option value="CHECKED_IN">
-          Presente
-        </option>
-        <option value="CANCELLED">Canceladas</option>
-      </select>
-
-      <select
-        onChange={(event) => {
-          setParticipantPayment(event.target.value);
-          setParticipantPage(1);
-        }}
-        style={{
-          borderRadius: "10px",
-          padding: "11px 12px"
-        }}
-        value={participantPayment}
-      >
-        <option value="ALL">
-          Todos os pagamentos
-        </option>
-        <option value="PAID">Pago</option>
-        <option value="PENDING">Pendente</option>
-        <option value="NOT_REQUIRED">
-          Não necessário
-        </option>
-        <option value="CANCELLED">Cancelado</option>
-      </select>
-
-      <select
-        onChange={(event) => {
-          setParticipantTicket(event.target.value);
-          setParticipantPage(1);
-        }}
-        style={{
-          borderRadius: "10px",
-          padding: "11px 12px"
-        }}
-        value={participantTicket}
-      >
-        <option value="ALL">
-          Todos os ingressos
-        </option>
-        {tickets.map((ticket) => (
-          <option
-            key={ticket.id}
-            value={ticket.id}
+    <div className="participants-filters">
+      <div className="participants-filters-row-search">
+        <div className="participants-filter-field">
+          <label
+            className="participants-filter-label"
+            htmlFor="participant-search"
           >
-            {ticket.name}
-          </option>
-        ))}
-      </select>
+            Buscar participante
+          </label>
+          <form
+            className="participants-search-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setParticipantSearch(
+                participantSearchInput.trim()
+              );
+              setParticipantPage(1);
+            }}
+          >
+            <input
+              id="participant-search"
+              onChange={(event) =>
+                setParticipantSearchInput(
+                  event.target.value
+                )
+              }
+              placeholder="Nome, e-mail, telefone ou código"
+              style={{
+                background: "#0f172a",
+                border: "1px solid rgba(148, 163, 184, 0.3)",
+                borderRadius: "10px",
+                color: "#ffffff",
+                font: "inherit",
+                minWidth: 0,
+                padding: "10px 12px",
+                width: "100%"
+              }}
+              value={participantSearchInput}
+            />
+
+            <button
+              style={{
+                background: "#2563eb",
+                border: 0,
+                borderRadius: "10px",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontWeight: 800,
+                padding: "10px 16px",
+                whiteSpace: "nowrap"
+              }}
+              type="submit"
+            >
+              Pesquisar
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div className="participants-filters-row-selects">
+        <div className="participants-filter-field">
+          <label
+            className="participants-filter-label"
+            htmlFor="participant-status"
+          >
+            Status da inscrição
+          </label>
+          <select
+            className="participants-filter-select"
+            id="participant-status"
+            onChange={(event) => {
+              setParticipantStatus(event.target.value);
+              setParticipantPage(1);
+            }}
+            value={participantStatus}
+          >
+            <option value="ALL">
+              Todas as inscrições
+            </option>
+            <option value="PENDING">Pendentes</option>
+            <option value="CONFIRMED">Confirmadas</option>
+            <option value="CHECKED_IN">
+              Presente
+            </option>
+            <option value="CANCELLED">Canceladas</option>
+          </select>
+        </div>
+
+        <div className="participants-filter-field">
+          <label
+            className="participants-filter-label"
+            htmlFor="participant-payment"
+          >
+            Pagamento
+          </label>
+          <select
+            className="participants-filter-select"
+            id="participant-payment"
+            onChange={(event) => {
+              setParticipantPayment(event.target.value);
+              setParticipantPage(1);
+            }}
+            value={participantPayment}
+          >
+            <option value="ALL">
+              Todos os pagamentos
+            </option>
+            <option value="PAID">Pago</option>
+            <option value="PENDING">Pendente</option>
+            <option value="NOT_REQUIRED">
+              Não necessário
+            </option>
+            <option value="CANCELLED">Cancelado</option>
+          </select>
+        </div>
+
+        <div className="participants-filter-field">
+          <label
+            className="participants-filter-label"
+            htmlFor="participant-ticket"
+          >
+            Ingresso
+          </label>
+          <select
+            className="participants-filter-select"
+            id="participant-ticket"
+            onChange={(event) => {
+              setParticipantTicket(event.target.value);
+              setParticipantPage(1);
+            }}
+            value={participantTicket}
+          >
+            <option value="ALL">
+              Todos os ingressos
+            </option>
+            {tickets.map((ticket) => (
+              <option
+                key={ticket.id}
+                value={ticket.id}
+              >
+                {ticket.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
 
     <p
       style={{
         color: "#94a3b8",
+        fontSize: "13px",
         margin: 0
       }}
     >
       {isLoadingParticipants
         ? "Carregando participantes..."
-        : `${participantTotal} participante(s)`}
+        : (
+          <>
+            {formatParticipantCountLabel(participantTotal)}
+            {participantTotalPages > 1
+              ? ` · ${formatShowingRegistrationsLabel(participantItems.length)}`
+              : null}
+          </>
+        )}
     </p>
 
-    <div
-      style={{
-        display: "grid",
-        gap: "10px"
-      }}
-    >
+    <div>
+      <div className="participants-list-header">
+        <span>Participante</span>
+        <span>Ingresso</span>
+        <span>Inscrição / Check-in</span>
+        <span>Pagamento</span>
+      </div>
+
       {!isLoadingParticipants &&
       participantItems.length === 0 ? (
         <p
           style={{
             color: "#94a3b8",
-            margin: 0
+            fontSize: "13px",
+            margin: "16px 0 0",
+            textAlign: "center"
           }}
         >
-          Nenhum participante encontrado.
+          {participantSearch.trim() ||
+          participantStatus !== "ALL" ||
+          participantPayment !== "ALL" ||
+          participantTicket !== "ALL"
+            ? "Nenhum participante encontrado."
+            : "Nenhum participante inscrito neste evento."}
         </p>
       ) : null}
 
@@ -8316,80 +8494,217 @@ export function EventWorkspaceClient({
           return null;
         }
 
-        return (
-          <details
-            key={registration.id}
-            style={{
-              border:
-                "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "12px",
-              padding: "14px 16px"
-            }}
-          >
-            <summary
+        const registrationTone = registration.waitlistedAt
+          ? "warning"
+          : getRegistrationBadgeTone(registration.status);
+        const checkInTone =
+          registration.status === "CHECKED_IN"
+            ? "success"
+            : "muted";
+        const paymentTone = getPaymentBadgeTone(
+          registration.paymentStatus
+        );
+        const badgeBase = {
+          borderRadius: "999px",
+          display: "inline-flex",
+          fontSize: "11px",
+          fontWeight: 800,
+          lineHeight: 1.3,
+          padding: "3px 8px",
+          whiteSpace: "nowrap" as const
+        };
+
+        const rowContent = (
+          <>
+            <span
               style={{
-                cursor: "pointer",
                 display: "grid",
-                gap: "10px",
-                gridTemplateColumns:
-                  "minmax(180px, 2fr) repeat(3, minmax(110px, 1fr))",
-                listStyle: "none"
+                gap: "2px",
+                minWidth: 0
               }}
             >
-              <strong>{participant.name}</strong>
-              <span>
+              <span className="participants-col-label">
+                Participante
+              </span>
+              <strong
+                style={{
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  lineHeight: 1.35,
+                  overflowWrap: "anywhere"
+                }}
+              >
+                {participant.name}
+              </strong>
+              {participant.email ? (
+                <span
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: "12px",
+                    overflowWrap: "anywhere"
+                  }}
+                >
+                  {participant.email}
+                </span>
+              ) : null}
+              {participant.phone ? (
+                <span
+                  style={{
+                    color: "#64748b",
+                    fontSize: "12px"
+                  }}
+                >
+                  {participant.phone}
+                </span>
+              ) : null}
+            </span>
+
+            <span
+              style={{
+                display: "grid",
+                gap: "2px",
+                minWidth: 0
+              }}
+            >
+              <span className="participants-col-label">
+                Ingresso
+              </span>
+              <span
+                style={{
+                  color: "#e2e8f0",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  overflowWrap: "anywhere"
+                }}
+              >
                 {registration.ticket?.name ??
                   "Sem ingresso"}
               </span>
-              <span>
-                {getRegistrationStatusLabel(
+              {registration.ticketBatch?.name ? (
+                <span
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: "12px",
+                    overflowWrap: "anywhere"
+                  }}
+                >
+                  {registration.ticketBatch.name}
+                </span>
+              ) : null}
+            </span>
+
+            <span
+              style={{
+                alignItems: "center",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "6px",
+                minWidth: 0
+              }}
+            >
+              <span className="participants-col-label">
+                Inscrição / Check-in
+              </span>
+              <span
+                style={{
+                  ...badgeBase,
+                  ...getCheckInToneStyles(registrationTone)
+                }}
+              >
+                {getParticipantRegistrationListLabel(
+                  registration.status,
+                  registration.waitlistedAt
+                )}
+              </span>
+              <span
+                style={{
+                  ...badgeBase,
+                  ...getCheckInToneStyles(checkInTone)
+                }}
+              >
+                {getParticipantCheckInLabel(
                   registration.status
                 )}
               </span>
+            </span>
 
-              <span>
+            <span
+              style={{
+                alignItems: "center",
+                display: "flex",
+                gap: "6px",
+                minWidth: 0
+              }}
+            >
+              <span className="participants-col-label">
+                Pagamento
+              </span>
+              <span
+                style={{
+                  ...badgeBase,
+                  ...getCheckInToneStyles(paymentTone)
+                }}
+              >
                 {getPaymentStatusLabel(
                   registration.paymentStatus
                 )}
               </span>
-            </summary>
+            </span>
+          </>
+        );
 
+        if (registration.formAnswers.length === 0) {
+          return (
+            <div
+              className="participants-list-row"
+              key={registration.id}
+            >
+              {rowContent}
+            </div>
+          );
+        }
+
+        return (
+          <details key={registration.id}>
+            <summary className="participants-list-row">
+              {rowContent}
+            </summary>
             <div
               style={{
+                borderBottom:
+                  "1px solid rgba(148, 163, 184, 0.14)",
+                color: "#cbd5e1",
                 display: "grid",
+                fontSize: "13px",
                 gap: "8px",
-                marginTop: "14px"
+                padding: "4px 4px 14px"
               }}
             >
-              <span>{participant.email ?? "Sem e-mail"}</span>
-              <span>{participant.phone}</span>
-              <span>
-                Lote:{" "}
-                {registration.ticketBatch?.name ??
-                  "Não informado"}
-              </span>
-              {registration.checkInToken ? (
-                <span>
-                  Código: {registration.checkInToken}
-                </span>
-              ) : null}
-
-              {registration.formAnswers.map(
-                (answer) => (
-                  <div key={answer.id}>
-                    <strong>
-                      {answer.field.label}
-                    </strong>
-                    <p style={{ margin: "4px 0 0" }}>
-                      {answer.field.isSensitive
-                        ? "Dado protegido"
-                        : Array.isArray(answer.value)
-                          ? answer.value.join(", ")
-                          : String(answer.value ?? "")}
-                    </p>
-                  </div>
-                )
-              )}
+              {registration.formAnswers.map((answer) => (
+                <div key={answer.id}>
+                  <strong
+                    style={{
+                      color: "#e2e8f0",
+                      fontSize: "12px"
+                    }}
+                  >
+                    {answer.field.label}
+                  </strong>
+                  <p
+                    style={{
+                      color: "#94a3b8",
+                      margin: "3px 0 0"
+                    }}
+                  >
+                    {answer.field.isSensitive
+                      ? "Dado protegido"
+                      : Array.isArray(answer.value)
+                        ? answer.value.join(", ")
+                        : String(answer.value ?? "")}
+                  </p>
+                </div>
+              ))}
             </div>
           </details>
         );
