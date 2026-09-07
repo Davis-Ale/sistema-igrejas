@@ -266,6 +266,9 @@ export async function createPublicRegistrationBySlugs(
       : {}),
     ...(normalizedEmail !== undefined
       ? { email: normalizedEmail }
+      : {}),
+    ...(input.discountCode
+      ? { discountCode: input.discountCode }
       : {})
   };
 

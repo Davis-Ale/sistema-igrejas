@@ -1,4 +1,6 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { resolveApplicableEventDiscount } from "./discount.service.js";
 import type {
   CheckInByTokenInput,
   CreateEventInput,
@@ -9,6 +11,10 @@ import type {
   UpdateEventInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
+import {
+  computeEventPlatformFeeSnapshot,
+  resolveCurrentPlatformFeePercent
+} from "./platform-fee.js";
 import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
 
 function buildRegistrationStatus(event: { isPaid: boolean }, isWaitlisted: boolean) {
@@ -79,17 +85,40 @@ async function createEventRegistrationPayment(
     registrationId: string;
     personId: string | null;
     amount: Prisma.Decimal | number | string;
+    discountId?: string | null;
+    discountCode?: string | null;
   }
 ) {
   return prisma.$transaction(
     async (transaction) => {
+      const church =
+        await transaction.church.findFirst({
+          where: {
+            id: input.churchId
+          },
+          select: {
+            platformFeePercent: true
+          }
+        });
+
+      if (!church) {
+        throw new Error("CHURCH_NOT_FOUND");
+      }
+
+      const percent = resolveCurrentPlatformFeePercent(
+        church.platformFeePercent
+      );
+      const gross = new Prisma.Decimal(input.amount);
+      const { platformFeeAmount, netAmount } =
+        computeEventPlatformFeeSnapshot(gross, percent);
+
       const order =
         await transaction.eventOrder.create({
           data: {
             churchId: input.churchId,
             eventId: input.eventId,
             status: "PENDING",
-            totalAmount: input.amount
+            totalAmount: gross
           }
         });
 
@@ -102,7 +131,7 @@ async function createEventRegistrationPayment(
             eventId: input.eventId,
             type: "EVENT",
             direction: "IN",
-            amount: input.amount,
+            amount: gross,
             method: "PIX",
             costCenter: "EVENTOS"
           }
@@ -119,7 +148,12 @@ async function createEventRegistrationPayment(
             provider:
               getEventPaymentProvider(),
             status: "PENDING",
-            amount: input.amount
+            amount: gross,
+            platformFeePercent: percent,
+            platformFeeAmount,
+            netAmount,
+            discountId: input.discountId ?? null,
+            discountCode: input.discountCode ?? null
           }
         });
 
@@ -188,7 +222,8 @@ export async function duplicateEvent(
                 options: true,
                 ticketScopes: true
               }
-            }
+            },
+            discounts: true
           }
         });
 
@@ -346,6 +381,29 @@ export async function duplicateEvent(
             }
           });
         }
+      }
+
+      for (const discount of source.discounts) {
+        const remappedTicketId = ticketIds.get(
+          discount.ticketId
+        );
+
+        if (!remappedTicketId) {
+          throw new Error(
+            "EVENT_DISCOUNT_TICKET_INVALID"
+          );
+        }
+
+        await transaction.eventDiscount.create({
+          data: {
+            churchId,
+            eventId: duplicated.id,
+            ticketId: remappedTicketId,
+            code: discount.code,
+            finalPrice: discount.finalPrice,
+            isActive: discount.isActive
+          }
+        });
       }
 
       return duplicated;
@@ -1185,6 +1243,26 @@ export async function createPublicRegistration(
 
   const isPaid = Number(batch.price) > 0;
 
+  let chargeAmount: Prisma.Decimal | number | string =
+    batch.price;
+  let discountId: string | null = null;
+  let discountCode: string | null = null;
+
+  if (input.discountCode) {
+    const appliedDiscount =
+      await resolveApplicableEventDiscount(prisma, {
+        churchId: event.churchId,
+        eventId: event.id,
+        ticketId: ticket.id,
+        ticketBatchId: batch.id,
+        code: input.discountCode
+      });
+
+    chargeAmount = appliedDiscount.finalPrice;
+    discountId = appliedDiscount.id;
+    discountCode = appliedDiscount.code;
+  }
+
   const registration =
     await prisma.$transaction(
       async (transaction) => {
@@ -1323,7 +1401,9 @@ export async function createPublicRegistration(
         eventId: event.id,
         registrationId: registration.id,
         personId: null,
-        amount: batch.price
+        amount: chargeAmount,
+        discountId,
+        discountCode
       }
     );
 

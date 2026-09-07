@@ -10,6 +10,12 @@ import {
   z
 } from "zod";
 import {
+  validatePublicDiscountSchema
+} from "./discount.schema.js";
+import {
+  validatePublicEventDiscount
+} from "./discount.service.js";
+import {
   createPublicRegistrationSchema
 } from "./event.schema.js";
 import {
@@ -123,6 +129,11 @@ async function sendPublicRouteError(
       status: 400,
       code: "INVALID_FORM_ANSWER",
       message: "Uma ou mais respostas são inválidas."
+    },
+    DISCOUNT_NOT_APPLICABLE: {
+      status: 400,
+      code: "DISCOUNT_NOT_APPLICABLE",
+      message: "Este código não se aplica a esta compra."
     }
   };
 
@@ -300,6 +311,32 @@ export async function registerPublicEventRoutes(
           prisma,
           params.churchSlug,
           params.eventSlug
+        );
+      } catch (error) {
+        await sendPublicRouteError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/public/churches/:churchSlug/events/:eventSlug/discounts/validate",
+    async (request, reply) => {
+      try {
+        const params = request.params as {
+          churchSlug: string;
+          eventSlug: string;
+        };
+
+        const input =
+          validatePublicDiscountSchema.parse(
+            request.body
+          );
+
+        return await validatePublicEventDiscount(
+          prisma,
+          params.churchSlug,
+          params.eventSlug,
+          input
         );
       } catch (error) {
         await sendPublicRouteError(error, reply);

@@ -268,6 +268,23 @@ export default function PublicEventPage() {
   const [ticketBatchId, setTicketBatchId] =
     useState("");
 
+  const [discountCodeInput, setDiscountCodeInput] =
+    useState("");
+
+  const [appliedDiscount, setAppliedDiscount] =
+    useState<{
+      code: string;
+      ticketId: string;
+      listPrice: string | number;
+      finalPrice: string | number;
+    } | null>(null);
+
+  const [discountError, setDiscountError] =
+    useState<string | null>(null);
+
+  const [isValidatingDiscount, setIsValidatingDiscount] =
+    useState(false);
+
   const [answers, setAnswers] =
     useState<Record<string, string | string[]>>({});
 
@@ -376,6 +393,9 @@ export default function PublicEventPage() {
                 : undefined,
             ticketId,
             ticketBatchId,
+            ...(appliedDiscount
+              ? { discountCode: appliedDiscount.code }
+              : {}),
             answers: Object.entries(answers).map(
               ([fieldId, value]) => ({
                 fieldId,
@@ -445,6 +465,89 @@ export default function PublicEventPage() {
       (batch) =>
         batch.id === ticketBatchId
     ) ?? null;
+
+  const checkoutTotal =
+    appliedDiscount &&
+    appliedDiscount.ticketId === ticketId
+      ? appliedDiscount.finalPrice
+      : selectedBatch
+        ? selectedBatch.price
+        : event?.price ?? 0;
+
+  useEffect(() => {
+    setAppliedDiscount(null);
+    setDiscountError(null);
+  }, [ticketId, ticketBatchId]);
+
+  async function handleApplyDiscount() {
+    if (!event || !ticketId || !ticketBatchId) {
+      setDiscountError("Selecione o ingresso e o lote.");
+      return;
+    }
+
+    const code = discountCodeInput.trim();
+
+    if (!code) {
+      setDiscountError("Informe o código.");
+      return;
+    }
+
+    setIsValidatingDiscount(true);
+    setDiscountError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/public/churches/${encodeURIComponent(event.church.slug)}/events/${encodeURIComponent(event.slug)}/discounts/validate`,
+        {
+          body: JSON.stringify({
+            code,
+            ticketId,
+            ticketBatchId
+          }),
+          headers: {
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | {
+            code: string;
+            ticketId: string;
+            listPrice: string | number;
+            finalPrice: string | number;
+          }
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setAppliedDiscount(null);
+        setDiscountError(
+          "message" in data && data.message
+            ? data.message
+            : "Este código não se aplica a esta compra."
+        );
+        return;
+      }
+
+      if (!("finalPrice" in data)) {
+        setAppliedDiscount(null);
+        setDiscountError(
+          "Este código não se aplica a esta compra."
+        );
+        return;
+      }
+
+      setAppliedDiscount(data);
+    } catch {
+      setAppliedDiscount(null);
+      setDiscountError(
+        "Não foi possível validar o código agora."
+      );
+    } finally {
+      setIsValidatingDiscount(false);
+    }
+  }
 
   const visibleFields =
     event?.formFields.filter(
@@ -1473,16 +1576,90 @@ export default function PublicEventPage() {
                                   "18px"
                               }}
                             >
-                              {selectedBatch
-                                ? formatMoney(
-                                    selectedBatch.price
-                                  )
-                                : formatMoney(
-                                    event.price
-                                  )}
+                              {formatMoney(checkoutTotal)}
                             </strong>
                           </div>
                         </div>
+
+                        {event.isPaid ? (
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: "8px"
+                            }}
+                          >
+                            <label
+                              htmlFor="discount-code"
+                              style={{
+                                color: "#cbd5e1",
+                                fontSize: "13px",
+                                fontWeight: 700
+                              }}
+                            >
+                              Código
+                            </label>
+                            <div
+                              style={{
+                                display: "grid",
+                                gap: "8px",
+                                gridTemplateColumns:
+                                  "minmax(0, 1fr) auto"
+                              }}
+                            >
+                              <input
+                                id="discount-code"
+                                maxLength={32}
+                                onChange={(changeEvent) =>
+                                  setDiscountCodeInput(
+                                    changeEvent.target.value
+                                  )
+                                }
+                                style={{
+                                  background: "#0f172a",
+                                  border:
+                                    "1px solid rgba(148, 163, 184, 0.3)",
+                                  borderRadius: "12px",
+                                  color: "#ffffff",
+                                  font: "inherit",
+                                  padding: "12px 14px"
+                                }}
+                                value={discountCodeInput}
+                              />
+                              <button
+                                disabled={isValidatingDiscount}
+                                onClick={() => {
+                                  void handleApplyDiscount();
+                                }}
+                                style={{
+                                  background: "transparent",
+                                  border:
+                                    "1px solid rgba(96, 165, 250, 0.45)",
+                                  borderRadius: "12px",
+                                  color: "#93c5fd",
+                                  fontWeight: 900,
+                                  padding: "12px 16px",
+                                  whiteSpace: "nowrap"
+                                }}
+                                type="button"
+                              >
+                                {isValidatingDiscount
+                                  ? "Aplicando..."
+                                  : "Aplicar"}
+                              </button>
+                            </div>
+                            {discountError ? (
+                              <p
+                                style={{
+                                  color: "#fecaca",
+                                  fontSize: "13px",
+                                  margin: 0
+                                }}
+                              >
+                                {discountError}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
 
                         {event.isPaid ? (
                           <div

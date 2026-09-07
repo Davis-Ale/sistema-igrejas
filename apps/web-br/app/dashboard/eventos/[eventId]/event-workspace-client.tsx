@@ -9,6 +9,12 @@ import {
   useMemo,
   useState
 } from "react";
+import {
+  EventModuleBackLink,
+  EventModuleEventSelector,
+  EventModuleNav,
+  type EventWorkspaceSection
+} from "../event-module-chrome";
 
 type LoginSession = {
   token: string;
@@ -189,6 +195,35 @@ type EventFinancialTransaction = {
 type EventFinancialSummary = {
   income: string | number;
   expense: string | number;
+  eventSales?: {
+    grossAmount: string | number;
+    platformFeeAmount: string | number;
+    netAmount: string | number;
+    currentPlatformFeePercent?: string | number;
+  };
+};
+
+type EventDiscountItem = {
+  id: string;
+  ticketId: string;
+  code: string;
+  finalPrice: string | number;
+  isActive: boolean;
+  ticket: {
+    id: string;
+    name: string;
+  };
+};
+
+type EventFinancialTransactionListResponse = {
+  items: EventFinancialTransaction[];
+  pagination: {
+    page: number;
+    currentPage: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 type TicketBatch = {
@@ -196,6 +231,9 @@ type TicketBatch = {
   name: string;
   quantity: number;
   price: string | number;
+  buyerAmount?: string | number;
+  platformFeeAmount?: string | number;
+  netReceivableAmount?: string | number;
   salesStart: string;
   salesEnd: string;
   isVisible: boolean;
@@ -218,17 +256,9 @@ type EventTicket = {
 
 type EventWorkspaceClientProps = {
   eventId: string;
+  initialSection?: EventWorkspaceSection;
+  openCreateEvent?: boolean;
 };
-
-type EventWorkspaceSection =
-  | "overview"
-  | "information"
-  | "tickets"
-  | "registration-form"
-  | "participants"
-  | "check-in"
-  | "financial"
-  | "event-app";
 
 type EventFormFieldType =
   | "TEXT"
@@ -319,6 +349,20 @@ function formatMoney(value: string | number) {
   }).format(Number.isFinite(numberValue) ? numberValue : 0);
 }
 
+function formatPlatformFeePercent(value: string | number) {
+  const numberValue =
+    typeof value === "string" ? Number(value) : value;
+
+  if (!Number.isFinite(numberValue)) {
+    return "";
+  }
+
+  return `${numberValue.toLocaleString("pt-BR", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0
+  })}%`;
+}
+
 type TicketBatchSaleStatus =
   | "Esgotado"
   | "Não iniciado"
@@ -367,10 +411,13 @@ function getTicketRowIdentity(
 }
 
 const TICKET_LIST_COLUMNS =
-  "minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.1fr) minmax(0, 1fr) 76px";
+  "minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 76px";
 
 const PARTICIPANT_LIST_COLUMNS =
   "minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.95fr)";
+
+const FINANCIAL_LIST_COLUMNS =
+  "minmax(0, 1.8fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.75fr) minmax(0, 0.9fr) minmax(0, 1fr)";
 
 function getTicketBatchSoldPercent(
   sold: number,
@@ -523,7 +570,9 @@ function EventFormPreviewControl({
 }
 
 export function EventWorkspaceClient({
-  eventId
+  eventId,
+  initialSection = "overview",
+  openCreateEvent = false
 }: EventWorkspaceClientProps) {
   const router = useRouter();
 
@@ -600,8 +649,32 @@ export function EventWorkspaceClient({
     useState(false);
   const [isCreateBatchOpen, setIsCreateBatchOpen] =
     useState(false);
+  const [discounts, setDiscounts] = useState<
+    EventDiscountItem[]
+  >([]);
+  const [isLoadingDiscounts, setIsLoadingDiscounts] =
+    useState(false);
+  const [discountError, setDiscountError] = useState<
+    string | null
+  >(null);
+  const [discountMessage, setDiscountMessage] = useState<
+    string | null
+  >(null);
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] =
+    useState(false);
+  const [editingDiscountId, setEditingDiscountId] =
+    useState<string | null>(null);
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountTicketId, setDiscountTicketId] =
+    useState("");
+  const [discountFinalPrice, setDiscountFinalPrice] =
+    useState("");
+  const [discountIsActive, setDiscountIsActive] =
+    useState(true);
+  const [isSavingDiscount, setIsSavingDiscount] =
+    useState(false);
   const [activeSection, setActiveSection] =
-    useState<EventWorkspaceSection>("overview");
+    useState<EventWorkspaceSection>(initialSection);
   const [formFields, setFormFields] =
     useState<EventFormField[]>([]);
   const [previewBaseValues, setPreviewBaseValues] =
@@ -709,6 +782,9 @@ export function EventWorkspaceClient({
     useState<EventFinancialSummary | null>(null);
   const [isLoadingFinancial, setIsLoadingFinancial] =
     useState(false);
+  const [financialError, setFinancialError] = useState<
+    string | null
+  >(null);
   const [
     financialSearchInput,
     setFinancialSearchInput
@@ -725,6 +801,11 @@ export function EventWorkspaceClient({
     financialStatusFilter,
     setFinancialStatusFilter
   ] = useState("ALL");
+  const [financialPage, setFinancialPage] = useState(1);
+  const [financialTotal, setFinancialTotal] = useState(0);
+  const [financialTotalPages, setFinancialTotalPages] =
+    useState(0);
+  const [financialLimit, setFinancialLimit] = useState(50);
   const [eventAnalytics, setEventAnalytics] =
     useState<EventAnalyticsResponse | null>(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] =
@@ -933,6 +1014,156 @@ export function EventWorkspaceClient({
   useEffect(() => {
     void loadTickets();
   }, [eventId]);
+
+  function closeDiscountDialog() {
+    setIsDiscountDialogOpen(false);
+    setEditingDiscountId(null);
+    setDiscountCode("");
+    setDiscountTicketId("");
+    setDiscountFinalPrice("");
+    setDiscountIsActive(true);
+    setDiscountError(null);
+  }
+
+  function openCreateDiscountDialog() {
+    setEditingDiscountId(null);
+    setDiscountCode("");
+    setDiscountTicketId(tickets[0]?.id ?? "");
+    setDiscountFinalPrice("");
+    setDiscountIsActive(true);
+    setDiscountError(null);
+    setDiscountMessage(null);
+    setIsDiscountDialogOpen(true);
+  }
+
+  function openEditDiscountDialog(discount: EventDiscountItem) {
+    setEditingDiscountId(discount.id);
+    setDiscountCode(discount.code);
+    setDiscountTicketId(discount.ticketId);
+    setDiscountFinalPrice(String(discount.finalPrice));
+    setDiscountIsActive(discount.isActive);
+    setDiscountError(null);
+    setDiscountMessage(null);
+    setIsDiscountDialogOpen(true);
+  }
+
+  async function loadDiscounts() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsLoadingDiscounts(true);
+    setDiscountError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/discounts`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = await response.json() as
+        | EventDiscountItem[]
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setDiscountError(
+          !Array.isArray(data) && data.message
+            ? data.message
+            : "Não foi possível carregar os descontos."
+        );
+        return;
+      }
+
+      setDiscounts(data as EventDiscountItem[]);
+    } catch {
+      setDiscountError(
+        "Não foi possível carregar os descontos agora."
+      );
+    } finally {
+      setIsLoadingDiscounts(false);
+    }
+  }
+
+  async function handleSaveDiscount(
+    formEvent: FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsSavingDiscount(true);
+    setDiscountError(null);
+    setDiscountMessage(null);
+
+    try {
+      const payload = {
+        ticketId: discountTicketId,
+        code: discountCode,
+        finalPrice: Number(discountFinalPrice),
+        isActive: discountIsActive
+      };
+
+      const response = await fetch(
+        editingDiscountId
+          ? `${API_BASE_URL}/api/events/${eventId}/discounts/${editingDiscountId}`
+          : `${API_BASE_URL}/api/events/${eventId}/discounts`,
+        {
+          body: JSON.stringify(payload),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: editingDiscountId ? "PATCH" : "POST"
+        }
+      );
+
+      const data = await response.json() as
+        | EventDiscountItem
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setDiscountError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível salvar o desconto."
+        );
+        return;
+      }
+
+      setDiscountMessage(
+        editingDiscountId
+          ? "Desconto atualizado."
+          : "Desconto criado."
+      );
+      closeDiscountDialog();
+      await loadDiscounts();
+    } catch {
+      setDiscountError(
+        "Não foi possível salvar o desconto agora."
+      );
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeSection === "discounts") {
+      void loadDiscounts();
+    }
+  }, [activeSection, eventId]);
 
   useEffect(() => {
     if (activeSection !== "participants") {
@@ -1320,21 +1551,7 @@ export function EventWorkspaceClient({
         return;
       }
 
-      const createdBatch = data as TicketBatch;
-
-      setTickets((current) =>
-        current.map((ticket) =>
-          ticket.id === selectedTicket.id
-            ? {
-                ...ticket,
-                batches: [
-                  ...ticket.batches,
-                  createdBatch
-                ]
-              }
-            : ticket
-        )
-      );
+      await loadTickets();
       setTicketMessage("Lote criado.");
       form.reset();
       setIsCreateBatchOpen(false);
@@ -2332,16 +2549,6 @@ export function EventWorkspaceClient({
     }
   }
 
-  function normalizeFinancialSearch(
-    value: string
-  ) {
-    return value
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-  }
-
   function getEventFinancialRegistrations(
     transaction:
       EventFinancialTransaction
@@ -2397,6 +2604,14 @@ export function EventWorkspaceClient({
       return "Cartão";
     }
 
+    if (method === "CASH") {
+      return "Dinheiro";
+    }
+
+    if (method === "BOLETO") {
+      return "Boleto";
+    }
+
     return method;
   }
 
@@ -2415,10 +2630,7 @@ export function EventWorkspaceClient({
       return "Vencido";
     }
 
-    if (
-      status ===
-      "REFUND_PENDING"
-    ) {
+    if (status === "REFUND_PENDING") {
       return "Reembolso em processamento";
     }
 
@@ -2426,151 +2638,146 @@ export function EventWorkspaceClient({
       return "Cancelado";
     }
 
-    return "Sem pagamento";
+    // Transaction sem EventPayment = lançamento financeiro
+    // interno (POST /financial/transactions ou Asaas charge
+    // com eventId), não ausência de valor.
+    return "Sem cobrança";
   }
 
-  function getTransactionStatusLabel(
-    status:
-      EventFinancialTransaction["status"]
+  function getEventFinancialRowPaymentLabel(
+    transaction: EventFinancialTransaction
   ) {
-    if (status === "ACTIVE") {
-      return "Ativa";
+    if (transaction.status === "REVERSED") {
+      return "Reembolsado";
+    }
+
+    if (transaction.status === "CANCELLED") {
+      return "Cancelado";
+    }
+
+    return getEventPaymentStatusLabel(
+      transaction.eventPayment?.status ?? null
+    );
+  }
+
+  function getEventFinancialPaymentTone(
+    transaction: EventFinancialTransaction
+  ): "success" | "warning" | "danger" | "muted" {
+    if (transaction.status === "REVERSED") {
+      return "danger";
+    }
+
+    if (transaction.status === "CANCELLED") {
+      return "danger";
+    }
+
+    const status =
+      transaction.eventPayment?.status ?? null;
+
+    if (status === "PAID") {
+      return "success";
+    }
+
+    if (
+      status === "PENDING" ||
+      status === "OVERDUE" ||
+      status === "REFUND_PENDING"
+    ) {
+      return "warning";
     }
 
     if (status === "CANCELLED") {
-      return "Cancelada";
+      return "danger";
     }
 
-    return "Estornada";
+    // Sem EventPayment: lançamento interno válido
+    return "muted";
   }
 
-  const filteredFinancialTransactions =
-    financialTransactions.filter(
-      (transaction) => {
-        const search =
-          normalizeFinancialSearch(
-            financialSearch
-          );
+  function getEventFinancialOrigin(
+    transaction: EventFinancialTransaction
+  ) {
+    const participants =
+      getEventFinancialParticipants(transaction);
 
-        const registrations =
-          getEventFinancialRegistrations(
-            transaction
-          );
+    if (participants.length > 0) {
+      return {
+        primary: participants
+          .map((participant) => participant.name)
+          .join(", "),
+        secondary:
+          participants[0]?.email ??
+          participants[0]?.phone ??
+          null,
+        kind: "participant" as const
+      };
+    }
 
-        const participants =
-          getEventFinancialParticipants(
-            transaction
-          );
+    if (!transaction.eventPayment) {
+      return {
+        primary: "Lançamento interno",
+        secondary: null,
+        kind: "internal" as const
+      };
+    }
 
-        const paymentStatus =
-          transaction.eventPayment
-            ?.status ?? null;
+    return {
+      primary: "Sem participante",
+      secondary: null,
+      kind: "missing" as const
+    };
+  }
 
-        const searchableValues = [
-          transaction.asaasId,
-          transaction.eventPayment
-            ?.providerPaymentId,
-          transaction.eventPayment
-            ?.provider,
-          transaction.costCenter,
-          getEventFinancialMethodLabel(
-            transaction.method
-          ),
-          getEventPaymentStatusLabel(
-            paymentStatus
-          ),
-          getTransactionStatusLabel(
-            transaction.status
-          ),
-          ...participants.flatMap(
-            (participant) => [
-              participant.name,
-              participant.email,
-              participant.phone
-            ]
-          ),
-          ...registrations.flatMap(
-            (registration) => [
-              registration.ticket?.name,
-              registration.ticketBatch
-                ?.name
-            ]
-          )
-        ];
+  function getEventFinancialTicketLabel(
+    transaction: EventFinancialTransaction
+  ) {
+    const registrations =
+      getEventFinancialRegistrations(transaction);
 
-        const matchesSearch =
-          !search ||
-          searchableValues.some(
-            (value) =>
-              value &&
-              normalizeFinancialSearch(
-                String(value)
-              ).includes(search)
-          );
+    const tickets = registrations
+      .map((registration) => {
+        const ticket = registration.ticket?.name;
+        const batch = registration.ticketBatch?.name;
 
-        const matchesMethod =
-          financialMethodFilter ===
-            "ALL" ||
-          transaction.method ===
-            financialMethodFilter;
-
-        let matchesStatus = true;
-
-        if (
-          financialStatusFilter ===
-          "PAID"
-        ) {
-          matchesStatus =
-            paymentStatus === "PAID" &&
-            transaction.status ===
-              "ACTIVE";
+        if (ticket && batch) {
+          return `${ticket} • ${batch}`;
         }
 
-        if (
-          financialStatusFilter ===
-          "PENDING"
-        ) {
-          matchesStatus =
-            paymentStatus ===
-              "PENDING" ||
-            paymentStatus ===
-              "OVERDUE";
-        }
+        return ticket ?? batch ?? null;
+      })
+      .filter((value): value is string => Boolean(value));
 
-        if (
-          financialStatusFilter ===
-          "REFUND_PENDING"
-        ) {
-          matchesStatus =
-            paymentStatus ===
-              "REFUND_PENDING";
-        }
+    if (tickets.length > 0) {
+      return {
+        primary: tickets[0] ?? "—",
+        secondary:
+          tickets.length > 1
+            ? `+${tickets.length - 1} ingresso(s)`
+            : null
+      };
+    }
 
-        if (
-          financialStatusFilter ===
-          "CANCELLED"
-        ) {
-          matchesStatus =
-            transaction.status ===
-              "CANCELLED";
-        }
+    if (!transaction.eventPayment) {
+      return {
+        primary: "—",
+        secondary: null
+      };
+    }
 
-        if (
-          financialStatusFilter ===
-          "REFUNDED"
-        ) {
-          matchesStatus =
-            transaction.status ===
-              "REVERSED";
-        }
+    return {
+      primary: "Sem ingresso",
+      secondary: null
+    };
+  }
 
-        return (
-          matchesSearch &&
-          matchesMethod &&
-          matchesStatus
-        );
-      }
-    );
+  const hasActiveFinancialFilters =
+    Boolean(financialSearch) ||
+    financialMethodFilter !== "ALL" ||
+    financialStatusFilter !== "ALL";
+
+  function resetFinancialListPage() {
+    setFinancialPage(1);
+  }
 
   async function loadEventFinancial() {
     const token = getSessionToken();
@@ -2580,19 +2787,38 @@ export function EventWorkspaceClient({
       return;
     }
 
-    setError(null);
+    setFinancialError(null);
     setIsLoadingFinancial(true);
 
     try {
-      const query =
-        new URLSearchParams({
-          eventId
-        }).toString();
+      const summaryQuery = new URLSearchParams({
+        eventId
+      }).toString();
+      const transactionsQuery = new URLSearchParams({
+        eventId,
+        page: String(financialPage),
+        limit: "50"
+      });
+
+      if (financialSearch) {
+        transactionsQuery.set("search", financialSearch);
+      }
+
+      if (financialMethodFilter !== "ALL") {
+        transactionsQuery.set("method", financialMethodFilter);
+      }
+
+      if (financialStatusFilter !== "ALL") {
+        transactionsQuery.set(
+          "paymentStatus",
+          financialStatusFilter
+        );
+      }
 
       const [summaryResponse, transactionsResponse] =
         await Promise.all([
           fetch(
-            `${API_BASE_URL}/api/financial/summary?${query}`,
+            `${API_BASE_URL}/api/financial/summary?${summaryQuery}`,
             {
               cache: "no-store",
               headers: {
@@ -2601,7 +2827,7 @@ export function EventWorkspaceClient({
             }
           ),
           fetch(
-            `${API_BASE_URL}/api/financial/transactions?${query}`,
+            `${API_BASE_URL}/api/financial/transactions?${transactionsQuery.toString()}`,
             {
               cache: "no-store",
               headers: {
@@ -2624,7 +2850,7 @@ export function EventWorkspaceClient({
           await failedResponse.json() as
             ApiErrorResponse;
 
-        setError(
+        setFinancialError(
           data.message ??
             "Não foi possível carregar o financeiro."
         );
@@ -2636,12 +2862,16 @@ export function EventWorkspaceClient({
           EventFinancialSummary
       );
 
-      setFinancialTransactions(
+      const payload =
         await transactionsResponse.json() as
-          EventFinancialTransaction[]
-      );
+          EventFinancialTransactionListResponse;
+
+      setFinancialTransactions(payload.items);
+      setFinancialTotal(payload.pagination.total);
+      setFinancialTotalPages(payload.pagination.totalPages);
+      setFinancialLimit(payload.pagination.limit);
     } catch {
-      setError(
+      setFinancialError(
         "Não foi possível carregar o financeiro agora."
       );
     } finally {
@@ -2656,7 +2886,14 @@ export function EventWorkspaceClient({
     ) {
       void loadEventFinancial();
     }
-  }, [activeSection, eventId]);
+  }, [
+    activeSection,
+    eventId,
+    financialPage,
+    financialSearch,
+    financialMethodFilter,
+    financialStatusFilter
+  ]);
 
   useEffect(() => {
     setAnalyticsPeriodPreset("ALL");
@@ -2666,6 +2903,11 @@ export function EventWorkspaceClient({
     setAnalyticsPricing("ALL");
     setEventAnalytics(null);
     setAnalyticsError(null);
+    setFinancialSearch("");
+    setFinancialSearchInput("");
+    setFinancialMethodFilter("ALL");
+    setFinancialStatusFilter("ALL");
+    setFinancialPage(1);
   }, [eventId]);
 
   useEffect(() => {
@@ -2798,6 +3040,15 @@ export function EventWorkspaceClient({
     setCreateError(null);
     setIsCreateModalOpen(true);
   }
+
+  useEffect(() => {
+    if (!openCreateEvent) {
+      return;
+    }
+
+    openCreateEventModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreateEvent]);
 
   function closeCreateEventModal() {
     if (isCreatingEvent) {
@@ -3234,17 +3485,7 @@ export function EventWorkspaceClient({
           maxWidth: "1180px"
         }}
       >
-        <Link
-          href="/dashboard"
-          style={{
-            color: "#93c5fd",
-            fontSize: "14px",
-            fontWeight: 800,
-            textDecoration: "none"
-          }}
-        >
-          Voltar ao painel
-        </Link>
+        <EventModuleBackLink />
 
         {isLoading ? (
           <p style={{ color: "#cbd5e1", margin: 0 }}>
@@ -3314,62 +3555,18 @@ export function EventWorkspaceClient({
                   {event.church.name}
                 </p>
 
-                <label
-                  style={{
-                    color: "#94a3b8",
-                    display: "grid",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    gap: "8px",
-                    marginBottom: "14px",
-                    maxWidth: "420px"
+                <EventModuleEventSelector
+                  events={eventsList}
+                  fallbackTitle={event.title}
+                  onSelectedEventIdChange={(nextEventId) => {
+                    if (nextEventId && nextEventId !== event.id) {
+                      router.push(
+                        `/dashboard/eventos/${nextEventId}?section=${activeSection}`
+                      );
+                    }
                   }}
-                >
-                  Evento
-
-                  <select
-                    onChange={(changeEvent) => {
-                      const nextEventId =
-                        changeEvent.target.value;
-
-                      if (
-                        nextEventId &&
-                        nextEventId !== event.id
-                      ) {
-                        router.push(
-                          `/dashboard/eventos/${nextEventId}`
-                        );
-                      }
-                    }}
-                    style={{
-                      background: "#0f172a",
-                      border:
-                        "1px solid rgba(148, 163, 184, 0.3)",
-                      borderRadius: "12px",
-                      color: "#ffffff",
-                      font: "inherit",
-                      fontSize: "14px",
-                      fontWeight: 700,
-                      padding: "11px 12px"
-                    }}
-                    value={event.id}
-                  >
-                    {(eventsList.length > 0
-                      ? eventsList
-                      : [
-                          {
-                            date: event.date,
-                            id: event.id,
-                            title: event.title
-                          }
-                        ]
-                    ).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  selectedEventId={event.id}
+                />
 
                 <h1
                   style={{
@@ -3446,104 +3643,13 @@ export function EventWorkspaceClient({
                   "minmax(210px, 250px) minmax(0, 1fr)"
               }}
             >
-              <nav
-                style={{
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border:
-                    "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "20px",
-                  display: "grid",
-                  gap: "8px",
-                  padding: "12px",
-                  position: "sticky",
-                  top: "24px"
-                }}
-              >
-                <button
-                  onClick={() =>
-                    setActiveSection("overview")
-                  }
-                  style={{
-                    background:
-                      activeSection === "overview"
-                        ? "#2563eb"
-                        : "transparent",
-                    border: 0,
-                    borderRadius: "12px",
-                    color:
-                      activeSection === "overview"
-                        ? "#ffffff"
-                        : "#cbd5e1",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: 900,
-                    padding: "12px 14px",
-                    textAlign: "left"
-                  }}
-                  type="button"
-                >
-                  Visão geral
-                </button>
-
-                <button
-                  onClick={openCreateEventModal}
-                  style={{
-                    background:
-                      "rgba(37, 99, 235, 0.12)",
-                    border:
-                      "1px dashed rgba(96, 165, 250, 0.45)",
-                    borderRadius: "12px",
-                    color: "#93c5fd",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: 900,
-                    padding: "12px 14px",
-                    textAlign: "left"
-                  }}
-                  type="button"
-                >
-                  + Criar evento
-                </button>
-
-                {[
-                  ["information", "Informações"],
-                  ["tickets", "Ingressos"],
-                  ["registration-form", "Formulário de inscrição"],
-                  ["participants", "Participantes"],
-                  ["check-in", "Check-in"],
-                  ["financial", "Financeiro"],
-                  ["event-app", "Aplicativo do Evento"]
-                ].map(([section, label]) => (
-                  <button
-                    key={section}
-                    onClick={() =>
-                      setActiveSection(
-                        section as EventWorkspaceSection
-                      )
-                    }
-                    style={{
-                      background:
-                        activeSection === section
-                          ? "#2563eb"
-                          : "transparent",
-                      border: 0,
-                      borderRadius: "12px",
-                      color:
-                        activeSection === section
-                          ? "#ffffff"
-                          : "#cbd5e1",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: 900,
-                      padding: "12px 14px",
-                      textAlign: "left"
-                    }}
-                    type="button"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
+              <EventModuleNav
+                activeSection={activeSection}
+                onCreateEvent={openCreateEventModal}
+                onSelectSection={setActiveSection}
+                selectedEventId={event.id}
+                variant="workspace"
+              />
 
               <div
                 style={{
@@ -5485,9 +5591,9 @@ export function EventWorkspaceClient({
                       {[
                         "Tipo",
                         "Vendidos/total",
-                        "Valor a receber",
-                        "Taxa",
                         "Valor do comprador",
+                        "Taxa",
+                        "Valor a receber",
                         "Visibilidade do ingresso"
                       ].map((columnLabel) => (
                         <span
@@ -5691,25 +5797,15 @@ export function EventWorkspaceClient({
                         </span>
                         <span
                           style={{
-                            color: "#94a3b8",
+                            color: "#cbd5e1",
                             fontSize: "13px",
                             minWidth: 0,
                             overflowWrap: "anywhere"
                           }}
-                          title="Valor líquido do organizador não existe no domínio atual."
                         >
-                          —
-                        </span>
-                        <span
-                          style={{
-                            color: "#94a3b8",
-                            fontSize: "13px",
-                            minWidth: 0,
-                            overflowWrap: "anywhere"
-                          }}
-                          title="Taxa não existe no domínio atual."
-                        >
-                          —
+                          {row.batch?.buyerAmount == null
+                            ? "—"
+                            : formatMoney(row.batch.buyerAmount)}
                         </span>
                         <span
                           style={{
@@ -5719,9 +5815,23 @@ export function EventWorkspaceClient({
                             overflowWrap: "anywhere"
                           }}
                         >
-                          {row.batch
-                            ? formatMoney(row.batch.price)
-                            : "—"}
+                          {row.batch?.platformFeeAmount == null
+                            ? "—"
+                            : formatMoney(row.batch.platformFeeAmount)}
+                        </span>
+                        <span
+                          style={{
+                            color: "#cbd5e1",
+                            fontSize: "13px",
+                            minWidth: 0,
+                            overflowWrap: "anywhere"
+                          }}
+                        >
+                          {row.batch?.netReceivableAmount == null
+                            ? "—"
+                            : formatMoney(
+                                row.batch.netReceivableAmount
+                              )}
                         </span>
                         <span
                           style={{
@@ -7288,6 +7398,468 @@ export function EventWorkspaceClient({
                   </div>
                 ) : null}
               </>
+            ) : null}
+
+            {activeSection === "discounts" ? (
+              <section
+                style={{
+                  background: "rgba(15, 23, 42, 0.82)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "20px",
+                  display: "grid",
+                  gap: "22px",
+                  padding: "24px"
+                }}
+              >
+                <header
+                  style={{
+                    display: "grid",
+                    gap: "18px"
+                  }}
+                >
+                  <div>
+                    <p
+                      style={{
+                        color: "#60a5fa",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        letterSpacing: "0.08em",
+                        margin: "0 0 8px",
+                        textTransform: "uppercase"
+                      }}
+                    >
+                      Descontos
+                    </p>
+                    <h2
+                      style={{
+                        color: "#ffffff",
+                        fontSize: "24px",
+                        margin: 0
+                      }}
+                    >
+                      Descontos do evento
+                    </h2>
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "14px",
+                        margin: "8px 0 0"
+                      }}
+                    >
+                      Vender o mesmo ingresso por outro valor, sem criar lote.
+                    </p>
+                  </div>
+                  <button
+                    onClick={openCreateDiscountDialog}
+                    style={{
+                      background: "#2563eb",
+                      border: "1px solid #2563eb",
+                      borderRadius: "10px",
+                      color: "#ffffff",
+                      fontWeight: 900,
+                      justifySelf: "start",
+                      padding: "8px 12px",
+                      whiteSpace: "nowrap"
+                    }}
+                    type="button"
+                  >
+                    Criar desconto
+                  </button>
+                </header>
+
+                {discountMessage ? (
+                  <p
+                    style={{
+                      background: "rgba(5, 150, 105, 0.16)",
+                      border:
+                        "1px solid rgba(52, 211, 153, 0.26)",
+                      borderRadius: "12px",
+                      color: "#a7f3d0",
+                      margin: 0,
+                      padding: "12px"
+                    }}
+                  >
+                    {discountMessage}
+                  </p>
+                ) : null}
+
+                {discountError && !isDiscountDialogOpen ? (
+                  <p
+                    style={{
+                      background: "rgba(127, 29, 29, 0.32)",
+                      border:
+                        "1px solid rgba(248, 113, 113, 0.28)",
+                      borderRadius: "12px",
+                      color: "#fecaca",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                      margin: 0,
+                      padding: "12px"
+                    }}
+                  >
+                    {discountError}
+                  </p>
+                ) : null}
+
+                {isLoadingDiscounts ? (
+                  <p>Carregando descontos...</p>
+                ) : null}
+
+                {!isLoadingDiscounts &&
+                discounts.length === 0 ? (
+                  <p>Nenhum desconto neste evento.</p>
+                ) : null}
+
+                {discounts.length > 0 ? (
+                  <div>
+                    <div
+                      style={{
+                        alignItems: "end",
+                        borderBottom:
+                          "1px solid rgba(148, 163, 184, 0.22)",
+                        color: "#94a3b8",
+                        display: "grid",
+                        fontSize: "12px",
+                        fontWeight: 900,
+                        gap: "12px",
+                        gridTemplateColumns:
+                          "minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr) auto",
+                        lineHeight: 1.3,
+                        padding: "0 0 10px"
+                      }}
+                    >
+                      {[
+                        "Código",
+                        "Ingresso",
+                        "Preço final",
+                        "Ativo/Inativo"
+                      ].map((columnLabel) => (
+                        <span key={columnLabel}>
+                          {columnLabel}
+                        </span>
+                      ))}
+                      <span />
+                    </div>
+
+                    {discounts.map((discount) => (
+                      <div
+                        key={discount.id}
+                        style={{
+                          alignItems: "center",
+                          borderBottom:
+                            "1px solid rgba(148, 163, 184, 0.14)",
+                          display: "grid",
+                          gap: "12px",
+                          gridTemplateColumns:
+                            "minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr) auto",
+                          padding: "12px 0"
+                        }}
+                      >
+                        <strong
+                          style={{
+                            color: "#ffffff",
+                            fontSize: "14px"
+                          }}
+                        >
+                          {discount.code}
+                        </strong>
+                        <span>{discount.ticket.name}</span>
+                        <span>
+                          {formatMoney(discount.finalPrice)}
+                        </span>
+                        <span>
+                          {discount.isActive
+                            ? "Ativo"
+                            : "Inativo"}
+                        </span>
+                        <button
+                          onClick={() =>
+                            openEditDiscountDialog(discount)
+                          }
+                          style={{
+                            background: "transparent",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.3)",
+                            borderRadius: "10px",
+                            color: "#e2e8f0",
+                            fontSize: "12px",
+                            fontWeight: 900,
+                            justifySelf: "end",
+                            padding: "7px 10px",
+                            whiteSpace: "nowrap"
+                          }}
+                          type="button"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {isDiscountDialogOpen ? (
+                  <div
+                    onClick={closeDiscountDialog}
+                    style={{
+                      alignItems: "center",
+                      background: "rgba(2, 6, 23, 0.72)",
+                      display: "flex",
+                      inset: 0,
+                      justifyContent: "center",
+                      padding: "24px",
+                      position: "fixed",
+                      zIndex: 60
+                    }}
+                  >
+                    <div
+                      onClick={(clickEvent) =>
+                        clickEvent.stopPropagation()
+                      }
+                      style={{
+                        background:
+                          "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "28px",
+                        boxShadow:
+                          "0 28px 90px rgba(2, 6, 23, 0.48)",
+                        display: "grid",
+                        gap: "20px",
+                        maxWidth: "520px",
+                        padding: "28px",
+                        width: "100%"
+                      }}
+                    >
+                      <h2
+                        style={{
+                          color: "#ffffff",
+                          fontSize: "24px",
+                          letterSpacing: "-0.03em",
+                          margin: 0
+                        }}
+                      >
+                        {editingDiscountId
+                          ? "Editar desconto"
+                          : "Criar desconto"}
+                      </h2>
+
+                      {discountError ? (
+                        <p
+                          style={{
+                            background:
+                              "rgba(127, 29, 29, 0.32)",
+                            border:
+                              "1px solid rgba(248, 113, 113, 0.28)",
+                            borderRadius: "12px",
+                            color: "#fecaca",
+                            fontSize: "13px",
+                            lineHeight: 1.5,
+                            margin: 0,
+                            padding: "12px"
+                          }}
+                        >
+                          {discountError}
+                        </p>
+                      ) : null}
+
+                      <form
+                        onSubmit={handleSaveDiscount}
+                        style={{
+                          display: "grid",
+                          gap: "16px"
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "6px"
+                          }}
+                        >
+                          <label
+                            htmlFor="discount-code"
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              fontWeight: 700
+                            }}
+                          >
+                            Código
+                          </label>
+                          <input
+                            id="discount-code"
+                            maxLength={32}
+                            onChange={(changeEvent) =>
+                              setDiscountCode(
+                                changeEvent.target.value
+                              )
+                            }
+                            required
+                            style={{
+                              background: "#0f172a",
+                              border:
+                                "1px solid rgba(148, 163, 184, 0.3)",
+                              borderRadius: "12px",
+                              color: "#ffffff",
+                              font: "inherit",
+                              padding: "13px 14px"
+                            }}
+                            value={discountCode}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "6px"
+                          }}
+                        >
+                          <label
+                            htmlFor="discount-ticket"
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              fontWeight: 700
+                            }}
+                          >
+                            Ingresso
+                          </label>
+                          <select
+                            id="discount-ticket"
+                            onChange={(changeEvent) =>
+                              setDiscountTicketId(
+                                changeEvent.target.value
+                              )
+                            }
+                            required
+                            style={{
+                              background: "#0f172a",
+                              border:
+                                "1px solid rgba(148, 163, 184, 0.3)",
+                              borderRadius: "12px",
+                              color: "#ffffff",
+                              font: "inherit",
+                              padding: "13px 14px"
+                            }}
+                            value={discountTicketId}
+                          >
+                            {tickets.map((ticket) => (
+                              <option
+                                key={ticket.id}
+                                value={ticket.id}
+                              >
+                                {ticket.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: "6px"
+                          }}
+                        >
+                          <label
+                            htmlFor="discount-final-price"
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              fontWeight: 700
+                            }}
+                          >
+                            Preço final
+                          </label>
+                          <input
+                            id="discount-final-price"
+                            min="0.01"
+                            onChange={(changeEvent) =>
+                              setDiscountFinalPrice(
+                                changeEvent.target.value
+                              )
+                            }
+                            required
+                            step="0.01"
+                            style={{
+                              background: "#0f172a",
+                              border:
+                                "1px solid rgba(148, 163, 184, 0.3)",
+                              borderRadius: "12px",
+                              color: "#ffffff",
+                              font: "inherit",
+                              padding: "13px 14px"
+                            }}
+                            type="number"
+                            value={discountFinalPrice}
+                          />
+                        </div>
+
+                        <label
+                          style={{
+                            alignItems: "center",
+                            color: "#cbd5e1",
+                            display: "flex",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            gap: "8px"
+                          }}
+                        >
+                          <input
+                            checked={discountIsActive}
+                            onChange={(changeEvent) =>
+                              setDiscountIsActive(
+                                changeEvent.target.checked
+                              )
+                            }
+                            type="checkbox"
+                          />
+                          Ativo
+                        </label>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "8px"
+                          }}
+                        >
+                          <button
+                            onClick={closeDiscountDialog}
+                            style={{
+                              background: "transparent",
+                              border:
+                                "1px solid rgba(148, 163, 184, 0.3)",
+                              borderRadius: "10px",
+                              color: "#e2e8f0",
+                              fontWeight: 900,
+                              padding: "10px 12px"
+                            }}
+                            type="button"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            disabled={isSavingDiscount}
+                            style={{
+                              background: "#2563eb",
+                              border: 0,
+                              borderRadius: "10px",
+                              color: "#ffffff",
+                              fontWeight: 900,
+                              padding: "10px 12px"
+                            }}
+                            type="submit"
+                          >
+                            {isSavingDiscount
+                              ? "Salvando..."
+                              : "Salvar"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
             ) : null}
 
             {activeSection === "registration-form" ? (
@@ -9789,586 +10361,654 @@ export function EventWorkspaceClient({
       border: "1px solid rgba(148, 163, 184, 0.18)",
       borderRadius: "20px",
       display: "grid",
-      gap: "18px",
-      padding: "24px"
+      gap: "16px",
+      padding: "22px 24px"
     }}
   >
+    <style>{`
+      .financial-filters {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr;
+      }
+      .financial-filters-row-selects {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .financial-filter-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+      .financial-filter-label {
+        color: #cbd5e1;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .financial-search-form {
+        align-items: stretch;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+      .financial-filter-select {
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 10px;
+        color: #ffffff;
+        font: inherit;
+        padding: 10px 12px;
+        width: 100%;
+      }
+      .financial-summary-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .financial-list-header {
+        align-items: end;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        color: #94a3b8;
+        display: grid;
+        font-size: 11px;
+        font-weight: 900;
+        gap: 12px;
+        grid-template-columns: ${FINANCIAL_LIST_COLUMNS};
+        letter-spacing: 0.04em;
+        line-height: 1.3;
+        padding: 0 4px 10px;
+        text-transform: uppercase;
+      }
+      .financial-list-row {
+        align-items: center;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        display: grid;
+        gap: 12px;
+        grid-template-columns: ${FINANCIAL_LIST_COLUMNS};
+        padding: 11px 4px;
+        transition: background 0.12s ease;
+      }
+      .financial-list-row:hover {
+        background: rgba(148, 163, 184, 0.06);
+      }
+      .financial-col-label {
+        display: none;
+      }
+      @media (max-width: 900px) {
+        .financial-summary-grid {
+          grid-template-columns: 1fr;
+        }
+        .financial-filters-row-selects {
+          grid-template-columns: 1fr;
+        }
+        .financial-list-header {
+          display: none;
+        }
+        .financial-list-row {
+          align-items: start;
+          gap: 8px;
+          grid-template-columns: 1fr;
+          padding: 12px 2px;
+        }
+        .financial-col-label {
+          color: #64748b;
+          display: inline;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          margin-right: 6px;
+          text-transform: uppercase;
+        }
+      }
+    `}</style>
+
     <header>
       <p
         style={{
           color: "#60a5fa",
-          fontSize: "13px",
-          fontWeight: 900,
-          margin: "0 0 6px",
+          fontSize: "11px",
+          fontWeight: 800,
+          letterSpacing: "0.08em",
+          margin: "0 0 4px",
           textTransform: "uppercase"
         }}
       >
         Financeiro
       </p>
 
-      <h2 style={{ margin: 0 }}>
-        Movimentações do evento
+      <h2
+        style={{
+          fontSize: "20px",
+          fontWeight: 800,
+          margin: 0
+        }}
+      >
+        Financeiro do evento
       </h2>
 
       <p
         style={{
           color: "#94a3b8",
-          margin: "8px 0 0"
+          fontSize: "13px",
+          margin: "6px 0 0"
         }}
       >
-        Acompanhe vendas, participantes,
-        métodos e status dos pagamentos.
+        Valor bruto, taxa da plataforma, valor líquido e histórico deste evento.
       </p>
     </header>
 
     {isLoadingFinancial ? (
-      <p>Carregando financeiro...</p>
-    ) : null}
-
-    {!isLoadingFinancial &&
-    financialSummary ? (
-      <div
+      <p
         style={{
-          display: "grid",
-          gap: "10px",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(160px, 1fr))"
+          color: "#94a3b8",
+          margin: 0
         }}
       >
-        <article
-          style={{
-            border:
-              "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "12px",
-            padding: "14px"
-          }}
-        >
-          <strong
-            style={{
-              color: "#94a3b8"
-            }}
-          >
-            Entradas
-          </strong>
-          <p
-            style={{
-              fontSize: "20px",
-              fontWeight: 900,
-              margin: "6px 0 0"
-            }}
-          >
-            {formatMoney(
-              financialSummary.income
-            )}
-          </p>
-        </article>
-
-        <article
-          style={{
-            border:
-              "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "12px",
-            padding: "14px"
-          }}
-        >
-          <strong
-            style={{
-              color: "#94a3b8"
-            }}
-          >
-            Saídas
-          </strong>
-          <p
-            style={{
-              fontSize: "20px",
-              fontWeight: 900,
-              margin: "6px 0 0"
-            }}
-          >
-            {formatMoney(
-              financialSummary.expense
-            )}
-          </p>
-        </article>
-
-        <article
-          style={{
-            border:
-              "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "12px",
-            padding: "14px"
-          }}
-        >
-          <strong
-            style={{
-              color: "#94a3b8"
-            }}
-          >
-            Saldo
-          </strong>
-          <p
-            style={{
-              fontSize: "20px",
-              fontWeight: 900,
-              margin: "6px 0 0"
-            }}
-          >
-            {formatMoney(
-              Number(
-                financialSummary.income
-              ) -
-                Number(
-                  financialSummary.expense
-                )
-            )}
-          </p>
-        </article>
-      </div>
-    ) : null}
-
-    <form
-      onSubmit={(formEvent) => {
-        formEvent.preventDefault();
-
-        setFinancialSearch(
-          financialSearchInput.trim()
-        );
-      }}
-      style={{
-        alignItems: "end",
-        display: "grid",
-        gap: "14px",
-        gridTemplateColumns:
-          "minmax(300px, 2.2fr) minmax(180px, 0.9fr) minmax(210px, 1fr) 132px",
-        width: "100%"
-      }}
-    >
-      <label
-        style={{
-          display: "grid",
-          gap: "7px",
-          minWidth: 0
-        }}
-      >
-        <span
-          style={{
-            color: "#94a3b8",
-            fontSize: "12px",
-            fontWeight: 800
-          }}
-        >
-          Pesquisar movimentações
-        </span>
-
-        <input
-          onChange={(event) =>
-            setFinancialSearchInput(
-              event.target.value
-            )
-          }
-          placeholder="Participante, e-mail, telefone, ingresso ou cobrança"
-          style={{
-            boxSizing: "border-box",
-            fontSize: "14px",
-            minHeight: "46px",
-            padding: "0 14px",
-            width: "100%"
-          }}
-          type="search"
-          value={financialSearchInput}
-        />
-      </label>
-
-      <label
-        style={{
-          display: "grid",
-          gap: "7px",
-          minWidth: 0
-        }}
-      >
-        <span
-          style={{
-            color: "#94a3b8",
-            fontSize: "12px",
-            fontWeight: 800
-          }}
-        >
-          Método
-        </span>
-
-        <select
-          onChange={(event) =>
-            setFinancialMethodFilter(
-              event.target.value
-            )
-          }
-          style={{
-            boxSizing: "border-box",
-            fontSize: "14px",
-            minHeight: "46px",
-            padding: "0 12px",
-            width: "100%"
-          }}
-          value={financialMethodFilter}
-        >
-          <option value="ALL">
-            Todos os métodos
-          </option>
-          <option value="PIX">
-            PIX
-          </option>
-          <option value="CARD">
-            Cartão
-          </option>
-        </select>
-      </label>
-
-      <label
-        style={{
-          display: "grid",
-          gap: "7px",
-          minWidth: 0
-        }}
-      >
-        <span
-          style={{
-            color: "#94a3b8",
-            fontSize: "12px",
-            fontWeight: 800
-          }}
-        >
-          Status
-        </span>
-
-        <select
-          onChange={(event) =>
-            setFinancialStatusFilter(
-              event.target.value
-            )
-          }
-          style={{
-            boxSizing: "border-box",
-            fontSize: "14px",
-            minHeight: "46px",
-            padding: "0 12px",
-            width: "100%"
-          }}
-          value={financialStatusFilter}
-        >
-          <option value="ALL">
-            Todos os status
-          </option>
-          <option value="PAID">
-            Pago
-          </option>
-          <option value="PENDING">
-            Pendente
-          </option>
-          <option value="REFUND_PENDING">
-            Reembolso em processamento
-          </option>
-          <option value="CANCELLED">
-            Cancelado
-          </option>
-          <option value="REFUNDED">
-            Reembolsado
-          </option>
-        </select>
-      </label>
-
-      <button
-        style={{
-          alignSelf: "end",
-          minHeight: "46px",
-          minWidth: "132px",
-          padding: "0 18px",
-          whiteSpace: "nowrap",
-          width: "132px"
-        }}
-        type="submit"
-      >
-        Pesquisar
-      </button>
-    </form>
-
-    {!isLoadingFinancial &&
-    filteredFinancialTransactions.length ===
-      0 ? (
-      <p>
-        Nenhuma movimentação encontrada.
+        Carregando financeiro...
       </p>
     ) : null}
 
-    <div
-      style={{
-        display: "grid",
-        gap: "10px"
-      }}
-    >
-      {filteredFinancialTransactions.map(
-        (transaction) => {
-          const registrations =
-            getEventFinancialRegistrations(
-              transaction
-            );
+    {!isLoadingFinancial && financialError ? (
+      <div
+        style={{
+          background: "rgba(127, 29, 29, 0.28)",
+          border: "1px solid rgba(248, 113, 113, 0.28)",
+          borderRadius: "12px",
+          color: "#fecaca",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          padding: "12px 14px"
+        }}
+      >
+        {financialError}
+      </div>
+    ) : null}
 
-          const participants =
-            getEventFinancialParticipants(
-              transaction
-            );
-
-          const participantNames =
-            participants.length > 0
-              ? participants
-                  .map(
-                    (participant) =>
-                      participant.name
-                  )
-                  .join(", ")
-              : "Sem participante vinculado";
-
-          const tickets =
-            registrations
-              .map((registration) => {
-                const ticket =
-                  registration.ticket
-                    ?.name;
-
-                const batch =
-                  registration.ticketBatch
-                    ?.name;
-
-                if (
-                  ticket &&
-                  batch
-                ) {
-                  return (
-                    ticket +
-                    " • " +
-                    batch
-                  );
-                }
-
-                return (
-                  ticket ??
-                  batch ??
-                  null
-                );
-              })
-              .filter(
-                (
-                  value
-                ): value is string =>
-                  Boolean(value)
-              );
-
-          const paymentStatus =
-            transaction.eventPayment
-              ?.status ?? null;
-
-          const provider =
-            transaction.eventPayment
-              ?.provider ??
-            (transaction.asaasId
-              ? "ASAAS"
-              : null);
-
-          const providerPaymentId =
-            transaction.eventPayment
-              ?.providerPaymentId ??
-            transaction.asaasId;
-
-          return (
-            <article
-              key={transaction.id}
+    {!isLoadingFinancial &&
+    !financialError &&
+    financialSummary ? (
+      <div className="financial-summary-grid">
+        {(
+          [
+            {
+              label: "Valor bruto",
+              value: formatMoney(
+                financialSummary.eventSales?.grossAmount ?? 0
+              ),
+              color: "#a7f3d0"
+            },
+            {
+              label: "Taxa da plataforma",
+              value: formatMoney(
+                financialSummary.eventSales?.platformFeeAmount ?? 0
+              ),
+              color: "#fca5a5",
+              hint:
+                financialSummary.eventSales
+                  ?.currentPlatformFeePercent == null
+                  ? undefined
+                  : `Taxa atual: ${formatPlatformFeePercent(
+                      financialSummary.eventSales
+                        .currentPlatformFeePercent
+                    )}`
+            },
+            {
+              label: "Valor líquido",
+              value: formatMoney(
+                financialSummary.eventSales?.netAmount ?? 0
+              ),
+              color: "#e2e8f0"
+            }
+          ] as const
+        ).map((card) => (
+          <article
+            key={card.label}
+            style={{
+              background: "rgba(15, 23, 42, 0.55)",
+              border: "1px solid rgba(148, 163, 184, 0.16)",
+              borderRadius: "12px",
+              padding: "12px 14px"
+            }}
+          >
+            <strong
               style={{
-                border:
-                  "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "14px",
-                display: "grid",
-                gap: "12px",
-                padding: "16px"
+                color: "#94a3b8",
+                fontSize: "11px",
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase"
               }}
             >
-              <div
+              {card.label}
+            </strong>
+            <p
+              style={{
+                color: card.color,
+                fontSize: "22px",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                margin: "6px 0 0"
+              }}
+            >
+              {card.value}
+            </p>
+            {"hint" in card && card.hint ? (
+              <p
                 style={{
-                  alignItems: "start",
-                  display: "grid",
-                  gap: "12px",
-                  gridTemplateColumns:
-                    "minmax(180px, 1.5fr) minmax(150px, 1fr) minmax(110px, 0.7fr) minmax(120px, 0.8fr)"
+                  color: "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  margin: "4px 0 0"
                 }}
               >
-                <div>
-                  <strong>
-                    {participantNames}
-                  </strong>
-                  <p
-                    style={{
-                      color:
-                        "#94a3b8",
-                      margin:
-                        "5px 0 0"
-                    }}
-                  >
-                    {tickets.length > 0
-                      ? tickets.join(
-                          ", "
-                        )
-                      : "Sem ingresso vinculado"}
-                  </p>
-                </div>
+                {card.hint}
+              </p>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    ) : null}
 
-                <div>
-                  <span
-                    style={{
-                      color:
-                        "#94a3b8",
-                      display:
-                        "block",
-                      fontSize:
-                        "12px"
-                    }}
-                  >
-                    Pagamento
-                  </span>
-                  <strong>
-                    {getEventPaymentStatusLabel(
-                      paymentStatus
-                    )}
-                  </strong>
-                </div>
+    <div className="financial-filters">
+      <div className="financial-filter-field">
+        <label
+          className="financial-filter-label"
+          htmlFor="financial-search"
+        >
+          Buscar movimentações
+        </label>
+        <form
+          className="financial-search-form"
+          onSubmit={(formEvent) => {
+            formEvent.preventDefault();
+            setFinancialSearch(
+              financialSearchInput.trim()
+            );
+            resetFinancialListPage();
+          }}
+        >
+          <input
+            id="financial-search"
+            onChange={(event) =>
+              setFinancialSearchInput(event.target.value)
+            }
+            placeholder="Participante, e-mail, telefone, ingresso ou cobrança"
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(148, 163, 184, 0.3)",
+              borderRadius: "10px",
+              color: "#ffffff",
+              font: "inherit",
+              minWidth: 0,
+              padding: "10px 12px",
+              width: "100%"
+            }}
+            type="search"
+            value={financialSearchInput}
+          />
+          <button
+            style={{
+              background: "#2563eb",
+              border: 0,
+              borderRadius: "10px",
+              color: "#ffffff",
+              cursor: "pointer",
+              fontWeight: 800,
+              padding: "10px 16px",
+              whiteSpace: "nowrap"
+            }}
+            type="submit"
+          >
+            Pesquisar
+          </button>
+        </form>
+      </div>
 
-                <div>
-                  <span
-                    style={{
-                      color:
-                        "#94a3b8",
-                      display:
-                        "block",
-                      fontSize:
-                        "12px"
-                    }}
-                  >
-                    Método
-                  </span>
-                  <strong>
-                    {getEventFinancialMethodLabel(
-                      transaction.method
-                    )}
-                  </strong>
-                </div>
+      <div className="financial-filters-row-selects">
+        <label className="financial-filter-field">
+          <span className="financial-filter-label">
+            Método
+          </span>
+          <select
+            className="financial-filter-select"
+            onChange={(event) => {
+              setFinancialMethodFilter(event.target.value);
+              resetFinancialListPage();
+            }}
+            value={financialMethodFilter}
+          >
+            <option value="ALL">Todos os métodos</option>
+            <option value="PIX">PIX</option>
+            <option value="CARD">Cartão</option>
+          </select>
+        </label>
 
-                <div
+        <label className="financial-filter-field">
+          <span className="financial-filter-label">
+            Status
+          </span>
+          <select
+            className="financial-filter-select"
+            onChange={(event) => {
+              setFinancialStatusFilter(event.target.value);
+              resetFinancialListPage();
+            }}
+            value={financialStatusFilter}
+          >
+            <option value="ALL">Todos os status</option>
+            <option value="PAID">Pago</option>
+            <option value="PENDING">Pendente</option>
+            <option value="NO_CHARGE">Sem cobrança</option>
+            <option value="REFUND_PENDING">
+              Reembolso em processamento
+            </option>
+            <option value="CANCELLED">Cancelado</option>
+            <option value="REFUNDED">Reembolsado</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    {!isLoadingFinancial &&
+    !financialError &&
+    financialTransactions.length === 0 ? (
+      <p
+        style={{
+          color: "#94a3b8",
+          margin: 0
+        }}
+      >
+        {hasActiveFinancialFilters
+          ? "Nenhuma movimentação encontrada para estes filtros."
+          : "Nenhuma movimentação neste evento."}
+      </p>
+    ) : null}
+
+    {!isLoadingFinancial &&
+    !financialError &&
+    financialTransactions.length > 0 ? (
+      <div
+        style={{
+          display: "grid",
+          gap: 0
+        }}
+      >
+        <div className="financial-list-header">
+          <span>Participante / Origem</span>
+          <span>Ingresso / lote</span>
+          <span>Pagamento</span>
+          <span>Método</span>
+          <span>Valor</span>
+          <span>Data</span>
+        </div>
+
+        {financialTransactions.map((transaction) => {
+          const origin = getEventFinancialOrigin(transaction);
+          const ticket = getEventFinancialTicketLabel(
+            transaction
+          );
+          const paymentLabel =
+            getEventFinancialRowPaymentLabel(transaction);
+          const paymentTone =
+            getEventFinancialPaymentTone(transaction);
+          const badgeBase = {
+            borderRadius: "999px",
+            display: "inline-flex",
+            fontSize: "11px",
+            fontWeight: 800,
+            lineHeight: 1.3,
+            padding: "3px 8px",
+            whiteSpace: "nowrap" as const
+          };
+
+          return (
+            <div
+              className="financial-list-row"
+              key={transaction.id}
+            >
+              <span
+                style={{
+                  display: "grid",
+                  gap: "2px",
+                  minWidth: 0
+                }}
+              >
+                <span className="financial-col-label">
+                  Participante / Origem
+                </span>
+                <strong
                   style={{
-                    textAlign:
-                      "right"
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    lineHeight: 1.35,
+                    overflowWrap: "anywhere"
                   }}
                 >
-                  <strong
+                  {origin.primary}
+                </strong>
+                {origin.secondary ? (
+                  <span
                     style={{
-                      color:
-                        transaction.direction ===
-                        "IN"
-                          ? "#a7f3d0"
-                          : "#fca5a5",
-                      fontSize:
-                        "18px"
+                      color: "#94a3b8",
+                      fontSize: "12px",
+                      overflowWrap: "anywhere"
                     }}
                   >
-                    {transaction.direction ===
-                    "IN"
-                      ? "+"
-                      : "-"}
-                    {formatMoney(
-                      transaction.amount
-                    )}
-                  </strong>
-                </div>
-              </div>
+                    {origin.secondary}
+                  </span>
+                ) : null}
+              </span>
 
-              <div
+              <span
                 style={{
-                  borderTop:
-                    "1px solid rgba(148, 163, 184, 0.12)",
-                  color:
-                    "#94a3b8",
-                  display:
-                    "grid",
-                  fontSize:
-                    "12px",
-                  gap:
-                    "8px",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(150px, 1fr))",
-                  paddingTop:
-                    "10px"
+                  display: "grid",
+                  gap: "2px",
+                  minWidth: 0
                 }}
               >
-                <span>
-                  Financeiro:{" "}
-                  <strong
-                    style={{
-                      color:
-                        "#e2e8f0"
-                    }}
-                  >
-                    {getTransactionStatusLabel(
-                      transaction.status
-                    )}
-                  </strong>
+                <span className="financial-col-label">
+                  Ingresso / lote
                 </span>
-
-                <span>
-                  Provider:{" "}
-                  <strong
-                    style={{
-                      color:
-                        "#e2e8f0"
-                    }}
-                  >
-                    {provider ??
-                      "Interno"}
-                  </strong>
-                </span>
-
                 <span
-                  title={
-                    providerPaymentId ??
-                    ""
-                  }
+                  style={{
+                    color: "#e2e8f0",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    overflowWrap: "anywhere"
+                  }}
                 >
-                  Cobrança:{" "}
-                  <strong
+                  {ticket.primary}
+                </span>
+                {ticket.secondary ? (
+                  <span
                     style={{
-                      color:
-                        "#e2e8f0"
+                      color: "#94a3b8",
+                      fontSize: "12px"
                     }}
                   >
-                    {providerPaymentId ??
-                      "Sem ID externo"}
-                  </strong>
-                </span>
+                    {ticket.secondary}
+                  </span>
+                ) : null}
+              </span>
 
-                <span>
-                  Data:{" "}
-                  <strong
-                    style={{
-                      color:
-                        "#e2e8f0"
-                    }}
-                  >
-                    {formatDate(
-                      transaction.at
-                    )}
-                  </strong>
+              <span
+                style={{
+                  alignItems: "center",
+                  display: "flex",
+                  gap: "6px",
+                  minWidth: 0
+                }}
+              >
+                <span className="financial-col-label">
+                  Pagamento
                 </span>
-              </div>
-            </article>
+                <span
+                  style={{
+                    ...badgeBase,
+                    ...getCheckInToneStyles(paymentTone)
+                  }}
+                >
+                  {paymentLabel}
+                </span>
+              </span>
+
+              <span
+                style={{
+                  color: "#e2e8f0",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  minWidth: 0
+                }}
+              >
+                <span className="financial-col-label">
+                  Método
+                </span>
+                {getEventFinancialMethodLabel(
+                  transaction.method
+                )}
+              </span>
+
+              <span
+                style={{
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  minWidth: 0,
+                  color:
+                    transaction.direction === "IN"
+                      ? "#a7f3d0"
+                      : "#fca5a5"
+                }}
+              >
+                <span className="financial-col-label">
+                  Valor
+                </span>
+                {transaction.direction === "IN" ? "+" : "-"}
+                {formatMoney(transaction.amount)}
+              </span>
+
+              <span
+                style={{
+                  color: "#cbd5e1",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  minWidth: 0,
+                  whiteSpace: "nowrap"
+                }}
+              >
+                <span className="financial-col-label">
+                  Data
+                </span>
+                {formatDateTimeCompact(transaction.at)}
+              </span>
+            </div>
           );
-        }
-      )}
-    </div>
+        })}
+      </div>
+    ) : null}
+
+    {!isLoadingFinancial &&
+    !financialError &&
+    financialTotal > 0 &&
+    financialTotalPages >= 1 ? (
+      <div
+        style={{
+          display: "grid",
+          gap: "10px"
+        }}
+      >
+        <div
+          style={{
+            alignItems: "center",
+            display: "flex",
+            gap: "12px",
+            justifyContent: "space-between"
+          }}
+        >
+          <button
+            disabled={
+              isLoadingFinancial || financialPage <= 1
+            }
+            onClick={() => {
+              setFinancialPage((current) =>
+                Math.max(1, current - 1)
+              );
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(148, 163, 184, 0.28)",
+              borderRadius: "10px",
+              color: "#e2e8f0",
+              cursor:
+                financialPage <= 1
+                  ? "not-allowed"
+                  : "pointer",
+              fontWeight: 800,
+              padding: "10px 14px"
+            }}
+            type="button"
+          >
+            Anterior
+          </button>
+
+          <span
+            style={{
+              color: "#94a3b8",
+              fontSize: "13px"
+            }}
+          >
+            Página {financialPage} de {financialTotalPages}
+          </span>
+
+          <button
+            disabled={
+              isLoadingFinancial ||
+              financialPage >= financialTotalPages
+            }
+            onClick={() => {
+              setFinancialPage((current) => current + 1);
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(148, 163, 184, 0.28)",
+              borderRadius: "10px",
+              color: "#e2e8f0",
+              cursor:
+                financialPage >= financialTotalPages
+                  ? "not-allowed"
+                  : "pointer",
+              fontWeight: 800,
+              padding: "10px 14px"
+            }}
+            type="button"
+          >
+            Próxima
+          </button>
+        </div>
+
+        <p
+          style={{
+            color: "#64748b",
+            fontSize: "12px",
+            margin: 0
+          }}
+        >
+          Mostrando{" "}
+          {(
+            (financialPage - 1) * financialLimit + 1
+          ).toLocaleString("pt-BR")}
+          –
+          {Math.min(
+            financialPage * financialLimit,
+            financialTotal
+          ).toLocaleString("pt-BR")}{" "}
+          de {financialTotal.toLocaleString("pt-BR")}{" "}
+          movimentações
+        </p>
+      </div>
+    ) : null}
   </section>
 ) : null}
 

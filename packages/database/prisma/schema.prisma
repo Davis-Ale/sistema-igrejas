@@ -110,6 +110,7 @@ model Church {
   blockedAt             DateTime?
   blockReason           String?
   baseCityId            String?
+  platformFeePercent    Decimal?     @db.Decimal(5, 2)
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
@@ -130,6 +131,7 @@ model Church {
   eventApiKeys     EventApiKey[]
   eventOrders      EventOrder[]
   eventPayments    EventPayment[]
+  eventDiscounts   EventDiscount[]
   transactions     Transaction[]
   userAccounts     UserAccount[]
   trialSignups     TrialSignup[]
@@ -413,6 +415,7 @@ model Event {
   apiKeys          EventApiKey[]
   orders           EventOrder[]
   payments         EventPayment[]
+  discounts        EventDiscount[]
   transactions     Transaction[]
 
   @@unique([churchId, slug])
@@ -442,6 +445,7 @@ model EventTicket {
   batches       TicketBatch[]
   registrations Registration[]
   formFields    EventFormFieldTicket[]
+  discounts     EventDiscount[]
 
   @@unique([eventId, name])
   @@index([churchId])
@@ -635,23 +639,50 @@ model EventOrder {
   @@index([churchId, status])
 }
 
-model EventPayment {
-  id                String   @id @default(cuid())
-  churchId          String
-  eventId           String
-  orderId           String
-  transactionId     String   @unique
-  provider          String
-  providerPaymentId String?
-  status            String   @default("PENDING")
-  amount            Decimal  @db.Decimal(12, 2)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+model EventDiscount {
+  id         String   @id @default(cuid())
+  churchId   String
+  eventId    String
+  ticketId   String
+  code       String
+  finalPrice Decimal  @db.Decimal(12, 2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  church      Church      @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  order       EventOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  church   Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event    Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticket   EventTicket    @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  payments EventPayment[]
+
+  @@unique([eventId, code])
+  @@index([churchId, eventId])
+  @@index([churchId, ticketId])
+}
+
+model EventPayment {
+  id                 String   @id @default(cuid())
+  churchId           String
+  eventId            String
+  orderId            String
+  transactionId      String   @unique
+  provider           String
+  providerPaymentId  String?
+  status             String   @default("PENDING")
+  amount             Decimal  @db.Decimal(12, 2)
+  platformFeePercent Decimal? @db.Decimal(5, 2)
+  platformFeeAmount  Decimal? @db.Decimal(12, 2)
+  netAmount          Decimal? @db.Decimal(12, 2)
+  discountId         String?
+  discountCode       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  church      Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  order       EventOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transaction Transaction    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  discount    EventDiscount? @relation(fields: [discountId], references: [id], onDelete: Restrict)
 
   @@unique([provider, providerPaymentId])
   @@index([churchId])
@@ -660,6 +691,7 @@ model EventPayment {
   @@index([churchId, status])
   @@index([churchId, provider])
   @@index([churchId, providerPaymentId])
+  @@index([discountId])
 }
 
 model Transaction {

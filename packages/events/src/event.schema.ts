@@ -117,6 +117,7 @@ export const createPublicRegistrationSchema = z.object({
     .default("PIX"),
   ticketId: z.string().trim().min(1, "Ingresso é obrigatório."),
   ticketBatchId: z.string().trim().min(1, "Lote é obrigatório."),
+  discountCode: z.string().trim().max(32).optional(),
   answers: z
     .array(
       z.object({

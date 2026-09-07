@@ -1,7 +1,8 @@
-import type {
-  Prisma,
-  PrismaClient
-} from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  projectCurrentTicketPricing,
+  resolveCurrentPlatformFeePercent
+} from "./platform-fee.js";
 import type {
   CreateEventTicketInput,
   CreateTicketBatchInput,
@@ -38,7 +39,20 @@ export async function listEventTickets(
 ) {
   await requireEvent(prisma, churchId, eventId);
 
-  return prisma.eventTicket.findMany({
+  const church = await prisma.church.findFirst({
+    where: {
+      id: churchId
+    },
+    select: {
+      platformFeePercent: true
+    }
+  });
+
+  const percent = resolveCurrentPlatformFeePercent(
+    church?.platformFeePercent
+  );
+
+  const tickets = await prisma.eventTicket.findMany({
     where: {
       churchId,
       eventId
@@ -78,6 +92,17 @@ export async function listEventTickets(
       createdAt: "asc"
     }
   });
+
+  return tickets.map((ticket) => ({
+    ...ticket,
+    batches: ticket.batches.map((batch) => ({
+      ...batch,
+      ...projectCurrentTicketPricing(
+        new Prisma.Decimal(batch.price),
+        percent
+      )
+    }))
+  }));
 }
 
 export async function createEventTicket(

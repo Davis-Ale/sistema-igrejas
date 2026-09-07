@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { resolveCurrentPlatformFeePercent } from "@sistema-igrejas/events";
 import type {
   CreateTransactionInput,
   ListTransactionsQueryInput,
@@ -72,6 +73,246 @@ function buildTransactionWhere(churchId: string, query: ListTransactionsQueryInp
       : {})
   };
 }
+
+function buildPaymentStatusWhere(
+  paymentStatus: ListTransactionsQueryInput["paymentStatus"]
+): Prisma.TransactionWhereInput | undefined {
+  if (!paymentStatus) {
+    return undefined;
+  }
+
+  if (paymentStatus === "PAID") {
+    return {
+      status: "ACTIVE",
+      eventPayment: {
+        is: {
+          status: "PAID"
+        }
+      }
+    };
+  }
+
+  if (paymentStatus === "PENDING") {
+    return {
+      eventPayment: {
+        is: {
+          status: {
+            in: ["PENDING", "OVERDUE"]
+          }
+        }
+      }
+    };
+  }
+
+  if (paymentStatus === "NO_CHARGE") {
+    return {
+      eventPayment: {
+        is: null
+      }
+    };
+  }
+
+  if (paymentStatus === "REFUND_PENDING") {
+    return {
+      eventPayment: {
+        is: {
+          status: "REFUND_PENDING"
+        }
+      }
+    };
+  }
+
+  if (paymentStatus === "CANCELLED") {
+    return {
+      status: "CANCELLED"
+    };
+  }
+
+  return {
+    status: "REVERSED"
+  };
+}
+
+function buildSearchContains(search: string) {
+  return {
+    contains: search,
+    mode: "insensitive" as const
+  };
+}
+
+function buildRegistrationSearchWhere(
+  relation: "person" | "visitor" | "ticket" | "ticketBatch",
+  field: "name" | "email" | "phone",
+  contains: ReturnType<typeof buildSearchContains>
+): Prisma.TransactionWhereInput {
+  return {
+    eventPayment: {
+      is: {
+        order: {
+          is: {
+            registrations: {
+              some: {
+                [relation]: {
+                  is: {
+                    [field]: contains
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+}
+
+function buildSearchWhere(search: string): Prisma.TransactionWhereInput {
+  const contains = buildSearchContains(search);
+
+  return {
+    OR: [
+      { asaasId: contains },
+      { costCenter: contains },
+      {
+        eventPayment: {
+          is: {
+            providerPaymentId: contains
+          }
+        }
+      },
+      {
+        eventPayment: {
+          is: {
+            provider: contains
+          }
+        }
+      },
+      {
+        person: {
+          is: {
+            name: contains
+          }
+        }
+      },
+      {
+        person: {
+          is: {
+            email: contains
+          }
+        }
+      },
+      {
+        person: {
+          is: {
+            phone: contains
+          }
+        }
+      },
+      buildRegistrationSearchWhere("person", "name", contains),
+      buildRegistrationSearchWhere("person", "email", contains),
+      buildRegistrationSearchWhere("person", "phone", contains),
+      buildRegistrationSearchWhere("visitor", "name", contains),
+      buildRegistrationSearchWhere("visitor", "email", contains),
+      buildRegistrationSearchWhere("visitor", "phone", contains),
+      buildRegistrationSearchWhere("ticket", "name", contains),
+      buildRegistrationSearchWhere("ticketBatch", "name", contains)
+    ]
+  };
+}
+
+function buildListTransactionsWhere(
+  churchId: string,
+  query: ListTransactionsQueryInput
+): Prisma.TransactionWhereInput {
+  const filters: Prisma.TransactionWhereInput[] = [
+    buildTransactionWhere(churchId, query)
+  ];
+  const paymentStatusWhere = buildPaymentStatusWhere(query.paymentStatus);
+
+  if (paymentStatusWhere) {
+    filters.push(paymentStatusWhere);
+  }
+
+  if (query.search) {
+    filters.push(buildSearchWhere(query.search));
+  }
+
+  if (filters.length === 1) {
+    return filters[0] ?? { churchId };
+  }
+
+  return {
+    AND: filters
+  };
+}
+
+const transactionListInclude = {
+  person: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true
+    }
+  },
+  event: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      date: true
+    }
+  },
+  eventPayment: {
+    select: {
+      id: true,
+      status: true,
+      provider: true,
+      providerPaymentId: true,
+      order: {
+        select: {
+          registrations: {
+            select: {
+              person: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  email: true
+                }
+              },
+              visitor: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  email: true
+                }
+              },
+              ticket: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              ticketBatch: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+const transactionListOrderBy = [
+  { at: "desc" as const },
+  { id: "desc" as const }
+];
 
 export async function createTransaction(
   prisma: PrismaClient,
@@ -523,74 +764,42 @@ export async function listTransactions(
   churchId: string,
   query: ListTransactionsQueryInput
 ) {
-  return prisma.transaction.findMany({
-    where: buildTransactionWhere(churchId, query),
-    include: {
-      person: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true
-        }
-      },
-      event: {
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          date: true
-        }
-      },
-      eventPayment: {
-        select: {
-          id: true,
-          status: true,
-          provider: true,
-          providerPaymentId: true,
-          order: {
-            select: {
-              registrations: {
-                select: {
-                  person: {
-                    select: {
-                      id: true,
-                      name: true,
-                      phone: true,
-                      email: true
-                    }
-                  },
-                  visitor: {
-                    select: {
-                      id: true,
-                      name: true,
-                      phone: true,
-                      email: true
-                    }
-                  },
-                  ticket: {
-                    select: {
-                      id: true,
-                      name: true
-                    }
-                  },
-                  ticketBatch: {
-                    select: {
-                      id: true,
-                      name: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    orderBy: {
-      at: "desc"
+  const where = buildListTransactionsWhere(churchId, query);
+
+  if (query.page == null) {
+    return prisma.transaction.findMany({
+      where,
+      include: transactionListInclude,
+      orderBy: transactionListOrderBy
+    });
+  }
+
+  const limit = query.limit ?? 50;
+  const skip = (query.page - 1) * limit;
+
+  const [total, items] = await Promise.all([
+    prisma.transaction.count({
+      where
+    }),
+    prisma.transaction.findMany({
+      where,
+      include: transactionListInclude,
+      orderBy: transactionListOrderBy,
+      take: limit,
+      skip
+    })
+  ]);
+
+  return {
+    items,
+    pagination: {
+      page: query.page,
+      currentPage: query.page,
+      limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit)
     }
-  });
+  };
 }
 
 export async function getFinancialSummary(
@@ -630,7 +839,7 @@ export async function getFinancialSummary(
     AND: summaryFilters
   };
 
-  const [income, expense] = await Promise.all([
+  const [income, expense, eventSales, church] = await Promise.all([
     prisma.transaction.aggregate({
       where: {
         ...where,
@@ -648,11 +857,57 @@ export async function getFinancialSummary(
       _sum: {
         amount: true
       }
-    })
+    }),
+    query.eventId
+      ? prisma.eventPayment.aggregate({
+          where: {
+            churchId,
+            eventId: query.eventId,
+            status: "PAID",
+            platformFeePercent: {
+              not: null
+            },
+            transaction: {
+              is: {
+                status: "ACTIVE"
+              }
+            }
+          },
+          _sum: {
+            amount: true,
+            platformFeeAmount: true,
+            netAmount: true
+          }
+        })
+      : Promise.resolve(null),
+    query.eventId
+      ? prisma.church.findFirst({
+          where: {
+            id: churchId
+          },
+          select: {
+            platformFeePercent: true
+          }
+        })
+      : Promise.resolve(null)
   ]);
 
   return {
     income: income._sum.amount ?? 0,
-    expense: expense._sum.amount ?? 0
+    expense: expense._sum.amount ?? 0,
+    ...(eventSales
+      ? {
+          eventSales: {
+            grossAmount: eventSales._sum.amount ?? 0,
+            platformFeeAmount:
+              eventSales._sum.platformFeeAmount ?? 0,
+            netAmount: eventSales._sum.netAmount ?? 0,
+            currentPlatformFeePercent:
+              resolveCurrentPlatformFeePercent(
+                church?.platformFeePercent
+              )
+          }
+        }
+      : {})
   };
 }

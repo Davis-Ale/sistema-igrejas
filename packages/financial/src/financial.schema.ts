@@ -43,6 +43,29 @@ export const createTransactionSchema = z.object({
 
 export const updateTransactionSchema = createTransactionSchema.partial();
 
+const emptyToUndefined = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return trimmed;
+};
+
+export const eventPaymentStatusFilterSchema = z.enum([
+  "PAID",
+  "PENDING",
+  "NO_CHARGE",
+  "REFUND_PENDING",
+  "CANCELLED",
+  "REFUNDED"
+]);
+
 export const listTransactionsQuerySchema = z.object({
   type: txTypeSchema.optional(),
   direction: txDirectionSchema.optional(),
@@ -52,7 +75,14 @@ export const listTransactionsQuerySchema = z.object({
   personId: z.string().trim().min(1).optional(),
   eventId: z.string().trim().min(1).optional(),
   from: z.coerce.date().optional(),
-  to: z.coerce.date().optional()
+  to: z.coerce.date().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().max(120).optional()
+  ),
+  paymentStatus: eventPaymentStatusFilterSchema.optional()
 });
 
 export const transactionParamsSchema = z.object({

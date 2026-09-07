@@ -14,7 +14,9 @@ import {
   attachEventPaymentProviderId,
   getEventRegistrationPaymentCheckout,
   resetPendingEventPaymentProviderReference,
+  registerDiscountRoutes,
   registerEventApiKeyRoutes,
+  registerEventFinancialRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
   registerRegistrationFormRoutes,
@@ -472,8 +474,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
+      await registerEventFinancialRoutes(protectedRoutes, prisma);
   await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerTicketRoutes(protectedRoutes, prisma);
+      await registerDiscountRoutes(protectedRoutes, prisma);
       await registerRegistrationFormRoutes(
         protectedRoutes,
         prisma
