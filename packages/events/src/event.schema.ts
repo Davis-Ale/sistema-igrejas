@@ -157,9 +157,7 @@ const emptyToUndefined = (value: unknown) => {
   return trimmed;
 };
 
-export const listEventRegistrationsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+const eventRegistrationFilterFields = {
   search: z.preprocess(
     emptyToUndefined,
     z.string().max(120).optional()
@@ -178,7 +176,17 @@ export const listEventRegistrationsQuerySchema = z.object({
     emptyToUndefined,
     z.string().min(1).optional()
   )
+};
+
+export const listEventRegistrationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  ...eventRegistrationFilterFields
 });
+
+export const exportEventRegistrationsQuerySchema = z.object(
+  eventRegistrationFilterFields
+);
 
 export const eventIdParamsSchema = z.object({
   eventId: z.string().trim().min(1, "Evento é obrigatório.")
@@ -222,5 +230,8 @@ export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationSta
 export type CheckInByTokenInput = z.infer<typeof checkInByTokenSchema>;
 export type ListEventRegistrationsQuery = z.infer<
   typeof listEventRegistrationsQuerySchema
+>;
+export type ExportEventRegistrationsQuery = z.infer<
+  typeof exportEventRegistrationsQuerySchema
 >;
 export type EventAnalyticsQuery = z.infer<typeof eventAnalyticsQuerySchema>;

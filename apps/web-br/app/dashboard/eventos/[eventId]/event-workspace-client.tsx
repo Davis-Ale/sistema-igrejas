@@ -298,6 +298,126 @@ const WEB_BASE_URL =
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ?? "http://localhost:3001";
 
+function getFilenameFromContentDisposition(
+  header: string | null,
+  fallback: string
+) {
+  if (!header) {
+    return fallback;
+  }
+
+  const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1]);
+    } catch {
+      return utfMatch[1];
+    }
+  }
+
+  const quotedMatch = header.match(/filename="([^"]+)"/i);
+
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = header.match(/filename=([^;]+)/i);
+
+  if (plainMatch?.[1]) {
+    return plainMatch[1].trim();
+  }
+
+  return fallback;
+}
+
+type FileSystemWritableLike = {
+  write: (data: Uint8Array) => Promise<void>;
+  close: () => Promise<void>;
+  abort?: () => Promise<void>;
+};
+
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName?: string;
+  }) => Promise<{
+    createWritable: () => Promise<FileSystemWritableLike>;
+  }>;
+};
+
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+function buildSuggestedParticipantCsvFilename(slug: string | undefined) {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+    year: "numeric"
+  }).format(new Date());
+
+  if (!slug) {
+    return `participantes-${date}.csv`;
+  }
+
+  return `participantes-${slug}-${date}.csv`;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function abortWritable(writable: FileSystemWritableLike | null) {
+  if (!writable?.abort) {
+    return;
+  }
+
+  try {
+    await writable.abort();
+  } catch {
+    return;
+  }
+}
+
+async function streamResponseBodyToWritable(
+  body: ReadableStream<Uint8Array>,
+  writable: FileSystemWritableLike
+) {
+  const reader = body.getReader();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      if (value) {
+        await writable.write(value);
+      }
+    }
+
+    await writable.close();
+  } catch (error) {
+    await abortWritable(writable);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function getSessionToken() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
 
@@ -746,6 +866,10 @@ export function EventWorkspaceClient({
     useState(0);
   const [isLoadingParticipants, setIsLoadingParticipants] =
     useState(false);
+  const [
+    isExportingParticipants,
+    setIsExportingParticipants
+  ] = useState(false);
   const [checkInCode, setCheckInCode] =
     useState("");
   const [
@@ -1256,6 +1380,111 @@ export function EventWorkspaceClient({
     participantTicket,
     router
   ]);
+
+  async function handleExportParticipants() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsExportingParticipants(true);
+    setError(null);
+
+    let writable: FileSystemWritableLike | null = null;
+
+    try {
+      const pickerWindow = window as SaveFilePickerWindow;
+
+      if (typeof pickerWindow.showSaveFilePicker === "function") {
+        try {
+          const handle = await pickerWindow.showSaveFilePicker({
+            suggestedName: buildSuggestedParticipantCsvFilename(
+              event?.slug
+            )
+          });
+          writable = await handle.createWritable();
+        } catch (error) {
+          if (isAbortError(error)) {
+            return;
+          }
+
+          writable = null;
+        }
+      }
+
+      const params = new URLSearchParams();
+
+      if (participantSearch.trim()) {
+        params.set("search", participantSearch.trim());
+      }
+
+      if (participantStatus !== "ALL") {
+        params.set("status", participantStatus);
+      }
+
+      if (participantPayment !== "ALL") {
+        params.set("paymentStatus", participantPayment);
+      }
+
+      if (participantTicket !== "ALL") {
+        params.set("ticketId", participantTicket);
+      }
+
+      const query = params.toString();
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/registrations/export${
+          query ? `?${query}` : ""
+        }`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        await abortWritable(writable);
+        writable = null;
+        const data = (await response.json()) as ApiErrorResponse;
+        setError(
+          data.message ??
+            "Não foi possível exportar os participantes."
+        );
+        return;
+      }
+
+      if (writable && response.body) {
+        await streamResponseBodyToWritable(response.body, writable);
+        writable = null;
+        return;
+      }
+
+      await abortWritable(writable);
+      writable = null;
+
+      const blob = await response.blob();
+      triggerBlobDownload(
+        blob,
+        getFilenameFromContentDisposition(
+          response.headers.get("content-disposition"),
+          "participantes.csv"
+        )
+      );
+    } catch (error) {
+      await abortWritable(writable);
+
+      if (isAbortError(error)) {
+        return;
+      }
+
+      setError("Não foi possível exportar os participantes agora.");
+    } finally {
+      setIsExportingParticipants(false);
+    }
+  }
 
   async function loadFormFields() {
     const token = getSessionToken();
@@ -8737,6 +8966,27 @@ export function EventWorkspaceClient({
         gap: 12px;
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
+      .participants-toolbar {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+      }
+      .participants-export-button {
+        background: transparent;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        border-radius: 10px;
+        color: #e2e8f0;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 8px 12px;
+        white-space: nowrap;
+      }
+      .participants-export-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
       .participants-filter-field {
         display: grid;
         gap: 6px;
@@ -9011,24 +9261,39 @@ export function EventWorkspaceClient({
       </div>
     </div>
 
-    <p
-      style={{
-        color: "#94a3b8",
-        fontSize: "13px",
-        margin: 0
-      }}
-    >
-      {isLoadingParticipants
-        ? "Carregando participantes..."
-        : (
-          <>
-            {formatParticipantCountLabel(participantTotal)}
-            {participantTotalPages > 1
-              ? ` · ${formatShowingRegistrationsLabel(participantItems.length)}`
-              : null}
-          </>
-        )}
-    </p>
+    <div className="participants-toolbar">
+      <p
+        style={{
+          color: "#94a3b8",
+          fontSize: "13px",
+          margin: 0
+        }}
+      >
+        {isLoadingParticipants
+          ? "Carregando participantes..."
+          : (
+            <>
+              {formatParticipantCountLabel(participantTotal)}
+              {participantTotalPages > 1
+                ? ` · ${formatShowingRegistrationsLabel(participantItems.length)}`
+                : null}
+            </>
+          )}
+      </p>
+
+      <button
+        className="participants-export-button"
+        disabled={isExportingParticipants}
+        onClick={() => {
+          void handleExportParticipants();
+        }}
+        type="button"
+      >
+        {isExportingParticipants
+          ? "Exportando..."
+          : "Exportar CSV"}
+      </button>
+    </div>
 
     <div>
       <div className="participants-list-header">

@@ -1,6 +1,15 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import type { ListEventRegistrationsQuery } from "./event.schema.js";
+import type {
+  ExportEventRegistrationsQuery,
+  ListEventRegistrationsQuery
+} from "./event.schema.js";
+
+export type EventRegistrationListFilters = Pick<
+  ListEventRegistrationsQuery,
+  "search" | "status" | "paymentStatus" | "ticketId"
+> &
+  ExportEventRegistrationsQuery;
 
 const ACCENT_SOURCE =
   "áàâãäéêëèíïîìóôõöòúûüùçñÁÀÂÃÄÉÊËÈÍÏÎÌÓÔÕÖÒÚÛÜÙÇÑ";
@@ -61,10 +70,10 @@ function searchableText(column: Prisma.Sql) {
   return Prisma.sql`btrim(regexp_replace(translate(lower(coalesce(${column}, '')), ${ACCENT_SOURCE}, ${ACCENT_TARGET}), '[[:space:]]+', ' ', 'g'))`;
 }
 
-function buildListWhereSql(
+export function buildListWhereSql(
   churchId: string,
   eventId: string,
-  query: ListEventRegistrationsQuery
+  query: EventRegistrationListFilters
 ) {
   const filters: Prisma.Sql[] = [
     Prisma.sql`r."churchId" = ${churchId}`,

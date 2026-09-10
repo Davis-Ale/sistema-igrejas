@@ -16,7 +16,9 @@ export * from "./registration-form.service.js";
 export * from "./registration-form.routes.js";
 
 export * from "./api-key.routes.js";
+export * from "./csv.js";
 export * from "./registration-list.service.js";
+export * from "./registration-export.service.js";
 
 export {
   applyEventPaymentProviderStatus,

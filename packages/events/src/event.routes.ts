@@ -11,6 +11,7 @@ import {
   eventAnalyticsQuerySchema,
   eventIdParamsSchema,
   listEventRegistrationsQuerySchema,
+  exportEventRegistrationsQuerySchema,
   updateEventSchema,
   updateRegistrationStatusSchema
 } from "./event.schema.js";
@@ -26,6 +27,7 @@ import {
   updateRegistrationStatus
 } from "./event.service.js";
 import { listEventRegistrations } from "./registration-list.service.js";
+import { createEventRegistrationsCsvExport } from "./registration-export.service.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -222,6 +224,50 @@ export async function registerEventRoutes(
       }
     }
   );
+
+  app.get("/events/:eventId/registrations/export", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = eventIdParamsSchema.parse(request.params);
+      const query = exportEventRegistrationsQuerySchema.parse(
+        request.query
+      );
+      const csvExport = await createEventRegistrationsCsvExport(
+        prisma,
+        churchId,
+        params.eventId,
+        query
+      );
+      const origin = request.headers.origin;
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${csvExport.filename}"`,
+        "Cache-Control": "no-store",
+        "Access-Control-Expose-Headers": "Content-Disposition",
+        ...(origin
+          ? {
+              "Access-Control-Allow-Origin": origin,
+              Vary: "Origin"
+            }
+          : {})
+      });
+
+      await csvExport.stream((chunk) => {
+        reply.raw.write(chunk);
+      });
+
+      reply.raw.end();
+    } catch (error) {
+      if (reply.raw.headersSent) {
+        reply.raw.end();
+        return;
+      }
+
+      await sendRouteError(error, reply);
+    }
+  });
 
   app.get("/events/:eventId/registrations", async (request, reply) => {
     try {
