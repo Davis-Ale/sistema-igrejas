@@ -8,6 +8,7 @@ import type {
   CreatePublicRegistrationInput,
   CreateRegistrationInput,
   EventAnalyticsQuery,
+  ListEventsQuery,
   UpdateEventInput,
   UpdateRegistrationStatusInput
 } from "./event.schema.js";
@@ -494,55 +495,99 @@ export async function updateEvent(
   });
 }
 
-export async function listEvents(prisma: PrismaClient, churchId: string) {
-  const events = await prisma.event.findMany({
-    where: {
-      churchId
-    },
+const eventListSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  date: true,
+  capacity: true,
+  price: true,
+  isPublic: true,
+  isPaid: true,
+  publicRegistrationEnabled: true,
+  waitlistEnabled: true,
+  createdAt: true,
+  updatedAt: true,
+  trailStage: {
     select: {
       id: true,
-      title: true,
-      slug: true,
-      date: true,
-      capacity: true,
-      price: true,
-      isPublic: true,
-      isPaid: true,
-      publicRegistrationEnabled: true,
-      waitlistEnabled: true,
-      createdAt: true,
-      updatedAt: true,
-      trailStage: {
-        select: {
-          id: true,
-          label: true
-        }
-      },
-      _count: {
-        select: {
-          registrations: {
-            where: {
-              status: {
-                not: "CANCELLED"
-              }
-            }
+      label: true
+    }
+  },
+  _count: {
+    select: {
+      registrations: {
+        where: {
+          status: {
+            not: "CANCELLED" as const
           }
         }
       }
-    },
-    orderBy: {
-      date: "asc"
     }
-  });
+  }
+} satisfies Prisma.EventSelect;
 
-  return events.map((event) => {
-    const { _count, ...summary } = event;
+export async function listEvents(
+  prisma: PrismaClient,
+  churchId: string,
+  query: ListEventsQuery
+) {
+  const page = query.page;
+  const limit = query.limit;
+  const where: Prisma.EventWhereInput = {
+    churchId
+  };
 
-    return {
-      ...summary,
-      registrationCount: _count.registrations
-    };
-  });
+  if (query.search) {
+    where.OR = [
+      {
+        title: {
+          contains: query.search,
+          mode: "insensitive"
+        }
+      },
+      {
+        slug: {
+          contains: query.search,
+          mode: "insensitive"
+        }
+      }
+    ];
+  }
+
+  const [total, events] = await Promise.all([
+    prisma.event.count({
+      where
+    }),
+    prisma.event.findMany({
+      where,
+      select: eventListSelect,
+      orderBy:
+        query.orderBy === "title"
+          ? [{ title: query.order }, { id: query.order }]
+          : [{ date: query.order }, { id: query.order }],
+      skip: (page - 1) * limit,
+      take: limit
+    })
+  ]);
+
+  return {
+    items: events.map((event) => {
+      const { _count, ...summary } = event;
+
+      return {
+        ...summary,
+        registrationCount: _count.registrations
+      };
+    }),
+    pagination: {
+      page,
+      currentPage: page,
+      limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit)
+    }
+  };
 }
 
 export async function getEventById(

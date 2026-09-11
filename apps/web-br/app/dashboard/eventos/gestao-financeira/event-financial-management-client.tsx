@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
-  EventModuleEventSelector
+  persistSelectedEventId,
+  resolveAuthorizedSelectedEventId
 } from "../event-module-chrome";
 
 type LoginSession = {
@@ -203,10 +205,9 @@ type EventFinancialManagementClientProps = {
 };
 
 export function EventFinancialManagementClient({
-  fromEventId = ""
+  fromEventId: _fromEventId = ""
 }: EventFinancialManagementClientProps) {
   const [events, setEvents] = useState<EventListItem[]>([]);
-  const [headerEventId, setHeaderEventId] = useState(fromEventId);
   const [summary, setSummary] = useState<EventFinancialSummary | null>(null);
   const [items, setItems] = useState<EventFinancialTransaction[]>([]);
   const [total, setTotal] = useState(0);
@@ -222,6 +223,8 @@ export function EventFinancialManagementClient({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState("");
 
   const hasActiveFilters = useMemo(
     () =>
@@ -265,7 +268,7 @@ export function EventFinancialManagementClient({
   }
 
   async function loadEvents(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events`, {
+    const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -276,8 +279,18 @@ export function EventFinancialManagementClient({
       throw new Error(data.message ?? "Não foi possível carregar os eventos.");
     }
 
-    const data = (await response.json()) as EventListItem[];
-    setEvents(data);
+    const data = (await response.json()) as { items: EventListItem[] };
+    const list = data.items ?? [];
+    setEvents(list);
+    setSelectedEventId((current) => {
+      const nextId = resolveAuthorizedSelectedEventId(list, current);
+
+      if (nextId) {
+        persistSelectedEventId(nextId);
+      }
+
+      return nextId;
+    });
   }
 
   async function loadFinancial(token: string, currentPage: number) {
@@ -559,11 +572,6 @@ export function EventFinancialManagementClient({
               >
                 Eventos
               </p>
-              <EventModuleEventSelector
-                events={events}
-                onSelectedEventIdChange={setHeaderEventId}
-                selectedEventId={headerEventId}
-              />
               <h1
                 style={{
                   fontSize: "28px",
@@ -584,8 +592,15 @@ export function EventFinancialManagementClient({
               </p>
             </header>
           }
-          selectedEventId={headerEventId}
-          variant="management"
+          events={events}
+          onCreateEvent={() => setIsCreateModalOpen(true)}
+          onSelectedEventIdChange={(nextEventId) => {
+            persistSelectedEventId(nextEventId);
+            setSelectedEventId(nextEventId);
+          }}
+          productActive="financial"
+          selectedEventId={selectedEventId}
+          variant="product"
         >
         {isLoading ? (
           <p style={{ color: "#cbd5e1", margin: 0 }}>
@@ -1082,6 +1097,11 @@ export function EventFinancialManagementClient({
         </section>
         </EventModuleChrome>
       </section>
+
+      <CreateEventModal
+        onClose={() => setIsCreateModalOpen(false)}
+        open={isCreateModalOpen}
+      />
     </main>
   );
 }

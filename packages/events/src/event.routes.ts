@@ -10,6 +10,7 @@ import {
   createRegistrationSchema,
   eventAnalyticsQuerySchema,
   eventIdParamsSchema,
+  listEventsQuerySchema,
   listEventRegistrationsQuerySchema,
   exportEventRegistrationsQuerySchema,
   updateEventSchema,
@@ -170,7 +171,8 @@ export async function registerEventRoutes(
   app.get("/events", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
-      return await listEvents(prisma, churchId);
+      const query = listEventsQuerySchema.parse(request.query);
+      return await listEvents(prisma, churchId, query);
     } catch (error) {
       await sendRouteError(error, reply);
     }

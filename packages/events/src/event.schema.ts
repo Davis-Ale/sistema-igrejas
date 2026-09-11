@@ -178,6 +178,17 @@ const eventRegistrationFilterFields = {
   )
 };
 
+export const listEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().max(120).optional()
+  ),
+  orderBy: z.enum(["date", "title"]).default("date"),
+  order: z.enum(["asc", "desc"]).default("desc")
+});
+
 export const listEventRegistrationsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -228,6 +239,7 @@ export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
 export type CreatePublicRegistrationInput = z.infer<typeof createPublicRegistrationSchema>;
 export type UpdateRegistrationStatusInput = z.infer<typeof updateRegistrationStatusSchema>;
 export type CheckInByTokenInput = z.infer<typeof checkInByTokenSchema>;
+export type ListEventsQuery = z.infer<typeof listEventsQuerySchema>;
 export type ListEventRegistrationsQuery = z.infer<
   typeof listEventRegistrationsQuerySchema
 >;
