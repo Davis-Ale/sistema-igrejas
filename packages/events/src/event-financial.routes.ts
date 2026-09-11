@@ -16,6 +16,24 @@ import {
   listEventFinancialTransactions,
   streamEventFinancialExport
 } from "./event-financial.service.js";
+import { upsertEventsReceivingAccountSchema } from "./event-receiving-account.schema.js";
+import {
+  getEventsReceivingAccount,
+  upsertEventsReceivingAccount
+} from "./event-receiving-account.service.js";
+import {
+  FINANCIAL_INSTITUTIONS_CATALOG_SOURCE,
+  listFinancialInstitutions,
+  searchFinancialInstitutions
+} from "./financial-institutions.catalog.js";
+
+type EventsFinancialRole =
+  | "SUPER_ADMIN"
+  | "PASTOR"
+  | "LEADER"
+  | "VOLUNTEER"
+  | "MEMBER"
+  | "VISITOR";
 
 function getChurchId(request: FastifyRequest) {
   if (!request.churchId) {
@@ -23,6 +41,22 @@ function getChurchId(request: FastifyRequest) {
   }
 
   return request.churchId;
+}
+
+function getUserId(request: FastifyRequest) {
+  if (!request.user?.userId) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.userId;
+}
+
+function getUserRole(request: FastifyRequest): EventsFinancialRole {
+  if (!request.user?.role) {
+    throw new Error("USER_CONTEXT_REQUIRED");
+  }
+
+  return request.user.role;
 }
 
 async function sendEventFinancialError(
@@ -39,10 +73,22 @@ async function sendEventFinancialError(
     return;
   }
 
-  if (error instanceof Error && error.message === "CHURCH_CONTEXT_REQUIRED") {
+  if (
+    error instanceof Error &&
+    (error.message === "CHURCH_CONTEXT_REQUIRED" ||
+      error.message === "USER_CONTEXT_REQUIRED")
+  ) {
     await reply.code(401).send({
       error: "UNAUTHORIZED",
       message: "Contexto de autenticação obrigatório."
+    });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "FINANCIAL_ACCESS_DENIED") {
+    await reply.code(403).send({
+      error: "FINANCIAL_ACCESS_DENIED",
+      message: "Você não tem permissão para alterar a conta de recebimento."
     });
     return;
   }
@@ -118,6 +164,63 @@ export async function registerEventFinancialRoutes(
         return;
       }
 
+      await sendEventFinancialError(error, reply);
+    }
+  });
+
+  app.get("/events/financial/institutions", async (request, reply) => {
+    try {
+      getChurchId(request);
+
+      const query =
+        typeof request.query === "object" && request.query
+          ? (request.query as { q?: unknown; limit?: unknown })
+          : {};
+      const search =
+        typeof query.q === "string" ? query.q.trim() : "";
+      const parsedLimit =
+        typeof query.limit === "string" ? Number(query.limit) : Number.NaN;
+      const limit = Number.isInteger(parsedLimit) ? parsedLimit : 20;
+
+      const items = search
+        ? searchFinancialInstitutions(search, limit)
+        : listFinancialInstitutions();
+
+      return {
+        source: {
+          name: FINANCIAL_INSTITUTIONS_CATALOG_SOURCE.name,
+          dataset: FINANCIAL_INSTITUTIONS_CATALOG_SOURCE.dataset
+        },
+        total: listFinancialInstitutions().length,
+        items
+      };
+    } catch (error) {
+      await sendEventFinancialError(error, reply);
+    }
+  });
+
+  app.get("/events/financial/receiving-account", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const role = request.user?.role;
+
+      return await getEventsReceivingAccount(prisma, churchId, role);
+    } catch (error) {
+      await sendEventFinancialError(error, reply);
+    }
+  });
+
+  app.put("/events/financial/receiving-account", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const actor = {
+        userId: getUserId(request),
+        role: getUserRole(request)
+      };
+      const input = upsertEventsReceivingAccountSchema.parse(request.body);
+
+      return await upsertEventsReceivingAccount(prisma, churchId, actor, input);
+    } catch (error) {
       await sendEventFinancialError(error, reply);
     }
   });

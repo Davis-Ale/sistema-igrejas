@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@sistema-igrejas/database";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import request from "supertest";
 import { buildApp } from "../src/app.js";
@@ -118,6 +120,9 @@ describe("Event financial management E2E", () => {
   let churchSlug = "";
   let campusId = "";
   let personId = "";
+  let isolatedChurchId = "";
+  let isolatedPastorToken = "";
+  let operatorReceivingAccountIds: string[] = [];
   const createdEventIds: string[] = [];
   const createdTransactionIds: string[] = [];
   let storedOriginalFee: Prisma.Decimal | null = null;
@@ -163,6 +168,31 @@ describe("Event financial management E2E", () => {
     });
 
     storedOriginalFee = church?.platformFeePercent ?? null;
+
+    const operatorAccounts = await prisma.eventsReceivingAccount.findMany({
+      where: {
+        churchId
+      },
+      select: {
+        id: true
+      }
+    });
+    operatorReceivingAccountIds = operatorAccounts.map((row) => row.id);
+
+    const isolatedChurch = await prisma.church.create({
+      data: {
+        name: `E2E Gestão Financeira ${Date.now()}`,
+        slug: `e2e-gestao-financeira-${Date.now()}`,
+        plan: "TRIAL",
+        status: "ACTIVE"
+      }
+    });
+    isolatedChurchId = isolatedChurch.id;
+    isolatedPastorToken = await app.jwt.sign({
+      userId: loginResponse.body.user.id as string,
+      churchId: isolatedChurchId,
+      role: "PASTOR"
+    });
 
     const campus = await prisma.campus.findFirst({
       where: {
@@ -211,6 +241,24 @@ describe("Event financial management E2E", () => {
           platformFeePercent: storedOriginalFee
         }
       });
+
+      if (isolatedChurchId) {
+        await prisma.eventsReceivingAccountAudit.deleteMany({
+          where: {
+            churchId: isolatedChurchId
+          }
+        });
+        await prisma.eventsReceivingAccount.deleteMany({
+          where: {
+            churchId: isolatedChurchId
+          }
+        });
+        await prisma.church.delete({
+          where: {
+            id: isolatedChurchId
+          }
+        });
+      }
 
       if (createdEventIds.length > 0) {
         const payments = await prisma.eventPayment.findMany({
@@ -394,6 +442,46 @@ describe("Event financial management E2E", () => {
     return created;
   }
 
+  async function createLinkedEventCharge(input: {
+    eventId: string;
+    amount: number;
+    method?: "PIX" | "CARD" | "CASH" | "BOLETO";
+    status?: "ACTIVE" | "CANCELLED" | "REVERSED";
+    paymentStatus?: string;
+    at?: Date;
+  }) {
+    const order = await prisma!.eventOrder.create({
+      data: {
+        churchId,
+        eventId: input.eventId,
+        status: "PENDING",
+        totalAmount: input.amount
+      }
+    });
+
+    const created = await createEventTransaction({
+      eventId: input.eventId,
+      amount: input.amount,
+      ...(input.method ? { method: input.method } : {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.at ? { at: input.at } : {})
+    });
+
+    await prisma!.eventPayment.create({
+      data: {
+        churchId,
+        eventId: input.eventId,
+        orderId: order.id,
+        transactionId: created.id,
+        provider: "TEST",
+        status: input.paymentStatus ?? "PAID",
+        amount: input.amount
+      }
+    });
+
+    return created;
+  }
+
   it("isolates event financial data across tenants", async () => {
     const fixture = await createPaidEventFixture(`tenant-${Date.now()}`);
     const created = await registerPublic({
@@ -446,7 +534,7 @@ describe("Event financial management E2E", () => {
     const baseAt = new Date("2026-07-01T10:00:00.000Z");
 
     for (let index = 0; index < 51; index += 1) {
-      await createEventTransaction({
+      await createLinkedEventCharge({
         eventId: fixture.event.id,
         amount: 1,
         at: new Date(baseAt.getTime() + index * 1000)
@@ -558,7 +646,13 @@ describe("Event financial management E2E", () => {
       .set("Authorization", `Bearer ${pastorToken}`);
 
     expect(byEvent.status).toBe(200);
-    expect(byEvent.body.pagination.total).toBe(3);
+    expect(byEvent.body.pagination.total).toBe(2);
+    expect(
+      byEvent.body.items.some(
+        (item: { participantName: string }) =>
+          item.participantName === "Lançamento interno"
+      )
+    ).toBe(false);
 
     const byPeriod = await request(app.server)
       .get(
@@ -587,7 +681,7 @@ describe("Event financial management E2E", () => {
       .set("Authorization", `Bearer ${pastorToken}`);
 
     expect(byMethod.status).toBe(200);
-    expect(byMethod.body.pagination.total).toBe(2);
+    expect(byMethod.body.pagination.total).toBe(1);
 
     const byName = await request(app.server)
       .get(
@@ -606,7 +700,7 @@ describe("Event financial management E2E", () => {
       .set("Authorization", `Bearer ${pastorToken}`);
 
     expect(byTitle.status).toBe(200);
-    expect(byTitle.body.pagination.total).toBe(3);
+    expect(byTitle.body.pagination.total).toBe(2);
   });
 
   it("summary eventSales includes only PAID snapshots", async () => {
@@ -681,20 +775,19 @@ describe("Event financial management E2E", () => {
       amount: 25
     });
 
-    const cancelled = await createEventTransaction({
+    await createLinkedEventCharge({
       eventId: fixture.event.id,
       amount: 40,
-      status: "CANCELLED"
+      status: "CANCELLED",
+      paymentStatus: "CANCELLED"
     });
 
-    const reversed = await createEventTransaction({
+    await createLinkedEventCharge({
       eventId: fixture.event.id,
       amount: 30,
-      status: "REVERSED"
+      status: "REVERSED",
+      paymentStatus: "CANCELLED"
     });
-
-    expect(cancelled.status).toBe("CANCELLED");
-    expect(reversed.status).toBe("REVERSED");
 
     const summaryResponse = await request(app.server)
       .get("/api/events/financial/summary")
@@ -776,8 +869,8 @@ describe("Event financial management E2E", () => {
       .set("Authorization", `Bearer ${pastorToken}`);
 
     expect(list.status).toBe(200);
-    expect(list.body.pagination.total).toBe(1);
-    expect(list.body.items[0].amount).toBe(35);
+    expect(list.body.pagination.total).toBe(0);
+    expect(list.body.items).toEqual([]);
 
     const summary = await request(app.server)
       .get(`/api/events/financial/summary?eventId=${fixture.event.id}`)
@@ -821,7 +914,7 @@ describe("Event financial management E2E", () => {
 
   it("allows LEADER on event financial routes and keeps church financial forbidden", async () => {
     const fixture = await createPaidEventFixture(`leader-${Date.now()}`);
-    await createEventTransaction({
+    await createLinkedEventCharge({
       eventId: fixture.event.id,
       amount: 12
     });
@@ -988,7 +1081,7 @@ describe("Event financial management E2E", () => {
     );
     const emptySnapshotRow = findBorderoRow(
       parsed.rows,
-      "Lançamento interno"
+      "—"
     );
 
     expect(paidRow).toBeDefined();
@@ -1108,5 +1201,279 @@ describe("Event financial management E2E", () => {
     expect(parseCsvNumber(paidRow?.[8] ?? "")).toBe(7.9);
     expect(parseCsvNumber(paidRow?.[9] ?? "")).toBe(92.1);
     expect(parseCsvNumber(paidRow?.[10] ?? "")).toBe(7.9);
+  });
+
+  it("treats gestão financeira as global across events of the church", async () => {
+    const suffix = Date.now().toString();
+    const first = await createPaidEventFixture(`global-a-${suffix}`);
+    const second = await createPaidEventFixture(`global-b-${suffix}`);
+
+    const firstPaid = await registerPublic({
+      eventSlug: first.event.slug,
+      ticketId: first.ticket.id,
+      ticketBatchId: first.batch.id,
+      name: `Global A ${suffix}`,
+      phone: `4181${suffix.slice(-7)}`
+    });
+    const secondPaid = await registerPublic({
+      eventSlug: second.event.slug,
+      ticketId: second.ticket.id,
+      ticketBatchId: second.batch.id,
+      name: `Global B ${suffix}`,
+      phone: `4182${suffix.slice(-7)}`
+    });
+
+    expect(firstPaid.status).toBe(201);
+    expect(secondPaid.status).toBe(201);
+
+    await prisma!.eventPayment.update({
+      where: { id: firstPaid.body.paymentId as string },
+      data: { status: "PAID" }
+    });
+    await prisma!.eventPayment.update({
+      where: { id: secondPaid.body.paymentId as string },
+      data: { status: "PAID" }
+    });
+
+    const globalSummary = await request(app.server)
+      .get("/api/events/financial/summary")
+      .set("Authorization", `Bearer ${pastorToken}`);
+
+    expect(globalSummary.status).toBe(200);
+    expect(Number(globalSummary.body.eventSales.grossAmount)).toBeGreaterThanOrEqual(
+      200
+    );
+
+    const firstOnly = await request(app.server)
+      .get(`/api/events/financial/summary?eventId=${first.event.id}`)
+      .set("Authorization", `Bearer ${pastorToken}`);
+
+    expect(firstOnly.status).toBe(200);
+    expect(Number(firstOnly.body.eventSales.grossAmount)).toBe(100);
+
+    const globalList = await request(app.server)
+      .get("/api/events/financial/transactions?page=1&limit=50")
+      .set("Authorization", `Bearer ${pastorToken}`);
+
+    expect(globalList.status).toBe(200);
+    expect(
+      globalList.body.items.some(
+        (item: { eventId: string }) => item.eventId === first.event.id
+      )
+    ).toBe(true);
+    expect(
+      globalList.body.items.some(
+        (item: { eventId: string }) => item.eventId === second.event.id
+      )
+    ).toBe(true);
+  });
+
+  it("blocks cross-tenant access to the church receiving account", async () => {
+    const created = await request(app.server)
+      .put("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${isolatedPastorToken}`)
+      .send({
+        bankCode: "237",
+        bankAccountType: "CONTA_CORRENTE",
+        agency: "1263",
+        account: "9999991",
+        accountDigit: "1",
+        ownerName: "Igreja Local Teste",
+        cpfCnpj: "52233424611"
+      });
+
+    expect(created.status).toBe(200);
+    expect(created.body.configured).toBe(true);
+    expect(created.body.account.accountMasked).toBe("****9991");
+
+    const otherGet = await request(app.server)
+      .get("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${otherTenantToken}`);
+
+    expect(otherGet.status).toBe(200);
+    expect(otherGet.body.configured).toBe(false);
+    expect(otherGet.body.account).toBeNull();
+    expect(JSON.stringify(otherGet.body)).not.toContain("9999991");
+    expect(JSON.stringify(otherGet.body)).not.toContain("52233424611");
+
+    const otherPut = await request(app.server)
+      .put("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${otherTenantToken}`)
+      .send({
+        bankCode: "001",
+        bankAccountType: "CONTA_CORRENTE",
+        agency: "0001",
+        account: "123456",
+        accountDigit: "7",
+        ownerName: "Outra Igreja",
+        cpfCnpj: "39042976000171"
+      });
+
+    expect(otherPut.status).toBe(401);
+    expect(otherPut.body.error).toBe("UNAUTHORIZED");
+  });
+
+  it("allows pastor to create and update the receiving account with masked data", async () => {
+    const created = await request(app.server)
+      .put("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${isolatedPastorToken}`)
+      .send({
+        bankCode: "341",
+        bankAccountType: "CONTA_CORRENTE",
+        agency: "4321",
+        account: "88776655",
+        accountDigit: "0",
+        ownerName: "Pastor Titular da Igreja",
+        cpfCnpj: "52998224725"
+      });
+
+    expect(created.status).toBe(200);
+    expect(created.body.canUpdate).toBe(true);
+    expect(created.body.account.bankCode).toBe("341");
+    expect(created.body.account.institutionName).toBe("ITAÚ UNIBANCO S.A.");
+    expect(created.body.account.accountMasked).toBe("****6655");
+    expect(created.body.account.agencyMasked).toBe("***1");
+    expect(created.body.account.ownerNameMasked).toBe("Pastor I.");
+    expect(created.body.account.documentMasked).toBe("***.***.***-25");
+    expect(JSON.stringify(created.body)).not.toContain("88776655");
+    expect(JSON.stringify(created.body)).not.toContain("52998224725");
+    expect(created.body.account).not.toHaveProperty("accountNumber");
+    expect(created.body.account).not.toHaveProperty("holderDocument");
+    expect(created.body.account).not.toHaveProperty("accountDigit");
+
+    const stored = await prisma!.eventsReceivingAccount.findUnique({
+      where: { churchId: isolatedChurchId },
+      select: {
+        churchId: true,
+        accountNumber: true,
+        holderDocument: true
+      }
+    });
+
+    expect(stored?.churchId).toBe(isolatedChurchId);
+    expect(stored?.accountNumber).toBe("88776655");
+    expect(stored?.holderDocument).toBe("52998224725");
+
+    const updated = await request(app.server)
+      .put("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${isolatedPastorToken}`)
+      .send({
+        bankCode: "033",
+        bankAccountType: "CONTA_POUPANCA",
+        agency: "99",
+        account: "1122",
+        accountDigit: "X",
+        ownerName: "Igreja Atualizada",
+        cpfCnpj: "12345678000195"
+      });
+
+    expect(updated.status).toBe(200);
+    expect(updated.body.account.bankAccountType).toBe("CONTA_POUPANCA");
+    expect(updated.body.account.bankCode).toBe("033");
+    expect(updated.body.account.institutionName).toBe(
+      "BANCO SANTANDER (BRASIL) S.A."
+    );
+    expect(updated.body.account.accountMasked).toBe("****1122");
+    expect(updated.body.account.documentMasked).toBe("**.***.***/****-95");
+    expect(JSON.stringify(updated.body)).not.toContain("12345678000195");
+
+    const audits = await prisma!.eventsReceivingAccountAudit.findMany({
+      where: { churchId: isolatedChurchId },
+      orderBy: { createdAt: "asc" }
+    });
+
+    expect(audits.length).toBeGreaterThanOrEqual(2);
+    expect(audits.map((row) => row.action)).toEqual(
+      expect.arrayContaining(["CREATED", "UPDATED"])
+    );
+    expect(JSON.stringify(audits)).not.toContain("88776655");
+    expect(JSON.stringify(audits)).not.toContain("52998224725");
+  });
+
+  it("blocks a leader from changing the receiving account", async () => {
+    const visible = await request(app.server)
+      .get("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${leaderToken}`);
+
+    expect(visible.status).toBe(200);
+    expect(visible.body.canUpdate).toBe(false);
+
+    const blocked = await request(app.server)
+      .put("/api/events/financial/receiving-account")
+      .set("Authorization", `Bearer ${leaderToken}`)
+      .send({
+        bankCode: "237",
+        bankAccountType: "CONTA_CORRENTE",
+        agency: "1000",
+        account: "5555",
+        accountDigit: "1",
+        ownerName: "Lider Sem Permissao",
+        cpfCnpj: "39053344705"
+      });
+
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error).toBe("FINANCIAL_ACCESS_DENIED");
+  });
+
+  it("does not leave receiving-account residue on the operator tenant", async () => {
+    const remaining = await prisma!.eventsReceivingAccount.findMany({
+      where: {
+        churchId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    expect(remaining.map((row) => row.id).sort()).toEqual(
+      [...operatorReceivingAccountIds].sort()
+    );
+  });
+
+  it("keeps event product navigation complete and gestão financeira collapsible", () => {
+    const chromeSource = readFileSync(
+      path.resolve(
+        process.cwd(),
+        "../web-br/app/dashboard/eventos/event-module-chrome.tsx"
+      ),
+      "utf8"
+    );
+    const pageSource = readFileSync(
+      path.resolve(
+        process.cwd(),
+        "../web-br/app/dashboard/eventos/gestao-financeira/event-financial-management-client.tsx"
+      ),
+      "utf8"
+    );
+
+    for (const label of [
+      "Meus eventos",
+      "Criar evento",
+      "Gestão Financeira",
+      "Visão geral",
+      "Informações",
+      "Ingressos",
+      "Descontos",
+      "Formulário de inscrição",
+      "Participantes",
+      "Check-in",
+      "Financeiro",
+      "Aplicativo do Evento"
+    ]) {
+      expect(chromeSource).toContain(label);
+    }
+
+    expect(pageSource).toContain("Conta de recebimento");
+    expect(pageSource).toContain("Movimentações financeiras");
+    expect(pageSource).toContain("Buscar por código ou nome");
+    expect(pageSource).toContain("Nenhuma instituição encontrada");
+    expect(pageSource.match(/className="event-financial-accordion"/g)).toHaveLength(
+      2
+    );
+    expect(pageSource).not.toMatch(/<details[^>]*\sopen/);
+    expect(chromeSource).not.toContain("Privilégios");
+    expect(pageSource).not.toContain("Repasse");
+    expect(pageSource).not.toContain("Transferência");
+    expect(pageSource).not.toContain("Saque");
   });
 });

@@ -1,7 +1,8 @@
 "use client";
 
+import { Building2, ChevronDown, ListOrdered } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
@@ -59,6 +60,39 @@ type EventFinancialListResponse = {
   };
 };
 
+type FinancialInstitution = {
+  institutionCode: string;
+  shortName: string;
+  institutionName: string;
+};
+
+type EventsReceivingAccountMasked = {
+  bankCode: string;
+  institutionName: string | null;
+  bankAccountType: "CONTA_CORRENTE" | "CONTA_POUPANCA";
+  agencyMasked: string;
+  accountMasked: string;
+  ownerNameMasked: string;
+  documentMasked: string;
+  updatedAt: string;
+};
+
+type EventsReceivingAccountView = {
+  configured: boolean;
+  canUpdate: boolean;
+  account: EventsReceivingAccountMasked | null;
+};
+
+type ReceivingAccountFormState = {
+  bankCode: string;
+  bankAccountType: "CONTA_CORRENTE" | "CONTA_POUPANCA";
+  agency: string;
+  account: string;
+  accountDigit: string;
+  ownerName: string;
+  cpfCnpj: string;
+};
+
 type ApiErrorResponse = {
   error?: string;
   message?: string;
@@ -68,6 +102,36 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
 const PAGE_LIMIT = 50;
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
+function getLoadErrorMessage(error: unknown, fallback: string) {
+  if (isAbortError(error)) {
+    return null;
+  }
+
+  if (error instanceof TypeError) {
+    const message = error.message.toLowerCase();
+
+    if (
+      message.includes("failed to fetch") ||
+      message.includes("networkerror") ||
+      message.includes("load failed")
+    ) {
+      return "Não foi possível conectar à API. Tente novamente.";
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 function getSessionToken() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
@@ -195,9 +259,99 @@ function getTicketLabel(item: EventFinancialTransaction) {
     return item.ticketName ?? item.batchName ?? "—";
   }
 
-  return item.participantName === "Lançamento interno"
-    ? "—"
-    : "Sem ingresso";
+  return "—";
+}
+
+const EMPTY_RECEIVING_ACCOUNT_FORM: ReceivingAccountFormState = {
+  bankCode: "",
+  bankAccountType: "CONTA_CORRENTE",
+  agency: "",
+  account: "",
+  accountDigit: "",
+  ownerName: "",
+  cpfCnpj: ""
+};
+
+function getBankAccountTypeLabel(
+  type: EventsReceivingAccountMasked["bankAccountType"]
+) {
+  return type === "CONTA_POUPANCA" ? "Poupança" : "Conta corrente";
+}
+
+function getReceivingAccountClosedLabel(account: EventsReceivingAccountView | null) {
+  if (!account?.configured || !account.account) {
+    return "Conta não cadastrada";
+  }
+
+  const bankLabel = account.account.institutionName
+    ? `${account.account.bankCode} — ${account.account.institutionName}`
+    : `Banco ${account.account.bankCode}`;
+
+  return `Conta cadastrada · ${bankLabel} · ${account.account.accountMasked}`;
+}
+
+function normalizeInstitutionQuery(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function formatInstitutionLabel(institution: Pick<
+  FinancialInstitution,
+  "institutionCode" | "institutionName"
+>) {
+  return `${institution.institutionCode} — ${institution.institutionName}`;
+}
+
+function filterFinancialInstitutions(
+  institutions: FinancialInstitution[],
+  query: string
+) {
+  const normalizedQuery = normalizeInstitutionQuery(query);
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  return institutions
+    .map((institution) => {
+      const code = normalizeInstitutionQuery(institution.institutionCode);
+      const shortName = normalizeInstitutionQuery(institution.shortName);
+      const name = normalizeInstitutionQuery(institution.institutionName);
+      let rank = -1;
+
+      if (code === normalizedQuery) {
+        rank = 0;
+      } else if (code.startsWith(normalizedQuery)) {
+        rank = 1;
+      } else if (
+        shortName.startsWith(normalizedQuery) ||
+        name.startsWith(normalizedQuery)
+      ) {
+        rank = 2;
+      } else if (
+        shortName.includes(normalizedQuery) ||
+        name.includes(normalizedQuery)
+      ) {
+        rank = 3;
+      }
+
+      return { institution, rank };
+    })
+    .filter((match) => match.rank >= 0)
+    .sort((left, right) => {
+      if (left.rank !== right.rank) {
+        return left.rank - right.rank;
+      }
+
+      return left.institution.institutionCode.localeCompare(
+        right.institution.institutionCode
+      );
+    })
+    .slice(0, 20)
+    .map((match) => match.institution);
 }
 
 type EventFinancialManagementClientProps = {
@@ -225,6 +379,31 @@ export function EventFinancialManagementClient({
   const [isExporting, setIsExporting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState("");
+  const [receivingAccount, setReceivingAccount] =
+    useState<EventsReceivingAccountView | null>(null);
+  const [receivingAccountForm, setReceivingAccountForm] =
+    useState<ReceivingAccountFormState>(EMPTY_RECEIVING_ACCOUNT_FORM);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [financialInstitutions, setFinancialInstitutions] = useState<
+    FinancialInstitution[]
+  >([]);
+  const [bankQuery, setBankQuery] = useState("");
+  const [isBankListOpen, setIsBankListOpen] = useState(false);
+  const [bankHighlightIndex, setBankHighlightIndex] = useState(0);
+  const refreshGenerationRef = useRef(0);
+  const refreshAbortRef = useRef<AbortController | null>(null);
+  const selectedInstitution = useMemo(
+    () =>
+      financialInstitutions.find(
+        (institution) =>
+          institution.institutionCode === receivingAccountForm.bankCode
+      ) ?? null,
+    [financialInstitutions, receivingAccountForm.bankCode]
+  );
+  const bankMatches = useMemo(
+    () => filterFinancialInstitutions(financialInstitutions, bankQuery),
+    [bankQuery, financialInstitutions]
+  );
 
   const hasActiveFilters = useMemo(
     () =>
@@ -267,11 +446,12 @@ export function EventFinancialManagementClient({
     return params;
   }
 
-  async function loadEvents(token: string) {
+  async function loadEvents(token: string, signal: AbortSignal) {
     const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
       headers: {
         Authorization: `Bearer ${token}`
-      }
+      },
+      signal
     });
 
     if (!response.ok) {
@@ -293,7 +473,11 @@ export function EventFinancialManagementClient({
     });
   }
 
-  async function loadFinancial(token: string, currentPage: number) {
+  async function loadFinancial(
+    token: string,
+    currentPage: number,
+    signal: AbortSignal
+  ) {
     const summaryParams = buildFilterParams(false);
     const listParams = buildFilterParams(true);
     listParams.set("page", String(currentPage));
@@ -305,7 +489,8 @@ export function EventFinancialManagementClient({
         {
           headers: {
             Authorization: `Bearer ${token}`
-          }
+          },
+          signal
         }
       ),
       fetch(
@@ -313,7 +498,8 @@ export function EventFinancialManagementClient({
         {
           headers: {
             Authorization: `Bearer ${token}`
-          }
+          },
+          signal
         }
       )
     ]);
@@ -342,6 +528,45 @@ export function EventFinancialManagementClient({
     setPage(listData.pagination.currentPage);
   }
 
+  async function loadReceivingAccount(token: string, signal: AbortSignal) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/events/financial/receiving-account`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        signal
+      }
+    );
+
+    if (!response.ok) {
+      const data = (await response.json()) as ApiErrorResponse;
+      throw new Error(
+        data.message ?? "Não foi possível carregar a conta de recebimento."
+      );
+    }
+
+    const data = (await response.json()) as EventsReceivingAccountView;
+    setReceivingAccount(data);
+
+    if (!data.configured || !data.account?.bankCode) {
+      setReceivingAccountForm((current) => ({
+        ...current,
+        bankCode: ""
+      }));
+      setBankQuery("");
+      return;
+    }
+
+    const savedBankCode = data.account.bankCode;
+
+    setReceivingAccountForm((current) => ({
+      ...current,
+      bankCode: savedBankCode
+    }));
+    setBankQuery("");
+  }
+
   async function refresh(currentPage = page) {
     const token = getSessionToken();
 
@@ -351,29 +576,92 @@ export function EventFinancialManagementClient({
       return;
     }
 
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    const generation = refreshGenerationRef.current + 1;
+    refreshGenerationRef.current = generation;
+
     setError(null);
     setIsLoading(true);
 
     try {
-      await Promise.all([
-        events.length === 0 ? loadEvents(token) : Promise.resolve(),
-        loadFinancial(token, currentPage)
+      const results = await Promise.allSettled([
+        events.length === 0
+          ? loadEvents(token, controller.signal)
+          : Promise.resolve(),
+        loadFinancial(token, currentPage, controller.signal),
+        loadReceivingAccount(token, controller.signal)
       ]);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Não foi possível carregar a gestão financeira de eventos."
+
+      if (generation !== refreshGenerationRef.current) {
+        return;
+      }
+
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected" && !isAbortError(result.reason)
       );
+
+      if (firstFailure) {
+        const message = getLoadErrorMessage(
+          firstFailure.reason,
+          "Não foi possível carregar a gestão financeira de eventos."
+        );
+
+        if (message) {
+          setError(message);
+        }
+      }
     } finally {
-      setIsLoading(false);
+      if (generation === refreshGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     void refresh(1);
+
+    return () => {
+      refreshAbortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, from, to, paymentStatus, method, search]);
+
+  useEffect(() => {
+    const token = getSessionToken();
+
+    if (!token) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void fetch(`${API_BASE_URL}/api/events/financial/institutions`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as {
+          items?: FinancialInstitution[];
+        };
+        setFinancialInstitutions(data.items ?? []);
+      })
+      .catch(() => {
+        return;
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -434,6 +722,67 @@ export function EventFinancialManagementClient({
       setError("Não foi possível exportar o borderô.");
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleSaveReceivingAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const token = getSessionToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    if (
+      !financialInstitutions.some(
+        (institution) =>
+          institution.institutionCode === receivingAccountForm.bankCode
+      )
+    ) {
+      setError("Selecione uma instituição financeira válida.");
+      return;
+    }
+
+    setIsSavingAccount(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/financial/receiving-account`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(receivingAccountForm)
+        }
+      );
+
+      if (!response.ok) {
+        const data = (await response.json()) as ApiErrorResponse;
+        throw new Error(
+          data.message ?? "Não foi possível salvar a conta de recebimento."
+        );
+      }
+
+      const data = (await response.json()) as EventsReceivingAccountView;
+      setReceivingAccount(data);
+      setReceivingAccountForm({
+        ...EMPTY_RECEIVING_ACCOUNT_FORM,
+        bankCode: data.account?.bankCode ?? ""
+      });
+      setBankQuery("");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Não foi possível salvar a conta de recebimento."
+      );
+    } finally {
+      setIsSavingAccount(false);
     }
   }
 
@@ -517,10 +866,78 @@ export function EventFinancialManagementClient({
           padding: 10px 12px;
           width: 100%;
         }
+        .event-financial-combobox {
+          position: relative;
+        }
+        .event-financial-combobox-list {
+          background: #0f172a;
+          border: 1px solid rgba(148, 163, 184, 0.3);
+          border-radius: 10px;
+          box-shadow: 0 12px 24px rgba(2, 6, 23, 0.45);
+          left: 0;
+          margin-top: 4px;
+          max-height: 220px;
+          overflow-y: auto;
+          position: absolute;
+          right: 0;
+          z-index: 20;
+        }
+        .event-financial-combobox-option {
+          background: transparent;
+          border: 0;
+          color: #e2e8f0;
+          cursor: pointer;
+          display: block;
+          font: inherit;
+          padding: 9px 12px;
+          text-align: left;
+          width: 100%;
+        }
+        .event-financial-combobox-option[data-active="true"],
+        .event-financial-combobox-option:hover {
+          background: rgba(37, 99, 235, 0.28);
+        }
+        .event-financial-combobox-empty {
+          color: #94a3b8;
+          font-size: 13px;
+          padding: 10px 12px;
+        }
+        .event-financial-accordion {
+          background: rgba(15, 23, 42, 0.42);
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          border-radius: 16px;
+          overflow: hidden;
+        }
+        .event-financial-accordion > summary {
+          align-items: center;
+          cursor: pointer;
+          display: flex;
+          gap: 12px;
+          list-style: none;
+          padding: 14px 16px;
+        }
+        .event-financial-accordion > summary::-webkit-details-marker {
+          display: none;
+        }
+        .event-financial-accordion[open] > summary svg:last-child {
+          transform: rotate(180deg);
+        }
+        .event-financial-accordion-body {
+          border-top: 1px solid rgba(148, 163, 184, 0.12);
+          display: grid;
+          gap: 18px;
+          padding: 18px 16px 16px;
+        }
+        .event-financial-account-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
         @media (max-width: 980px) {
           .event-financial-summary-grid,
           .event-financial-count-grid,
-          .event-financial-filters-row {
+          .event-financial-filters-row,
+          .event-financial-account-grid {
             grid-template-columns: 1fr;
           }
           .event-financial-list-header {
@@ -726,16 +1143,329 @@ export function EventFinancialManagementClient({
           </>
         ) : null}
 
-        <section
-          style={{
-            background: "rgba(15, 23, 42, 0.42)",
-            border: "1px solid rgba(148, 163, 184, 0.16)",
-            borderRadius: "22px",
-            display: "grid",
-            gap: "18px",
-            padding: "22px"
-          }}
-        >
+        <details className="event-financial-accordion">
+          <summary>
+            <Building2 color="#93c5fd" size={18} />
+            <span style={{ display: "grid", flex: 1, gap: "2px", minWidth: 0 }}>
+              <strong style={{ fontSize: "14px", fontWeight: 800 }}>
+                Conta de recebimento
+              </strong>
+              <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                {getReceivingAccountClosedLabel(receivingAccount)}
+              </span>
+            </span>
+            <ChevronDown color="#64748b" size={18} />
+          </summary>
+          <div className="event-financial-accordion-body">
+            {receivingAccount?.configured && receivingAccount.account ? (
+              <p style={{ color: "#cbd5e1", fontSize: "13px", margin: 0 }}>
+                {receivingAccount.account.institutionName
+                  ? `${receivingAccount.account.bankCode} — ${receivingAccount.account.institutionName}`
+                  : `Banco ${receivingAccount.account.bankCode}`}
+                {" · "}
+                {receivingAccount.account.ownerNameMasked}
+                {" · "}
+                {receivingAccount.account.documentMasked}
+                {" · "}
+                {getBankAccountTypeLabel(receivingAccount.account.bankAccountType)}
+                {" · Agência "}
+                {receivingAccount.account.agencyMasked}
+              </p>
+            ) : (
+              <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0 }}>
+                Cadastre a conta da igreja que receberá o valor líquido das
+                vendas de Eventos.
+              </p>
+            )}
+
+            {receivingAccount && !receivingAccount.canUpdate ? (
+              <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0 }}>
+                Você pode consultar a conta, mas não tem permissão para
+                cadastrar ou alterar.
+              </p>
+            ) : null}
+
+            {receivingAccount?.canUpdate ? (
+              <form
+                onSubmit={handleSaveReceivingAccount}
+                style={{ display: "grid", gap: "14px" }}
+              >
+                <div className="event-financial-account-grid">
+                  <label className="event-financial-filter-field" htmlFor="events-receiving-owner">
+                    <span className="event-financial-filter-label">Titular</span>
+                    <input
+                      className="event-financial-control"
+                      id="events-receiving-owner"
+                      maxLength={120}
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          ownerName: event.target.value
+                        }))
+                      }
+                      required
+                      value={receivingAccountForm.ownerName}
+                    />
+                  </label>
+                  <label className="event-financial-filter-field" htmlFor="events-receiving-document">
+                    <span className="event-financial-filter-label">CPF ou CNPJ</span>
+                    <input
+                      className="event-financial-control"
+                      id="events-receiving-document"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          cpfCnpj: event.target.value
+                        }))
+                      }
+                      required
+                      value={receivingAccountForm.cpfCnpj}
+                    />
+                  </label>
+                  <label className="event-financial-filter-field" htmlFor="events-receiving-type">
+                    <span className="event-financial-filter-label">Tipo da conta</span>
+                    <select
+                      className="event-financial-control"
+                      id="events-receiving-type"
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          bankAccountType: event.target.value as
+                            | "CONTA_CORRENTE"
+                            | "CONTA_POUPANCA"
+                        }))
+                      }
+                      value={receivingAccountForm.bankAccountType}
+                    >
+                      <option value="CONTA_CORRENTE">Conta corrente</option>
+                      <option value="CONTA_POUPANCA">Poupança</option>
+                    </select>
+                  </label>
+                  <label className="event-financial-filter-field" htmlFor="events-receiving-bank">
+                    <span className="event-financial-filter-label">Banco</span>
+                    <div className="event-financial-combobox">
+                      <input
+                        autoComplete="off"
+                        className="event-financial-control"
+                        id="events-receiving-bank"
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            setIsBankListOpen(false);
+                            setBankQuery("");
+
+                            if (selectedInstitution) {
+                              return;
+                            }
+
+                            const savedCode =
+                              receivingAccount?.account?.bankCode ?? "";
+
+                            setReceivingAccountForm((current) => ({
+                              ...current,
+                              bankCode: savedCode
+                            }));
+                          }, 120);
+                        }}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setBankQuery(value);
+                          setIsBankListOpen(true);
+                          setBankHighlightIndex(0);
+                          setReceivingAccountForm((current) => ({
+                            ...current,
+                            bankCode: ""
+                          }));
+                        }}
+                        onFocus={() => {
+                          setBankQuery("");
+                          setIsBankListOpen(true);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowDown") {
+                            event.preventDefault();
+                            setIsBankListOpen(true);
+                            setBankHighlightIndex((current) =>
+                              Math.min(current + 1, Math.max(bankMatches.length - 1, 0))
+                            );
+                            return;
+                          }
+
+                          if (event.key === "ArrowUp") {
+                            event.preventDefault();
+                            setBankHighlightIndex((current) => Math.max(current - 1, 0));
+                            return;
+                          }
+
+                          if (event.key === "Enter" && isBankListOpen) {
+                            const highlighted = bankMatches[bankHighlightIndex];
+
+                            if (highlighted) {
+                              event.preventDefault();
+                              setReceivingAccountForm((current) => ({
+                                ...current,
+                                bankCode: highlighted.institutionCode
+                              }));
+                              setBankQuery("");
+                              setIsBankListOpen(false);
+                            }
+                            return;
+                          }
+
+                          if (event.key === "Escape") {
+                            setIsBankListOpen(false);
+                          }
+                        }}
+                        placeholder="Buscar por código ou nome"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-expanded={isBankListOpen}
+                        aria-controls="events-receiving-bank-list"
+                        value={
+                          isBankListOpen
+                            ? bankQuery
+                            : selectedInstitution
+                              ? formatInstitutionLabel(selectedInstitution)
+                              : ""
+                        }
+                      />
+                      {isBankListOpen && bankQuery.trim() ? (
+                        <div
+                          className="event-financial-combobox-list"
+                          id="events-receiving-bank-list"
+                          role="listbox"
+                        >
+                          {bankMatches.length === 0 ? (
+                            <div className="event-financial-combobox-empty">
+                              Nenhuma instituição encontrada
+                            </div>
+                          ) : (
+                            bankMatches.map((institution, index) => (
+                              <button
+                                className="event-financial-combobox-option"
+                                data-active={index === bankHighlightIndex}
+                                key={institution.institutionCode}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setReceivingAccountForm((current) => ({
+                                    ...current,
+                                    bankCode: institution.institutionCode
+                                  }));
+                                  setBankQuery("");
+                                  setIsBankListOpen(false);
+                                }}
+                                role="option"
+                                type="button"
+                              >
+                                {formatInstitutionLabel(institution)}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </label>
+                  <label className="event-financial-filter-field" htmlFor="events-receiving-agency">
+                    <span className="event-financial-filter-label">Agência</span>
+                    <input
+                      className="event-financial-control"
+                      id="events-receiving-agency"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          agency: event.target.value.replace(/\D/g, "")
+                        }))
+                      }
+                      required
+                      value={receivingAccountForm.agency}
+                    />
+                  </label>
+                  <label
+                    className="event-financial-filter-field"
+                    htmlFor="events-receiving-account"
+                    style={{
+                      display: "grid",
+                      gap: "10px",
+                      gridTemplateColumns: "minmax(0, 1fr) 88px"
+                    }}
+                  >
+                    <span className="event-financial-filter-label" style={{ gridColumn: "1 / -1" }}>
+                      Conta e dígito
+                    </span>
+                    <input
+                      className="event-financial-control"
+                      id="events-receiving-account"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          account: event.target.value.replace(/\D/g, "")
+                        }))
+                      }
+                      required
+                      value={receivingAccountForm.account}
+                    />
+                    <input
+                      aria-label="Dígito da conta"
+                      className="event-financial-control"
+                      id="events-receiving-digit"
+                      maxLength={2}
+                      onChange={(event) =>
+                        setReceivingAccountForm((current) => ({
+                          ...current,
+                          accountDigit: event.target.value
+                            .replace(/[^0-9Xx]/g, "")
+                            .slice(0, 2)
+                        }))
+                      }
+                      required
+                      value={receivingAccountForm.accountDigit}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <button
+                    disabled={isSavingAccount}
+                    style={{
+                      background: "#2563eb",
+                      border: 0,
+                      borderRadius: "10px",
+                      color: "#ffffff",
+                      cursor: isSavingAccount ? "not-allowed" : "pointer",
+                      fontWeight: 800,
+                      padding: "10px 16px"
+                    }}
+                    type="submit"
+                  >
+                    {isSavingAccount
+                      ? "Salvando..."
+                      : receivingAccount?.configured
+                        ? "Alterar conta"
+                        : "Cadastrar conta"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
+        </details>
+
+        <details className="event-financial-accordion">
+          <summary>
+            <ListOrdered color="#93c5fd" size={18} />
+            <span style={{ display: "grid", flex: 1, gap: "2px", minWidth: 0 }}>
+              <strong style={{ fontSize: "14px", fontWeight: 800 }}>
+                Movimentações financeiras
+              </strong>
+              <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                {total > 0
+                  ? `${total.toLocaleString("pt-BR")} registros`
+                  : "Busca, filtros, histórico e borderô"}
+              </span>
+            </span>
+            <ChevronDown color="#64748b" size={18} />
+          </summary>
+          <div className="event-financial-accordion-body">
           <div className="event-financial-filters">
             <form
               onSubmit={handleSearch}
@@ -834,7 +1564,6 @@ export function EventFinancialManagementClient({
                   <option value="ALL">Todos os status</option>
                   <option value="PAID">Pago</option>
                   <option value="PENDING">Pendente</option>
-                  <option value="NO_CHARGE">Sem cobrança</option>
                   <option value="REFUND_PENDING">
                     Reembolso em processamento
                   </option>
@@ -1094,7 +1823,8 @@ export function EventFinancialManagementClient({
               </p>
             </div>
           ) : null}
-        </section>
+          </div>
+        </details>
         </EventModuleChrome>
       </section>
 

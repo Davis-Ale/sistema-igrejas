@@ -294,6 +294,11 @@ function buildEventFinancialBaseWhere(
     eventId: query.eventId ?? {
       not: null
     },
+    eventPayment: {
+      is: {
+        churchId
+      }
+    },
     ...buildDateAndMethodWhere(query)
   };
 }
@@ -302,18 +307,7 @@ function buildEventFinancialExportWhere(
   churchId: string,
   query: EventFinancialFilters
 ): Prisma.TransactionWhereInput {
-  return {
-    AND: [
-      buildEventFinancialListWhere(churchId, query),
-      {
-        eventPayment: {
-          is: {
-            churchId
-          }
-        }
-      }
-    ]
-  };
+  return buildEventFinancialListWhere(churchId, query);
 }
 
 function buildEventFinancialListWhere(
@@ -375,7 +369,7 @@ function getEventFinancialRowPaymentLabel(row: EventFinancialListRow) {
     return "Cancelado";
   }
 
-  return "Sem cobrança";
+  return "—";
 }
 
 function getEventFinancialExportPaymentLabel(row: EventFinancialListRow) {
@@ -420,7 +414,7 @@ function getParticipantName(row: EventFinancialListRow) {
     return names.join(", ");
   }
 
-  return "Lançamento interno";
+  return "—";
 }
 
 function getTicketNames(row: EventFinancialListRow) {
