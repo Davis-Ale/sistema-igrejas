@@ -66,7 +66,8 @@ async function requireExportEvent(
   const event = await prisma.event.findFirst({
     where: {
       churchId,
-      id: eventId
+      id: eventId,
+      deletedAt: null
     },
     select: {
       id: true,

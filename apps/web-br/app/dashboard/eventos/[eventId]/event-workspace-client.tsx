@@ -14,6 +14,7 @@ import {
   EventModuleBackLink,
   EventModuleNav,
   persistSelectedEventId,
+  readStoredSelectedEventId,
   type EventWorkspaceSection
 } from "../event-module-chrome";
 
@@ -976,6 +977,15 @@ export function EventWorkspaceClient({
   const [duplicateError, setDuplicateError] = useState<
     string | null
   >(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] =
+    useState(false);
+  const [isDeletingEvent, setIsDeletingEvent] =
+    useState(false);
+  const [deleteConfirmed, setDeleteConfirmed] =
+    useState(false);
+  const [deleteError, setDeleteError] = useState<
+    string | null
+  >(null);
 
   const statistics = useMemo(() => {
     const stats = event?.registrationStats;
@@ -1010,6 +1020,15 @@ export function EventWorkspaceClient({
             }
           }
         );
+
+        if (response.status === 404) {
+          if (readStoredSelectedEventId() === eventId) {
+            persistSelectedEventId("");
+          }
+
+          router.replace("/dashboard/eventos");
+          return;
+        }
 
         if (!response.ok) {
           const data = await response.json() as ApiErrorResponse;
@@ -3287,6 +3306,77 @@ export function EventWorkspaceClient({
     setDuplicateError(null);
   }
 
+  function openDeleteEventModal() {
+    if (!event) {
+      return;
+    }
+
+    setDeleteConfirmed(false);
+    setDeleteError(null);
+    setIsDeleteModalOpen(true);
+  }
+
+  function closeDeleteEventModal() {
+    if (isDeletingEvent) {
+      return;
+    }
+
+    setIsDeleteModalOpen(false);
+    setDeleteConfirmed(false);
+    setDeleteError(null);
+  }
+
+  async function handleDeleteEvent() {
+    if (!event || !deleteConfirmed) {
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setDeleteError(null);
+    setIsDeletingEvent(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${event.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          method: "DELETE"
+        }
+      );
+
+      if (response.status === 204 || response.ok) {
+        if (readStoredSelectedEventId() === event.id) {
+          persistSelectedEventId("");
+        }
+
+        setIsDeleteModalOpen(false);
+        router.push("/dashboard/eventos");
+        return;
+      }
+
+      const data = (await response.json()) as ApiErrorResponse;
+
+      setDeleteError(
+        data.message ??
+          "Não foi possível excluir o evento."
+      );
+    } catch {
+      setDeleteError(
+        "Não foi possível excluir o evento agora."
+      );
+    } finally {
+      setIsDeletingEvent(false);
+    }
+  }
+
   async function handleDuplicateEvent(
     formEvent: FormEvent<HTMLFormElement>
   ) {
@@ -5549,6 +5639,34 @@ export function EventWorkspaceClient({
                 </div>
                 </div>
               )}
+
+              <div
+                style={{
+                  borderTop:
+                    "1px solid rgba(148, 163, 184, 0.16)",
+                  display: "grid",
+                  gap: "8px",
+                  paddingTop: "16px"
+                }}
+              >
+                <button
+                  onClick={openDeleteEventModal}
+                  style={{
+                    background: "rgba(127, 29, 29, 0.2)",
+                    border: "1px solid rgba(252, 165, 165, 0.28)",
+                    borderRadius: "10px",
+                    color: "#fca5a5",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    justifySelf: "start",
+                    padding: "8px 12px"
+                  }}
+                  type="button"
+                >
+                  Excluir evento
+                </button>
+              </div>
             </section>
 
             ) : null}
@@ -11592,6 +11710,187 @@ export function EventWorkspaceClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteModalOpen && event ? (
+        <div
+          onClick={closeDeleteEventModal}
+          style={{
+            alignItems: "center",
+            background: "rgba(2, 6, 23, 0.72)",
+            display: "flex",
+            inset: 0,
+            justifyContent: "center",
+            padding: "24px",
+            position: "fixed",
+            zIndex: 60
+          }}
+        >
+          <div
+            onClick={(clickEvent) =>
+              clickEvent.stopPropagation()
+            }
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
+              border:
+                "1px solid rgba(148, 163, 184, 0.22)",
+              borderRadius: "28px",
+              boxShadow:
+                "0 28px 90px rgba(2, 6, 23, 0.48)",
+              display: "grid",
+              gap: "28px",
+              maxHeight: "calc(100vh - 48px)",
+              maxWidth: "640px",
+              overflow: "auto",
+              padding: "36px",
+              width: "100%"
+            }}
+          >
+            <header
+              style={{
+                display: "grid",
+                gap: "8px"
+              }}
+            >
+              <p
+                style={{
+                  color: "#fca5a5",
+                  fontSize: "13px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  margin: 0,
+                  textTransform: "uppercase"
+                }}
+              >
+                Excluir evento
+              </p>
+
+              <h2
+                style={{
+                  color: "#ffffff",
+                  fontSize: "28px",
+                  letterSpacing: "-0.03em",
+                  margin: 0
+                }}
+              >
+                {event.title}
+              </h2>
+
+              <p
+                style={{
+                  color: "#94a3b8",
+                  lineHeight: 1.6,
+                  margin: 0
+                }}
+              >
+                Esta ação remove o evento de Meus eventos e do
+                seletor. Inscrições, pagamentos, estornos e
+                auditoria financeira, se existirem, são
+                preservados. A ação não pode ser desfeita.
+              </p>
+            </header>
+
+            {deleteError ? (
+              <p
+                style={{
+                  background: "rgba(127, 29, 29, 0.32)",
+                  border:
+                    "1px solid rgba(248, 113, 113, 0.28)",
+                  borderRadius: "14px",
+                  color: "#fecaca",
+                  margin: 0,
+                  padding: "14px"
+                }}
+              >
+                {deleteError}
+              </p>
+            ) : null}
+
+            <label
+              style={{
+                alignItems: "flex-start",
+                color: "#e2e8f0",
+                display: "flex",
+                fontWeight: 800,
+                gap: "10px"
+              }}
+            >
+              <input
+                checked={deleteConfirmed}
+                onChange={(changeEvent) =>
+                  setDeleteConfirmed(changeEvent.target.checked)
+                }
+                type="checkbox"
+              />
+              <span>
+                Confirmo a exclusão de {event.title}
+              </span>
+            </label>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "12px",
+                justifyContent: "flex-end"
+              }}
+            >
+              <button
+                disabled={isDeletingEvent}
+                onClick={closeDeleteEventModal}
+                style={{
+                  background:
+                    "rgba(15, 23, 42, 0.68)",
+                  border:
+                    "1px solid rgba(148, 163, 184, 0.3)",
+                  borderRadius: "12px",
+                  color: "#e2e8f0",
+                  cursor: isDeletingEvent
+                    ? "not-allowed"
+                    : "pointer",
+                  fontWeight: 900,
+                  opacity: isDeletingEvent ? 0.72 : 1,
+                  padding: "12px 18px"
+                }}
+                type="button"
+              >
+                Cancelar
+              </button>
+
+              <button
+                disabled={
+                  isDeletingEvent || !deleteConfirmed
+                }
+                onClick={() => {
+                  void handleDeleteEvent();
+                }}
+                style={{
+                  background: "rgba(127, 29, 29, 0.2)",
+                  border:
+                    "1px solid rgba(252, 165, 165, 0.35)",
+                  borderRadius: "12px",
+                  color: "#fca5a5",
+                  cursor:
+                    isDeletingEvent || !deleteConfirmed
+                      ? "not-allowed"
+                      : "pointer",
+                  fontWeight: 900,
+                  opacity:
+                    isDeletingEvent || !deleteConfirmed
+                      ? 0.72
+                      : 1,
+                  padding: "12px 18px"
+                }}
+                type="button"
+              >
+                {isDeletingEvent
+                  ? "Excluindo..."
+                  : "Excluir evento"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

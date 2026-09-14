@@ -1,4 +1,4 @@
-import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import type {
@@ -7,7 +7,10 @@ import type {
   FastifyRequest
 } from "fastify";
 import { ZodError } from "zod";
-import { createEventApiKeySchema } from "./api-key.schema.js";
+import {
+  createEventApiKeySchema,
+  eventApiKeyIdParamsSchema
+} from "./api-key.schema.js";
 import {
   createEventApiKey,
   listEventApiKeys,
@@ -42,7 +45,7 @@ async function sendApiKeyError(
   ) {
     await reply.code(409).send({
       error: "EVENT_API_KEY_NAME_ALREADY_EXISTS",
-      message: "Já existe uma chave com este nome para o evento."
+      message: "Já existe uma chave com este nome para a igreja."
     });
     return;
   }
@@ -56,18 +59,10 @@ async function sendApiKeyError(
       return;
     }
 
-    if (error.message === "EVENT_NOT_FOUND") {
-      await reply.code(404).send({
-        error: "EVENT_NOT_FOUND",
-        message: "Evento não encontrado."
-      });
-      return;
-    }
-
     if (error.message === "EVENT_API_KEY_NOT_FOUND") {
       await reply.code(404).send({
         error: "EVENT_API_KEY_NOT_FOUND",
-        message: "Chave de API não encontrada para este evento."
+        message: "Chave de API não encontrada."
       });
       return;
     }
@@ -91,43 +86,24 @@ export async function registerEventApiKeyRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.get(
-    "/events/:eventId/api-keys",
-    async (request, reply) => {
-      try {
-        const churchId = getChurchId(request);
-        const { eventId } = request.params as {
-          eventId: string;
-        };
+  app.get("/events/api-keys", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
 
-        return await listEventApiKeys(
-          prisma,
-          churchId,
-          eventId
-        );
-      } catch (error) {
-        await sendApiKeyError(error, reply);
-      }
+      return await listEventApiKeys(prisma, churchId);
+    } catch (error) {
+      await sendApiKeyError(error, reply);
     }
-  );
+  });
 
   app.post(
-    "/events/:eventId/api-keys",
+    "/events/api-keys",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
-        const { eventId } = request.params as {
-          eventId: string;
-        };
-        const input =
-          createEventApiKeySchema.parse(request.body);
-
-        const apiKey = await createEventApiKey(
-          prisma,
-          churchId,
-          eventId,
-          input
-        );
+        const input = createEventApiKeySchema.parse(request.body);
+        const apiKey = await createEventApiKey(prisma, churchId, input);
 
         await reply.code(201).send(apiKey);
       } catch (error) {
@@ -137,20 +113,16 @@ export async function registerEventApiKeyRoutes(
   );
 
   app.post(
-    "/events/:eventId/api-keys/:apiKeyId/revoke",
+    "/events/api-keys/:apiKeyId/revoke",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
-        const { eventId, apiKeyId } = request.params as {
-          eventId: string;
-          apiKeyId: string;
-        };
-
+        const params = eventApiKeyIdParamsSchema.parse(request.params);
         const apiKey = await revokeEventApiKey(
           prisma,
           churchId,
-          eventId,
-          apiKeyId
+          params.apiKeyId
         );
 
         await reply.code(200).send(apiKey);

@@ -18,7 +18,8 @@ async function requireEvent(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     select: {
       id: true
@@ -226,6 +227,7 @@ export async function validatePublicEventDiscount(
     where: {
       slug: eventSlug,
       isPublic: true,
+      deletedAt: null,
       church: {
         slug: churchSlug
       }

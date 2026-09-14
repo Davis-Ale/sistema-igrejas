@@ -210,7 +210,8 @@ export async function duplicateEvent(
         await transaction.event.findFirst({
           where: {
             id: eventId,
-            churchId
+            churchId,
+            deletedAt: null
           },
           include: {
             ticketTypes: {
@@ -421,7 +422,8 @@ export async function updateEvent(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     select: {
       id: true,
@@ -495,6 +497,198 @@ export async function updateEvent(
   });
 }
 
+async function countEventOperationalHistory(
+  prisma: Prisma.TransactionClient | PrismaClient,
+  churchId: string,
+  eventId: string
+) {
+  const [
+    registrationCount,
+    eventOrderCount,
+    eventPaymentCount,
+    transactionCount,
+    financialOperationCount
+  ] = await Promise.all([
+    prisma.registration.count({
+      where: {
+        churchId,
+        eventId
+      }
+    }),
+    prisma.eventOrder.count({
+      where: {
+        churchId,
+        eventId
+      }
+    }),
+    prisma.eventPayment.count({
+      where: {
+        churchId,
+        eventId
+      }
+    }),
+    prisma.transaction.count({
+      where: {
+        churchId,
+        eventId
+      }
+    }),
+    prisma.eventsFinancialOperation.count({
+      where: {
+        churchId,
+        eventPayment: {
+          churchId,
+          eventId
+        }
+      }
+    })
+  ]);
+
+  return (
+    registrationCount +
+    eventOrderCount +
+    eventPaymentCount +
+    transactionCount +
+    financialOperationCount
+  );
+}
+
+async function archiveEventFromLists(
+  prisma: Prisma.TransactionClient,
+  eventId: string
+) {
+  await prisma.event.update({
+    where: {
+      id: eventId
+    },
+    data: {
+      deletedAt: new Date(),
+      isPublic: false,
+      publicRegistrationEnabled: false,
+      publicSlug: null
+    }
+  });
+}
+
+export async function deleteEvent(
+  prisma: PrismaClient,
+  churchId: string,
+  eventId: string
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      churchId,
+      deletedAt: null
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!event) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    const lockedRows = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM "Event"
+      WHERE id = ${event.id}
+        AND "churchId" = ${churchId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE
+    `;
+
+    const lockedEventId = lockedRows[0]?.id;
+
+    if (!lockedEventId) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
+
+    const historyCount = await countEventOperationalHistory(
+      transaction,
+      churchId,
+      lockedEventId
+    );
+
+    if (historyCount > 0) {
+      await archiveEventFromLists(transaction, lockedEventId);
+      return;
+    }
+
+    await transaction.eventFormAnswer.deleteMany({
+      where: {
+        churchId,
+        eventId: lockedEventId
+      }
+    });
+
+    await transaction.eventFormFieldTicket.deleteMany({
+      where: {
+        field: {
+          churchId,
+          eventId: lockedEventId
+        }
+      }
+    });
+
+    await transaction.eventFormFieldOption.deleteMany({
+      where: {
+        field: {
+          churchId,
+          eventId: lockedEventId
+        }
+      }
+    });
+
+    await transaction.eventFormField.deleteMany({
+      where: {
+        churchId,
+        eventId: lockedEventId
+      }
+    });
+
+    await transaction.eventDiscount.deleteMany({
+      where: {
+        churchId,
+        eventId: lockedEventId
+      }
+    });
+
+    await transaction.ticketBatch.deleteMany({
+      where: {
+        churchId,
+        eventId: lockedEventId
+      }
+    });
+
+    await transaction.eventTicket.deleteMany({
+      where: {
+        churchId,
+        eventId: lockedEventId
+      }
+    });
+
+    const historyCountAfterConfig = await countEventOperationalHistory(
+      transaction,
+      churchId,
+      lockedEventId
+    );
+
+    if (historyCountAfterConfig > 0) {
+      await archiveEventFromLists(transaction, lockedEventId);
+      return;
+    }
+
+    await transaction.event.delete({
+      where: {
+        id: lockedEventId
+      }
+    });
+  });
+}
+
 const eventListSelect = {
   id: true,
   title: true,
@@ -535,7 +729,8 @@ export async function listEvents(
   const page = query.page;
   const limit = query.limit;
   const where: Prisma.EventWhereInput = {
-    churchId
+    churchId,
+    deletedAt: null
   };
 
   if (query.search) {
@@ -598,7 +793,8 @@ export async function getEventById(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     include: {
       church: {
@@ -698,7 +894,8 @@ export async function getEventAnalytics(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     select: {
       id: true,
@@ -945,7 +1142,8 @@ export async function getPublicEventById(prisma: PrismaClient, eventId: string) 
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      isPublic: true
+      isPublic: true,
+      deletedAt: null
     },
     select: publicEventPageSelect
   });
@@ -965,7 +1163,8 @@ export async function getEventPreviewById(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     select: publicEventPageSelect
   });
@@ -986,7 +1185,8 @@ export async function createRegistration(
     prisma.event.findFirst({
       where: {
         id: input.eventId,
-        churchId
+        churchId,
+        deletedAt: null
       },
       include: {
         registrations: {
@@ -1110,7 +1310,8 @@ export async function createPublicRegistration(
     where: {
       id: eventId,
       isPublic: true,
-      publicRegistrationEnabled: true
+      publicRegistrationEnabled: true,
+      deletedAt: null
     },
     include: {
       registrations: {
@@ -2317,7 +2518,10 @@ export async function checkInRegistrationByToken(
       where: {
         checkInToken: input.checkInToken,
         churchId,
-        eventId: input.eventId
+        eventId: input.eventId,
+        event: {
+          deletedAt: null
+        }
       },
       select: {
         id: true,

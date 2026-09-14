@@ -19,6 +19,7 @@ import {
   registerEventFinancialRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
+  registerPublicEventsApiV1Routes,
   registerRegistrationFormRoutes,
   registerTicketRoutes,
   syncEventsFinancialRefundFromProvider
@@ -53,7 +54,12 @@ import { registerAssistantRoutes } from "./assistant/assistant.routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: true
+    logger: {
+      redact: [
+        "req.headers.authorization",
+        'req.headers["x-api-key"]'
+      ]
+    }
   });
 
   const databaseUrl = process.env.DATABASE_URL;
@@ -85,7 +91,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     ],
     allowedHeaders: [
       "Authorization",
-      "Content-Type"
+      "Content-Type",
+      "X-Api-Key"
     ]
   });
 
@@ -478,6 +485,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   );
 
   await app.register(
+    async (publicApiV1) => {
+      await registerPublicEventsApiV1Routes(publicApiV1, prisma);
+    },
+    {
+      prefix: "/api/v1"
+    }
+  );
+
+  await app.register(
     async (protectedRoutes) => {
       protectedRoutes.addHook(
         "preHandler",
@@ -485,6 +501,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       );
 
       await registerAssistantRoutes(protectedRoutes, prisma);
+      await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
       await registerEventFinancialRoutes(protectedRoutes, prisma, {
         refundProvider: async ({
@@ -550,7 +567,6 @@ export async function buildApp(): Promise<FastifyInstance> {
           );
         }
       });
-  await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerTicketRoutes(protectedRoutes, prisma);
       await registerDiscountRoutes(protectedRoutes, prisma);
       await registerRegistrationFormRoutes(

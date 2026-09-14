@@ -35,7 +35,8 @@ async function requireEvent(
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
-      churchId
+      churchId,
+      deletedAt: null
     },
     select: {
       id: true

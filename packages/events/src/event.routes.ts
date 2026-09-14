@@ -1,4 +1,4 @@
-import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
@@ -19,6 +19,7 @@ import {
 import {
   checkInRegistrationByToken,
   createEvent,
+  deleteEvent,
   duplicateEvent,
   createRegistration,
   getEventAnalytics,
@@ -351,6 +352,23 @@ export async function registerEventRoutes(
       await sendRouteError(error, reply);
     }
   });
+
+  app.delete(
+    "/events/:eventId",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const params = eventIdParamsSchema.parse(request.params);
+
+        await deleteEvent(prisma, churchId, params.eventId);
+
+        await reply.code(204).send();
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
+    }
+  );
 
   app.post("/events/registrations", async (request, reply) => {
     try {

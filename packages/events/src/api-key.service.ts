@@ -1,8 +1,23 @@
-import { randomBytes, createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import type { CreateEventApiKeyInput } from "./api-key.schema.js";
+import type { FastifyBaseLogger } from "fastify";
+import type {
+  CreateEventApiKeyInput,
+  EventApiKeyScope
+} from "./api-key.schema.js";
 
 const KEY_PREFIX_LENGTH = 8;
+
+const apiKeyPublicSelect = {
+  id: true,
+  name: true,
+  description: true,
+  keyPrefix: true,
+  scopes: true,
+  createdAt: true,
+  revokedAt: true,
+  lastUsedAt: true
+} as const;
 
 function generateApiKey() {
   const secret = randomBytes(32).toString("hex");
@@ -13,46 +28,29 @@ function generateApiKey() {
   return { token, keyPrefix, keyHash };
 }
 
-async function requireEvent(
-  prisma: PrismaClient,
-  churchId: string,
-  eventId: string
-) {
-  const event = await prisma.event.findFirst({
-    where: {
-      id: eventId,
-      churchId
-    },
-    select: {
-      id: true
-    }
-  });
+export function hashEventApiKeyToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
-  if (!event) {
-    throw new Error("EVENT_NOT_FOUND");
+function normalizeDescription(description: string | undefined) {
+  const trimmed = description?.trim() ?? "";
+
+  if (!trimmed) {
+    return null;
   }
+
+  return trimmed;
 }
 
 export async function listEventApiKeys(
   prisma: PrismaClient,
-  churchId: string,
-  eventId: string
+  churchId: string
 ) {
-  await requireEvent(prisma, churchId, eventId);
-
   return prisma.eventApiKey.findMany({
     where: {
-      churchId,
-      eventId
+      churchId
     },
-    select: {
-      id: true,
-      name: true,
-      keyPrefix: true,
-      createdAt: true,
-      revokedAt: true,
-      lastUsedAt: true
-    },
+    select: apiKeyPublicSelect,
     orderBy: {
       createdAt: "desc"
     }
@@ -62,29 +60,20 @@ export async function listEventApiKeys(
 export async function createEventApiKey(
   prisma: PrismaClient,
   churchId: string,
-  eventId: string,
   input: CreateEventApiKeyInput
 ) {
-  await requireEvent(prisma, churchId, eventId);
-
   const { token, keyPrefix, keyHash } = generateApiKey();
 
   const apiKey = await prisma.eventApiKey.create({
     data: {
       churchId,
-      eventId,
       name: input.name,
+      description: normalizeDescription(input.description),
       keyPrefix,
-      keyHash
+      keyHash,
+      scopes: input.scopes
     },
-    select: {
-      id: true,
-      name: true,
-      keyPrefix: true,
-      createdAt: true,
-      revokedAt: true,
-      lastUsedAt: true
-    }
+    select: apiKeyPublicSelect
   });
 
   return {
@@ -96,14 +85,12 @@ export async function createEventApiKey(
 export async function revokeEventApiKey(
   prisma: PrismaClient,
   churchId: string,
-  eventId: string,
   apiKeyId: string
 ) {
   const apiKey = await prisma.eventApiKey.findFirst({
     where: {
       id: apiKeyId,
-      churchId,
-      eventId
+      churchId
     },
     select: {
       id: true,
@@ -121,18 +108,68 @@ export async function revokeEventApiKey(
 
   return prisma.eventApiKey.update({
     where: {
-      id: apiKeyId
+      id: apiKey.id
     },
     data: {
       revokedAt: new Date()
     },
+    select: apiKeyPublicSelect
+  });
+}
+
+export async function authenticateEventApiKey(
+  prisma: PrismaClient,
+  headerValue: string | string[] | undefined,
+  requiredScope: EventApiKeyScope,
+  logger?: FastifyBaseLogger
+) {
+  if (typeof headerValue !== "string" || !headerValue.trim()) {
+    throw new Error("API_KEY_INVALID");
+  }
+
+  const keyHash = hashEventApiKeyToken(headerValue.trim());
+  const apiKey = await prisma.eventApiKey.findUnique({
+    where: {
+      keyHash
+    },
     select: {
       id: true,
-      name: true,
-      keyPrefix: true,
-      createdAt: true,
-      revokedAt: true,
-      lastUsedAt: true
+      churchId: true,
+      scopes: true,
+      revokedAt: true
     }
   });
+
+  if (!apiKey || apiKey.revokedAt) {
+    throw new Error("API_KEY_INVALID");
+  }
+
+  if (!apiKey.scopes.includes(requiredScope)) {
+    throw new Error("API_KEY_SCOPE_DENIED");
+  }
+
+  try {
+    await prisma.eventApiKey.update({
+      where: {
+        id: apiKey.id
+      },
+      data: {
+        lastUsedAt: new Date()
+      }
+    });
+  } catch (error) {
+    logger?.warn(
+      {
+        err: error,
+        apiKeyId: apiKey.id
+      },
+      "Failed to update API key lastUsedAt"
+    );
+  }
+
+  return {
+    churchId: apiKey.churchId,
+    apiKeyId: apiKey.id,
+    scopes: apiKey.scopes
+  };
 }

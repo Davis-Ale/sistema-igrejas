@@ -402,6 +402,7 @@ model Event {
   publicRegistrationEnabled Boolean  @default(false)
   waitlistEnabled           Boolean  @default(true)
   trailStageId              String?
+  deletedAt                 DateTime?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -416,7 +417,6 @@ model Event {
   ticketBatches    TicketBatch[]
   formFields       EventFormField[]
   formAnswers      EventFormAnswer[]
-  apiKeys          EventApiKey[]
   orders           EventOrder[]
   payments         EventPayment[]
   discounts        EventDiscount[]
@@ -431,6 +431,7 @@ model Event {
   @@index([churchId, isPaid])
   @@index([churchId, publicRegistrationEnabled])
   @@index([churchId, trailStageId])
+  @@index([churchId, deletedAt])
 }
 
 model EventTicket {
@@ -558,22 +559,21 @@ model EventFormAnswer {
 }
 
 model EventApiKey {
-  id         String    @id @default(cuid())
-  churchId   String
-  eventId    String
-  name       String
-  keyPrefix  String
-  keyHash    String
-  createdAt  DateTime  @default(now())
-  revokedAt  DateTime?
-  lastUsedAt DateTime?
+  id          String    @id @default(cuid())
+  churchId    String
+  name        String
+  description String?
+  keyPrefix   String
+  keyHash     String    @unique
+  scopes      String[]
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
 
   church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  @@unique([eventId, name])
+  @@unique([churchId, name])
   @@index([churchId])
-  @@index([churchId, eventId])
   @@index([keyPrefix])
 }
 

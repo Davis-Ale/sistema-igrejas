@@ -167,6 +167,7 @@ export async function getPublicEventBySlugs(
     where: {
       slug: eventSlug,
       isPublic: true,
+      deletedAt: null,
       church: {
         slug: churchSlug
       }
@@ -188,7 +189,8 @@ export async function getPublicEventByPublicSlug(
   const event = await prisma.event.findFirst({
     where: {
       publicSlug,
-      isPublic: true
+      isPublic: true,
+      deletedAt: null
     },
     select: publicEventSelect
   });
