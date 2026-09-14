@@ -1465,10 +1465,16 @@ describe("Event financial management E2E", () => {
 
     expect(pageSource).toContain("Conta de recebimento");
     expect(pageSource).toContain("Movimentações financeiras");
+    expect(pageSource).toContain("Estornos administrativos");
+    expect(pageSource).toContain("Estornar pagamento");
+    expect(pageSource).toContain("Nenhum estorno.");
+    expect(pageSource).not.toContain("Estorno real");
+    expect(pageSource).not.toContain("valor sai do backend");
+    expect(pageSource).not.toContain("não tem permissão para estornar");
     expect(pageSource).toContain("Buscar por código ou nome");
     expect(pageSource).toContain("Nenhuma instituição encontrada");
     expect(pageSource.match(/className="event-financial-accordion"/g)).toHaveLength(
-      2
+      3
     );
     expect(pageSource).not.toMatch(/<details[^>]*\sopen/);
     expect(chromeSource).not.toContain("Privilégios");

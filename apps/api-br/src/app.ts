@@ -20,9 +20,11 @@ import {
   registerEventRoutes,
   registerPublicEventRoutes,
   registerRegistrationFormRoutes,
-  registerTicketRoutes
+  registerTicketRoutes,
+  syncEventsFinancialRefundFromProvider
 } from "@sistema-igrejas/events";
 import {
+  AsaasClientError,
   createAsaasChargeForExistingTransaction,
   deleteAsaasPayment,
   finalizeProviderTransactionCancellation,
@@ -449,6 +451,16 @@ export async function buildApp(): Promise<FastifyInstance> {
         }
       }
 
+      await syncEventsFinancialRefundFromProvider(
+        prisma,
+        churchId,
+        {
+          eventPaymentId: referenceId,
+          providerPaymentId: paymentId,
+          paymentStatus: status
+        }
+      );
+
       if (!handledStructuredPayment) {
         await applyRegistrationPaymentStatus(
           prisma,
@@ -474,7 +486,70 @@ export async function buildApp(): Promise<FastifyInstance> {
 
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
-      await registerEventFinancialRoutes(protectedRoutes, prisma);
+      await registerEventFinancialRoutes(protectedRoutes, prisma, {
+        refundProvider: async ({
+          churchId,
+          eventPaymentId,
+          providerPaymentId
+        }) => {
+          try {
+            const refunded = await refundAsaasPayment(
+              providerPaymentId,
+              "Estorno administrativo de Eventos",
+              undefined,
+              `events-refund:${churchId}:${eventPaymentId}`
+            );
+            const refreshed = await getAsaasPayment(providerPaymentId);
+            const providerReference = refunded.id || providerPaymentId;
+
+            if (refreshed.status === "REFUNDED") {
+              return {
+                providerReference,
+                status: "REFUNDED" as const
+              };
+            }
+
+            return {
+              providerReference,
+              status: "PENDING" as const
+            };
+          } catch (error) {
+            if (error instanceof AsaasClientError) {
+              try {
+                const existing = await getAsaasPayment(providerPaymentId);
+
+                if (existing.status === "REFUNDED") {
+                  return {
+                    providerReference: providerPaymentId,
+                    status: "REFUNDED" as const
+                  };
+                }
+              } catch {
+                throw new Error("PAYMENT_PROVIDER_REVERSAL_FAILED");
+              }
+            }
+
+            throw new Error("PAYMENT_PROVIDER_REVERSAL_FAILED");
+          }
+        },
+        applyCancelledStatus: async ({
+          churchId,
+          eventPaymentId,
+          providerPaymentId
+        }) =>
+          applyEventPaymentProviderStatus(prisma, churchId, {
+            eventPaymentId,
+            providerPaymentId,
+            paymentStatus: "CANCELLED"
+          }),
+        finalizeReversal: async (churchId, transactionId) => {
+          await finalizeProviderTransactionReversal(
+            prisma,
+            churchId,
+            transactionId
+          );
+        }
+      });
   await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerTicketRoutes(protectedRoutes, prisma);
       await registerDiscountRoutes(protectedRoutes, prisma);

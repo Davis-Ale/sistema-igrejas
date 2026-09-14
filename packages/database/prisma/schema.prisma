@@ -114,8 +114,10 @@ model Church {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
-  eventsReceivingAccount       EventsReceivingAccount?
-  eventsReceivingAccountAudits EventsReceivingAccountAudit[]
+  eventsReceivingAccount         EventsReceivingAccount?
+  eventsReceivingAccountAudits   EventsReceivingAccountAudit[]
+  eventsFinancialOperations      EventsFinancialOperation[]
+  eventsFinancialOperationAudits EventsFinancialOperationAudit[]
   campuses                     Campus[]
   people           Person[]
   trails           Trail[]
@@ -685,6 +687,7 @@ model EventPayment {
   order       EventOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   transaction Transaction    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   discount    EventDiscount? @relation(fields: [discountId], references: [id], onDelete: Restrict)
+  financialOperations EventsFinancialOperation[]
 
   @@unique([provider, providerPaymentId])
   @@index([churchId])
@@ -781,6 +784,54 @@ model EventsReceivingAccountAudit {
 
   @@index([churchId, createdAt])
   @@index([receivingAccountId])
+}
+
+model EventsFinancialOperation {
+  id                String   @id @default(cuid())
+  churchId          String
+  type              String
+  status            String
+  eventPaymentId    String
+  transactionId     String
+  amount            Decimal  @db.Decimal(12, 2)
+  currency          String   @default("BRL")
+  provider          String   @default("ASAAS")
+  providerReference String?
+  actorUserId       String
+  actorRole         String
+  result            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  church       Church                           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  eventPayment EventPayment                     @relation(fields: [eventPaymentId], references: [id], onDelete: Restrict)
+  audits       EventsFinancialOperationAudit[]
+
+  @@unique([churchId, type, eventPaymentId])
+  @@index([churchId, createdAt])
+  @@index([churchId, status])
+  @@index([churchId, transactionId])
+  @@index([eventPaymentId])
+}
+
+model EventsFinancialOperationAudit {
+  id                String   @id @default(cuid())
+  churchId          String
+  operationId       String
+  action            String
+  actorUserId       String
+  actorRole         String
+  status            String
+  amount            Decimal  @db.Decimal(12, 2)
+  providerReference String?
+  result            String?
+  createdAt         DateTime @default(now())
+
+  church    Church                    @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  operation EventsFinancialOperation  @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@index([churchId, createdAt])
+  @@index([operationId])
 }
 
 model UserAccount {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, ChevronDown, ListOrdered } from "lucide-react";
+import { Building2, ChevronDown, ListOrdered, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CreateEventModal } from "../create-event-modal";
@@ -81,6 +81,49 @@ type EventsReceivingAccountView = {
   configured: boolean;
   canUpdate: boolean;
   account: EventsReceivingAccountMasked | null;
+};
+
+type EventsFinancialOperation = {
+  id: string;
+  type: "REFUND";
+  status: "REQUESTED" | "PENDING" | "CONFIRMED" | "FAILED";
+  amount: number;
+  eventTitle: string;
+  participantName: string;
+  createdAt: string;
+  result: string | null;
+};
+
+type EventsFinancialOperationsResponse = {
+  canCreate: boolean;
+  items: EventsFinancialOperation[];
+  pagination: {
+    page: number;
+    currentPage: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+type RefundableEventPayment = {
+  transactionId: string;
+  eventTitle: string;
+  participantName: string;
+  amount: number;
+  at: string;
+};
+
+type RefundableEventPaymentsResponse = {
+  canCreate: boolean;
+  items: RefundableEventPayment[];
+  pagination: {
+    page: number;
+    currentPage: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 type ReceivingAccountFormState = {
@@ -290,6 +333,26 @@ function getReceivingAccountClosedLabel(account: EventsReceivingAccountView | nu
   return `Conta cadastrada · ${bankLabel} · ${account.account.accountMasked}`;
 }
 
+function getRefundStatusLabel(status: EventsFinancialOperation["status"]) {
+  if (status === "CONFIRMED") {
+    return "Confirmado";
+  }
+
+  if (status === "PENDING" || status === "REQUESTED") {
+    return "Em processamento";
+  }
+
+  return "Falhou";
+}
+
+function getOperationsClosedLabel(historyTotal: number) {
+  if (historyTotal > 0) {
+    return `${historyTotal.toLocaleString("pt-BR")} registros`;
+  }
+
+  return "";
+}
+
 function normalizeInstitutionQuery(value: string) {
   return value
     .normalize("NFD")
@@ -384,6 +447,21 @@ export function EventFinancialManagementClient({
   const [receivingAccountForm, setReceivingAccountForm] =
     useState<ReceivingAccountFormState>(EMPTY_RECEIVING_ACCOUNT_FORM);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [operations, setOperations] = useState<EventsFinancialOperation[]>([]);
+  const [operationsTotal, setOperationsTotal] = useState(0);
+  const [operationsPage, setOperationsPage] = useState(1);
+  const [operationsTotalPages, setOperationsTotalPages] = useState(0);
+  const [canCreateRefund, setCanCreateRefund] = useState(false);
+  const [refundableItems, setRefundableItems] = useState<RefundableEventPayment[]>(
+    []
+  );
+  const [refundableTotal, setRefundableTotal] = useState(0);
+  const [refundablePage, setRefundablePage] = useState(1);
+  const [refundableTotalPages, setRefundableTotalPages] = useState(0);
+  const [confirmingRefundId, setConfirmingRefundId] = useState<string | null>(
+    null
+  );
+  const [isRefunding, setIsRefunding] = useState(false);
   const [financialInstitutions, setFinancialInstitutions] = useState<
     FinancialInstitution[]
   >([]);
@@ -567,6 +645,83 @@ export function EventFinancialManagementClient({
     setBankQuery("");
   }
 
+  async function loadOperations(
+    token: string,
+    currentPage: number,
+    signal: AbortSignal
+  ) {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(PAGE_LIMIT));
+    params.set("type", "REFUND");
+
+    if (eventId) {
+      params.set("eventId", eventId);
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/events/financial/operations?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        signal
+      }
+    );
+
+    if (!response.ok) {
+      const data = (await response.json()) as ApiErrorResponse;
+      throw new Error(
+        data.message ?? "Não foi possível carregar os estornos."
+      );
+    }
+
+    const data = (await response.json()) as EventsFinancialOperationsResponse;
+    setCanCreateRefund(data.canCreate);
+    setOperations(data.items);
+    setOperationsTotal(data.pagination.total);
+    setOperationsPage(data.pagination.currentPage);
+    setOperationsTotalPages(data.pagination.totalPages);
+  }
+
+  async function loadRefundable(
+    token: string,
+    currentPage: number,
+    signal: AbortSignal
+  ) {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(PAGE_LIMIT));
+
+    if (eventId) {
+      params.set("eventId", eventId);
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/events/financial/operations/refundable?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        signal
+      }
+    );
+
+    if (!response.ok) {
+      const data = (await response.json()) as ApiErrorResponse;
+      throw new Error(
+        data.message ?? "Não foi possível carregar as cobranças estornáveis."
+      );
+    }
+
+    const data = (await response.json()) as RefundableEventPaymentsResponse;
+    setCanCreateRefund(data.canCreate);
+    setRefundableItems(data.items);
+    setRefundableTotal(data.pagination.total);
+    setRefundablePage(data.pagination.currentPage);
+    setRefundableTotalPages(data.pagination.totalPages);
+  }
+
   async function refresh(currentPage = page) {
     const token = getSessionToken();
 
@@ -591,7 +746,9 @@ export function EventFinancialManagementClient({
           ? loadEvents(token, controller.signal)
           : Promise.resolve(),
         loadFinancial(token, currentPage, controller.signal),
-        loadReceivingAccount(token, controller.signal)
+        loadReceivingAccount(token, controller.signal),
+        loadOperations(token, 1, controller.signal),
+        loadRefundable(token, 1, controller.signal)
       ]);
 
       if (generation !== refreshGenerationRef.current) {
@@ -786,9 +943,54 @@ export function EventFinancialManagementClient({
     }
   }
 
+  async function handleRefund(transactionId: string) {
+    const token = getSessionToken();
+
+    if (!token) {
+      setError("Sessão inválida. Entre novamente no sistema.");
+      return;
+    }
+
+    setIsRefunding(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/financial/operations/refunds`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            transactionId
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const data = (await response.json()) as ApiErrorResponse;
+        throw new Error(data.message ?? "Não foi possível estornar a cobrança.");
+      }
+
+      setConfirmingRefundId(null);
+      await refresh(page);
+    } catch (refundError) {
+      setError(
+        refundError instanceof Error
+          ? refundError.message
+          : "Não foi possível estornar a cobrança."
+      );
+    } finally {
+      setIsRefunding(false);
+    }
+  }
+
   const showingFrom =
     total === 0 ? 0 : (page - 1) * PAGE_LIMIT + 1;
   const showingTo = Math.min(page * PAGE_LIMIT, total);
+  const operationsClosedLabel = getOperationsClosedLabel(operationsTotal);
 
   return (
     <main
@@ -1446,6 +1648,296 @@ export function EventFinancialManagementClient({
                   </button>
                 </div>
               </form>
+            ) : null}
+          </div>
+        </details>
+
+        <details className="event-financial-accordion">
+          <summary>
+            <Undo2 color="#93c5fd" size={18} />
+            <span style={{ display: "grid", flex: 1, gap: "2px", minWidth: 0 }}>
+              <strong style={{ fontSize: "14px", fontWeight: 800 }}>
+                Estornos administrativos
+              </strong>
+              {operationsClosedLabel ? (
+                <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                  {operationsClosedLabel}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown color="#64748b" size={18} />
+          </summary>
+          <div className="event-financial-accordion-body">
+            {canCreateRefund && refundableItems.length > 0 ? (
+              <div style={{ display: "grid", gap: "10px" }}>
+                {refundableItems.map((item) => (
+                    <div
+                      key={item.transactionId}
+                      style={{
+                        alignItems: "center",
+                        border: "1px solid rgba(148, 163, 184, 0.16)",
+                        borderRadius: "12px",
+                        display: "grid",
+                        gap: "8px",
+                        gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) auto auto",
+                        padding: "10px 12px"
+                      }}
+                    >
+                      <span style={{ minWidth: 0 }}>
+                        <strong style={{ display: "block", fontSize: "13px" }}>
+                          {item.participantName}
+                        </strong>
+                        <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                          {item.eventTitle}
+                        </span>
+                      </span>
+                      <span style={{ color: "#a7f3d0", fontSize: "13px", fontWeight: 800 }}>
+                        {formatMoney(item.amount)}
+                      </span>
+                      <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                        {formatDateTimeCompact(item.at)}
+                      </span>
+                      {confirmingRefundId === item.transactionId ? (
+                        <span style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            disabled={isRefunding}
+                            onClick={() => {
+                              void handleRefund(item.transactionId);
+                            }}
+                            style={{
+                              background: "#b91c1c",
+                              border: 0,
+                              borderRadius: "10px",
+                              color: "#ffffff",
+                              cursor: isRefunding ? "not-allowed" : "pointer",
+                              fontWeight: 800,
+                              padding: "8px 12px"
+                            }}
+                            type="button"
+                          >
+                            {isRefunding ? "Estornando..." : "Confirmar"}
+                          </button>
+                          <button
+                            disabled={isRefunding}
+                            onClick={() => setConfirmingRefundId(null)}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid rgba(148, 163, 184, 0.28)",
+                              borderRadius: "10px",
+                              color: "#e2e8f0",
+                              cursor: "pointer",
+                              fontWeight: 800,
+                              padding: "8px 12px"
+                            }}
+                            type="button"
+                          >
+                            Cancelar
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          disabled={isRefunding}
+                          onClick={() => setConfirmingRefundId(item.transactionId)}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid rgba(248, 113, 113, 0.4)",
+                            borderRadius: "10px",
+                            color: "#fecaca",
+                            cursor: "pointer",
+                            fontWeight: 800,
+                            padding: "8px 12px"
+                          }}
+                          type="button"
+                        >
+                          Estornar pagamento
+                        </button>
+                      )}
+                    </div>
+                ))}
+                {refundableTotal > PAGE_LIMIT ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "12px"
+                    }}
+                  >
+                    <button
+                      disabled={refundablePage <= 1}
+                      onClick={() => {
+                        const nextPage = Math.max(1, refundablePage - 1);
+                        setRefundablePage(nextPage);
+                        const token = getSessionToken();
+                        if (token) {
+                          void loadRefundable(
+                            token,
+                            nextPage,
+                            new AbortController().signal
+                          );
+                        }
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(148, 163, 184, 0.28)",
+                        borderRadius: "10px",
+                        color: "#e2e8f0",
+                        cursor: refundablePage <= 1 ? "not-allowed" : "pointer",
+                        fontWeight: 800,
+                        padding: "8px 12px"
+                      }}
+                      type="button"
+                    >
+                      Anterior
+                    </button>
+                    <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                      Página {refundablePage} de {Math.max(refundableTotalPages, 1)}
+                    </span>
+                    <button
+                      disabled={refundablePage >= refundableTotalPages}
+                      onClick={() => {
+                        const nextPage = refundablePage + 1;
+                        setRefundablePage(nextPage);
+                        const token = getSessionToken();
+                        if (token) {
+                          void loadRefundable(
+                            token,
+                            nextPage,
+                            new AbortController().signal
+                          );
+                        }
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(148, 163, 184, 0.28)",
+                        borderRadius: "10px",
+                        color: "#e2e8f0",
+                        cursor:
+                          refundablePage >= refundableTotalPages
+                            ? "not-allowed"
+                            : "pointer",
+                        fontWeight: 800,
+                        padding: "8px 12px"
+                      }}
+                      type="button"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {operations.length > 0 ? (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {operations.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      border: "1px solid rgba(148, 163, 184, 0.16)",
+                      borderRadius: "12px",
+                      display: "grid",
+                      gap: "6px",
+                      padding: "10px 12px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px"
+                      }}
+                    >
+                      <strong style={{ fontSize: "13px" }}>
+                        {item.participantName}
+                      </strong>
+                      <span style={{ color: "#a7f3d0", fontWeight: 800 }}>
+                        {formatMoney(item.amount)}
+                      </span>
+                    </span>
+                    <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                      {item.eventTitle} · {getRefundStatusLabel(item.status)} ·{" "}
+                      {formatDateTimeCompact(item.createdAt)}
+                    </span>
+                  </div>
+              ))}
+              {operationsTotal > PAGE_LIMIT ? (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px"
+                  }}
+                >
+                  <button
+                    disabled={operationsPage <= 1}
+                    onClick={() => {
+                      const nextPage = Math.max(1, operationsPage - 1);
+                      setOperationsPage(nextPage);
+                      const token = getSessionToken();
+                      if (token) {
+                        void loadOperations(
+                          token,
+                          nextPage,
+                          new AbortController().signal
+                        );
+                      }
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(148, 163, 184, 0.28)",
+                      borderRadius: "10px",
+                      color: "#e2e8f0",
+                      cursor: operationsPage <= 1 ? "not-allowed" : "pointer",
+                      fontWeight: 800,
+                      padding: "8px 12px"
+                    }}
+                    type="button"
+                  >
+                    Anterior
+                  </button>
+                  <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                    Página {operationsPage} de {Math.max(operationsTotalPages, 1)}
+                  </span>
+                  <button
+                    disabled={operationsPage >= operationsTotalPages}
+                    onClick={() => {
+                      const nextPage = operationsPage + 1;
+                      setOperationsPage(nextPage);
+                      const token = getSessionToken();
+                      if (token) {
+                        void loadOperations(
+                          token,
+                          nextPage,
+                          new AbortController().signal
+                        );
+                      }
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(148, 163, 184, 0.28)",
+                      borderRadius: "10px",
+                      color: "#e2e8f0",
+                      cursor:
+                        operationsPage >= operationsTotalPages
+                          ? "not-allowed"
+                          : "pointer",
+                      fontWeight: 800,
+                      padding: "8px 12px"
+                    }}
+                    type="button"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            ) : null}
+
+            {operations.length === 0 &&
+            !(canCreateRefund && refundableItems.length > 0) ? (
+              <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0 }}>
+                Nenhum estorno.
+              </p>
             ) : null}
           </div>
         </details>

@@ -7,6 +7,7 @@ export type AsaasClientConfig = {
 
 export type AsaasRequestOptions = {
   body?: unknown;
+  idempotencyKey?: string;
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   path: string;
 };
@@ -58,7 +59,12 @@ export function createAsaasClient(config: AsaasClientConfig = {}) {
       headers: {
         "Content-Type": "application/json",
         "User-Agent": "SistemaIgrejas/0.1.0",
-        access_token: apiKey
+        access_token: apiKey,
+        ...(options.idempotencyKey
+          ? {
+              "Asaas-Idempotency-Key": options.idempotencyKey
+            }
+          : {})
       },
       method: options.method ?? "GET"
     };

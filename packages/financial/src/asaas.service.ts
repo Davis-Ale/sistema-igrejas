@@ -118,7 +118,8 @@ export type RefundAsaasPaymentResponse = {
 export async function refundAsaasPayment(
   paymentId: string,
   description?: string,
-  client: AsaasClient = createAsaasClient()
+  client: AsaasClient = createAsaasClient(),
+  idempotencyKey?: string
 ): Promise<RefundAsaasPaymentResponse> {
   return client.request<RefundAsaasPaymentResponse>({
     body: description
@@ -128,7 +129,12 @@ export async function refundAsaasPayment(
       : undefined,
     method: "POST",
     path:
-      `/payments/${encodeURIComponent(paymentId)}/refund`
+      `/payments/${encodeURIComponent(paymentId)}/refund`,
+    ...(idempotencyKey
+      ? {
+          idempotencyKey
+        }
+      : {})
   });
 }
 
