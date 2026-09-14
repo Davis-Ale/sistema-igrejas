@@ -3233,6 +3233,10 @@ export function EventWorkspaceClient({
     ? `${WEB_BASE_URL}/eventos/${event.id}?returnTo=${encodeURIComponent(`/dashboard/eventos/${event.id}`)}`
     : "#";
 
+  const eventPreviewHref = event
+    ? `/dashboard/eventos/${event.id}/preview`
+    : "#";
+
   const eventAppUrl = event
     ? `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.church.slug)}/${encodeURIComponent(event.slug)}`
     : "#";
@@ -3723,6 +3727,24 @@ export function EventWorkspaceClient({
                   target="_blank"
                 >
                   Página de inscrição
+                </a>
+
+                <a
+                  href={eventPreviewHref}
+                  rel="noreferrer"
+                  style={{
+                    background: "rgba(15, 23, 42, 0.68)",
+                    border: "1px solid rgba(96, 165, 250, 0.45)",
+                    borderRadius: "14px",
+                    color: "#93c5fd",
+                    fontSize: "14px",
+                    fontWeight: 900,
+                    padding: "12px 16px",
+                    textDecoration: "none"
+                  }}
+                  target="_blank"
+                >
+                  Pré-visualizar
                 </a>
 
                 <a
@@ -4830,6 +4852,7 @@ export function EventWorkspaceClient({
                               </div>
                             </div>
                           ) : (
+                            <>
                             <p
                               style={{
                                 background:
@@ -4847,6 +4870,21 @@ export function EventWorkspaceClient({
                               Publique-o para disponibilizar a
                               página e o QR Code.
                             </p>
+
+                            <a
+                              href={eventPreviewHref}
+                              rel="noreferrer"
+                              style={{
+                                color: "#93c5fd",
+                                fontWeight: 900,
+                                justifySelf: "start",
+                                textDecoration: "none"
+                              }}
+                              target="_blank"
+                            >
+                              Pré-visualizar
+                            </a>
+                            </>
                           )}
                         </article>
 
@@ -5348,6 +5386,31 @@ export function EventWorkspaceClient({
                         ? "Publicado"
                         : "Rascunho"}
                     </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "10px"
+                      }}
+                    >
+                      <a
+                        href={eventPreviewHref}
+                        rel="noreferrer"
+                        style={{
+                          background:
+                            "rgba(15, 23, 42, 0.68)",
+                          border:
+                            "1px solid rgba(96, 165, 250, 0.45)",
+                          borderRadius: "12px",
+                          color: "#93c5fd",
+                          fontWeight: 900,
+                          padding: "11px 16px",
+                          textDecoration: "none"
+                        }}
+                        target="_blank"
+                      >
+                        Pré-visualizar
+                      </a>
                     {event.isPublic ? (
                       <button
                         disabled={isUpdatingPublicationState}
@@ -5405,6 +5468,7 @@ export function EventWorkspaceClient({
                         Publicar evento
                       </button>
                     )}
+                    </div>
                   </article>
 
                   <article

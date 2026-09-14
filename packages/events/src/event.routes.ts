@@ -23,6 +23,7 @@ import {
   createRegistration,
   getEventAnalytics,
   getEventById,
+  getEventPreviewById,
   listEvents,
   updateEvent,
   updateRegistrationStatus
@@ -301,6 +302,21 @@ export async function registerEventRoutes(
         churchId,
         params.eventId,
         query
+      );
+    } catch (error) {
+      await sendRouteError(error, reply);
+    }
+  });
+
+  app.get("/events/:eventId/preview", async (request, reply) => {
+    try {
+      const churchId = getChurchId(request);
+      const params = eventIdParamsSchema.parse(request.params);
+
+      return await getEventPreviewById(
+        prisma,
+        churchId,
+        params.eventId
       );
     } catch (error) {
       await sendRouteError(error, reply);

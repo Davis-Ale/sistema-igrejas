@@ -458,37 +458,10 @@ export async function registerPublicEventRoutes(
           eventId: string;
         };
 
-        const publicEvent =
-          await getPublicEventById(
-            prisma,
-            params.eventId
-          );
-
-        const eventChurch =
-          await prisma.event.findUnique({
-            where: {
-              id: params.eventId
-            },
-            select: {
-              church: {
-                select: {
-                  name: true,
-                  slug: true
-                }
-              }
-            }
-          });
-
-        if (!eventChurch) {
-          throw new Error(
-            "EVENT_NOT_FOUND"
-          );
-        }
-
-        return {
-          ...publicEvent,
-          church: eventChurch.church
-        };
+        return await getPublicEventById(
+          prisma,
+          params.eventId
+        );
       } catch (error) {
         await sendPublicRouteError(error, reply);
       }

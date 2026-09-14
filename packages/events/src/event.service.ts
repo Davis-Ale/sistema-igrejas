@@ -858,91 +858,120 @@ export async function getEventAnalytics(
   };
 }
 
+const publicEventPageSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  publicSlug: true,
+  date: true,
+  capacity: true,
+  price: true,
+  isPaid: true,
+  isPublic: true,
+  publicRegistrationEnabled: true,
+  waitlistEnabled: true,
+  church: {
+    select: {
+      name: true,
+      slug: true
+    }
+  },
+  registrations: {
+    where: {
+      status: {
+        not: "CANCELLED"
+      }
+    },
+    select: {
+      id: true,
+      status: true,
+      waitlistedAt: true
+    }
+  },
+  ticketTypes: {
+    where: {
+      isVisible: true
+    },
+    include: {
+      batches: {
+        where: {
+          isVisible: true
+        },
+        include: {
+          _count: {
+            select: {
+              registrations: {
+                where: {
+                  status: {
+                    not: "CANCELLED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          salesStart: "asc"
+        }
+      }
+    },
+    orderBy: {
+      createdAt: "asc"
+    }
+  },
+  formFields: {
+    where: {
+      isActive: true
+    },
+    include: {
+      options: {
+        orderBy: {
+          order: "asc"
+        }
+      },
+      ticketScopes: {
+        select: {
+          ticketId: true
+        }
+      }
+    },
+    orderBy: {
+      order: "asc"
+    }
+  }
+} satisfies Prisma.EventSelect;
+
 export async function getPublicEventById(prisma: PrismaClient, eventId: string) {
   const event = await prisma.event.findFirst({
     where: {
       id: eventId,
       isPublic: true
     },
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      date: true,
-      capacity: true,
-      price: true,
-      isPaid: true,
-      isPublic: true,
-      publicRegistrationEnabled: true,
-      waitlistEnabled: true,
-      registrations: {
-        where: {
-          status: {
-            not: "CANCELLED"
-          }
-        },
-        select: {
-          id: true,
-          status: true,
-          waitlistedAt: true
-        }
-      },
-      ticketTypes: {
-        where: {
-          isVisible: true
-        },
-        include: {
-          batches: {
-            where: {
-              isVisible: true
-            },
-            include: {
-              _count: {
-                select: {
-                  registrations: {
-                    where: {
-                      status: {
-                        not: "CANCELLED"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            orderBy: {
-              salesStart: "asc"
-            }
-          }
-        },
-        orderBy: {
-          createdAt: "asc"
-        }
-      },
-      formFields: {
-        where: {
-          isActive: true
-        },
-        include: {
-          options: {
-            orderBy: {
-              order: "asc"
-            }
-          },
-          ticketScopes: {
-            select: {
-              ticketId: true
-            }
-          }
-        },
-        orderBy: {
-          order: "asc"
-        }
-      }
-    }
+    select: publicEventPageSelect
   });
 
   if (!event) {
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
+  }
+
+  return event;
+}
+
+export async function getEventPreviewById(
+  prisma: PrismaClient,
+  churchId: string,
+  eventId: string
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
+      churchId
+    },
+    select: publicEventPageSelect
+  });
+
+  if (!event) {
+    throw new Error("EVENT_NOT_FOUND");
   }
 
   return event;
