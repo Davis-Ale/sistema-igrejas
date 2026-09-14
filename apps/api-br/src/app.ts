@@ -16,6 +16,7 @@ import {
   resetPendingEventPaymentProviderReference,
   registerDiscountRoutes,
   registerEventApiKeyRoutes,
+  registerEventIntegrationRoutes,
   registerEventFinancialRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
@@ -502,6 +503,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventApiKeyRoutes(protectedRoutes, prisma);
+      await registerEventIntegrationRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
       await registerEventFinancialRoutes(protectedRoutes, prisma, {
         refundProvider: async ({

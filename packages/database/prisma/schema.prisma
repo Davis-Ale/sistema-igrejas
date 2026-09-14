@@ -94,6 +94,21 @@ enum EventFormFieldType {
   MULTIPLE_CHOICE
 }
 
+enum EventIntegrationProvider {
+  GOOGLE_ANALYTICS
+  GOOGLE_ADS
+  META_PIXEL
+  WHATSAPP_BUSINESS_CLOUD
+  MAILCHIMP
+  RD_STATION
+}
+
+enum EventIntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
 model Church {
   id                    String       @id @default(cuid())
   churchId              String       @unique @default(cuid())
@@ -132,8 +147,9 @@ model Church {
   ticketBatches    TicketBatch[]
   eventFormFields  EventFormField[]
   eventFormAnswers EventFormAnswer[]
-  eventApiKeys     EventApiKey[]
-  eventOrders      EventOrder[]
+  eventApiKeys        EventApiKey[]
+  eventIntegrations   EventIntegration[]
+  eventOrders         EventOrder[]
   eventPayments    EventPayment[]
   eventDiscounts   EventDiscount[]
   transactions     Transaction[]
@@ -575,6 +591,26 @@ model EventApiKey {
   @@unique([churchId, name])
   @@index([churchId])
   @@index([keyPrefix])
+}
+
+model EventIntegration {
+  id               String                   @id @default(cuid())
+  churchId         String
+  provider         EventIntegrationProvider
+  status           EventIntegrationStatus   @default(DISCONNECTED)
+  publicConfig     Json?
+  encryptedSecrets String?
+  secretHint       String?
+  lastError        String?
+  connectedAt      DateTime?
+  disconnectedAt   DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@unique([churchId, provider])
+  @@index([churchId])
 }
 
 model Registration {

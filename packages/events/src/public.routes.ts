@@ -23,6 +23,9 @@ import {
   getPublicEventById
 } from "./event.service.js";
 import {
+  attachPublicEventTracking
+} from "./integration.service.js";
+import {
   createPublicRegistrationBySlugs,
   getPublicEventByPublicSlug,
   getPublicEventBySlugs,
@@ -288,9 +291,12 @@ export async function registerPublicEventRoutes(
           publicSlug: string;
         };
 
-        return await getPublicEventByPublicSlug(
+        return await attachPublicEventTracking(
           prisma,
-          params.publicSlug
+          await getPublicEventByPublicSlug(
+            prisma,
+            params.publicSlug
+          )
         );
       } catch (error) {
         await sendPublicRouteError(error, reply);
@@ -307,10 +313,13 @@ export async function registerPublicEventRoutes(
           eventSlug: string;
         };
 
-        return await getPublicEventBySlugs(
+        return await attachPublicEventTracking(
           prisma,
-          params.churchSlug,
-          params.eventSlug
+          await getPublicEventBySlugs(
+            prisma,
+            params.churchSlug,
+            params.eventSlug
+          )
         );
       } catch (error) {
         await sendPublicRouteError(error, reply);
@@ -458,9 +467,12 @@ export async function registerPublicEventRoutes(
           eventId: string;
         };
 
-        return await getPublicEventById(
+        return await attachPublicEventTracking(
           prisma,
-          params.eventId
+          await getPublicEventById(
+            prisma,
+            params.eventId
+          )
         );
       } catch (error) {
         await sendPublicRouteError(error, reply);

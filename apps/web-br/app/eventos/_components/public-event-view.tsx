@@ -8,6 +8,7 @@ import {
   useEffect,
   useState
 } from "react";
+import { PublicEventTracking } from "./public-event-tracking";
 
 type ApiErrorResponse = {
   message?: string;
@@ -74,6 +75,12 @@ type PublicEvent = {
   };
   ticketTypes: PublicTicket[];
   formFields: PublicFormField[];
+  tracking?: {
+    googleAnalyticsId: string | null;
+    googleAdsConversionId: string | null;
+    googleAdsConversionLabel: string | null;
+    metaPixelId: string | null;
+  } | null;
 };
 
 type PublicRegistration = {
@@ -195,6 +202,25 @@ function getAppUrl(
     event.publicSlug ?? event.slug;
 
   return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(publicSlug)}#aplicativo`;
+}
+
+function isPublicRegistrationConfirmed(
+  registration: PublicRegistration | null
+) {
+  if (!registration) {
+    return false;
+  }
+
+  if (registration.paymentStatus === "PENDING") {
+    return false;
+  }
+
+  return (
+    registration.paymentStatus === "PAID" ||
+    registration.paymentStatus === "NOT_REQUIRED" ||
+    registration.status === "CONFIRMED" ||
+    registration.status === "CHECKED_IN"
+  );
 }
 
 export function PublicEventView({
@@ -667,6 +693,15 @@ export function PublicEventView({
               ? "Voltar ao evento"
               : "Voltar para o início"}
         </Link>
+
+        {!isPreview && event ? (
+          <PublicEventTracking
+            registrationConfirmed={isPublicRegistrationConfirmed(
+              registration
+            )}
+            tracking={event.tracking ?? null}
+          />
+        ) : null}
 
         {isPreview ? (
           <p
