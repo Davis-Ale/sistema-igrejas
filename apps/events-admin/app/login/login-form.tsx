@@ -88,7 +88,7 @@ export function LoginForm() {
         JSON.stringify(loginSession)
       );
 
-      router.replace("/dashboard");
+      router.replace("/dashboard/eventos");
       router.refresh();
     } catch {
       setError(
