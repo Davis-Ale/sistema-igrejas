@@ -1,5 +1,5 @@
 {
-  "name": "events-pwa",
+  "name": "@sistema-igrejas/events-participant",
   "version": "0.1.0",
   "private": true,
   "type": "module",
