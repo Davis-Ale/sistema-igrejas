@@ -19,6 +19,7 @@ import {
   Plug,
   type LucideIcon
 } from "lucide-react";
+import styles from "./event-module-chrome.module.css";
 
 export const EVENT_WORKSPACE_SECTIONS = [
   "overview",
@@ -51,26 +52,6 @@ export type EventModuleEventOption = {
 const SELECTED_EVENT_STORAGE_KEY =
   "sistema-igrejas.events.selectedEventId";
 
-const EVENT_SECTION_NAV_ITEMS: Array<{
-  section: EventWorkspaceSection;
-  label: string;
-  icon: LucideIcon;
-}> = [
-  { section: "overview", icon: LayoutDashboard, label: "Visão geral" },
-  { section: "information", icon: FileText, label: "Informações" },
-  { section: "tickets", icon: Ticket, label: "Ingressos" },
-  { section: "discounts", icon: Tag, label: "Descontos" },
-  {
-    section: "registration-form",
-    icon: ClipboardList,
-    label: "Formulário de inscrição"
-  },
-  { section: "participants", icon: Users, label: "Participantes" },
-  { section: "check-in", icon: CircleCheck, label: "Check-in" },
-  { section: "financial", icon: ChartColumn, label: "Financeiro" },
-  { section: "event-app", icon: Smartphone, label: "Aplicativo do Evento" }
-];
-
 const backLinkStyle: CSSProperties = {
   color: "#93c5fd",
   fontSize: "14px",
@@ -100,34 +81,6 @@ const selectorStyle: CSSProperties = {
   width: "100%"
 };
 
-const navStyle: CSSProperties = {
-  background: "rgba(15, 23, 42, 0.82)",
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  borderRadius: "20px",
-  display: "grid",
-  gap: "6px",
-  padding: "12px",
-  position: "sticky",
-  top: "24px"
-};
-
-const createButtonStyle: CSSProperties = {
-  alignItems: "center",
-  background: "rgba(37, 99, 235, 0.12)",
-  border: "1px dashed rgba(96, 165, 250, 0.45)",
-  borderRadius: "12px",
-  color: "#93c5fd",
-  cursor: "pointer",
-  display: "flex",
-  fontSize: "14px",
-  fontWeight: 900,
-  gap: "8px",
-  padding: "12px 14px",
-  textAlign: "left",
-  textDecoration: "none",
-  width: "100%"
-};
-
 const contentGridStyle: CSSProperties = {
   alignItems: "start",
   display: "grid",
@@ -141,35 +94,16 @@ const contentColumnStyle: CSSProperties = {
   minWidth: 0
 };
 
-const eventSectionHeadingStyle: CSSProperties = {
-  borderTop: "1px solid rgba(148, 163, 184, 0.18)",
-  color: "#64748b",
-  fontSize: "11px",
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  margin: "6px 0 0",
-  padding: "10px 4px 2px",
-  textTransform: "uppercase"
-};
+function navItemClassName(active: boolean, enabled = true) {
+  if (!enabled) {
+    return `${styles.item} ${styles.itemDisabled}`;
+  }
 
-function navItemStyle(active: boolean, enabled = true): CSSProperties {
-  return {
-    alignItems: "center",
-    background: active ? "#2563eb" : "transparent",
-    border: 0,
-    borderRadius: "12px",
-    color: active ? "#ffffff" : "#cbd5e1",
-    cursor: enabled ? "pointer" : "default",
-    display: "flex",
-    fontSize: "13px",
-    fontWeight: 900,
-    gap: "8px",
-    opacity: enabled ? 1 : 0.45,
-    padding: "10px 12px",
-    textAlign: "left",
-    textDecoration: "none",
-    width: "100%"
-  };
+  if (active) {
+    return `${styles.item} ${styles.itemActive}`;
+  }
+
+  return styles.item;
 }
 
 function NavItemContent({
@@ -181,13 +115,10 @@ function NavItemContent({
 }) {
   return (
     <>
-      <Icon
-        aria-hidden="true"
-        size={26}
-        strokeWidth={2}
-        style={{ flexShrink: 0 }}
-      />
-      <span style={{ minWidth: 0 }}>{label}</span>
+      <span className={styles.icon}>
+        <Icon aria-hidden="true" size={18} strokeWidth={2} />
+      </span>
+      <span className={styles.label}>{label}</span>
     </>
   );
 }
@@ -366,11 +297,6 @@ export function EventModuleNav({
 }) {
   const isWorkspace = variant === "workspace";
   const hasSelectedEvent = Boolean(selectedEventId);
-  const selectorStyleCompact: CSSProperties = {
-    ...selectorStyle,
-    fontSize: "13px",
-    padding: "8px 10px"
-  };
 
   function handleSelectedEventIdChange(nextEventId: string) {
     persistSelectedEventId(nextEventId);
@@ -387,7 +313,10 @@ export function EventModuleNav({
 
     if (!hasSelectedEvent) {
       return (
-        <span key={section} style={navItemStyle(false, false)}>
+        <span
+          className={navItemClassName(false, false)}
+          key={section}
+        >
           {content}
         </span>
       );
@@ -396,9 +325,9 @@ export function EventModuleNav({
     if (isWorkspace) {
       return (
         <button
+          className={navItemClassName(active)}
           key={section}
           onClick={() => onSelectSection?.(section)}
-          style={navItemStyle(active)}
           type="button"
         >
           {content}
@@ -408,10 +337,10 @@ export function EventModuleNav({
 
     return (
       <Link
+        className={navItemClassName(false)}
         href={`/dashboard/eventos/${selectedEventId}?section=${section}`}
         key={section}
         onClick={() => persistSelectedEventId(selectedEventId)}
-        style={navItemStyle(false)}
       >
         {content}
       </Link>
@@ -419,87 +348,96 @@ export function EventModuleNav({
   }
 
   return (
-    <nav style={navStyle}>
-      <Link
-        href="/dashboard/eventos"
-        style={navItemStyle(productActive === "events")}
-      >
-        <NavItemContent icon={CalendarDays} label="Meus eventos" />
-      </Link>
-      {onCreateEvent ? (
-        <button
-          onClick={onCreateEvent}
-          style={createButtonStyle}
-          type="button"
-        >
-          <NavItemContent icon={CalendarPlus} label="Criar evento" />
-        </button>
-      ) : (
-        <Link href="/dashboard/eventos?create=1" style={createButtonStyle}>
-          <NavItemContent icon={CalendarPlus} label="Criar evento" />
-        </Link>
-      )}
-      <Link
-        href="/dashboard/eventos/gestao-financeira"
-        style={navItemStyle(productActive === "financial")}
-      >
-        <NavItemContent icon={Wallet} label="Gestão Financeira" />
-      </Link>
-      <Link
-        href="/dashboard/eventos/api-keys"
-        style={navItemStyle(productActive === "api-keys")}
-      >
-        <NavItemContent icon={KeyRound} label="API Keys" />
-      </Link>
-      <Link
-        href="/dashboard/eventos/integracoes"
-        style={navItemStyle(productActive === "integrations")}
-      >
-        <NavItemContent icon={Plug} label="Integrações" />
-      </Link>
+    <nav className={styles.nav}>
+      <div className={styles.block}>
+        {events.length === 0 && !selectedEventId ? (
+          <p className={styles.emptyHint}>Nenhum evento cadastrado</p>
+        ) : (
+          <select
+            aria-label="Evento selecionado"
+            className={styles.selector}
+            onChange={(changeEvent) => {
+              const nextEventId = changeEvent.target.value;
 
-      <p style={eventSectionHeadingStyle}>Evento selecionado</p>
-
-      {events.length === 0 && !selectedEventId ? (
-        <p
-          style={{
-            color: "#94a3b8",
-            fontSize: "12px",
-            margin: 0,
-            padding: "4px 4px 6px"
-          }}
-        >
-          Nenhum evento cadastrado
-        </p>
-      ) : (
-        <select
-          aria-label="Evento selecionado"
-          onChange={(changeEvent) => {
-            const nextEventId = changeEvent.target.value;
-
-            if (nextEventId && nextEventId !== selectedEventId) {
-              handleSelectedEventIdChange(nextEventId);
-            }
-          }}
-          style={selectorStyleCompact}
-          value={selectedEventId}
-        >
-          {selectedEventId === "" ? (
-            <option value="">Selecionar evento</option>
-          ) : null}
-          {resolveSelectorEvents(events, selectedEventId, fallbackTitle).map(
-            (item) => (
+              if (nextEventId && nextEventId !== selectedEventId) {
+                handleSelectedEventIdChange(nextEventId);
+              }
+            }}
+            value={selectedEventId}
+          >
+            {selectedEventId === "" ? (
+              <option value="">Selecionar evento</option>
+            ) : null}
+            {resolveSelectorEvents(
+              events,
+              selectedEventId,
+              fallbackTitle
+            ).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.title}
               </option>
-            )
-          )}
-        </select>
-      )}
+            ))}
+          </select>
+        )}
 
-      {EVENT_SECTION_NAV_ITEMS.map((item) =>
-        renderEventSectionItem(item.section, item.label, item.icon)
-      )}
+        <Link
+          className={navItemClassName(productActive === "events")}
+          href="/dashboard/eventos"
+        >
+          <NavItemContent icon={CalendarDays} label="Meus eventos" />
+        </Link>
+        {renderEventSectionItem("overview", "Visão geral", LayoutDashboard)}
+        {onCreateEvent ? (
+          <button
+            className={styles.createItem}
+            onClick={onCreateEvent}
+            type="button"
+          >
+            <NavItemContent icon={CalendarPlus} label="Criar evento" />
+          </button>
+        ) : (
+          <Link
+            className={styles.createItem}
+            href="/dashboard/eventos?create=1"
+          >
+            <NavItemContent icon={CalendarPlus} label="Criar evento" />
+          </Link>
+        )}
+        {renderEventSectionItem("information", "Informações", FileText)}
+        {renderEventSectionItem("tickets", "Ingressos", Ticket)}
+        {renderEventSectionItem("discounts", "Descontos", Tag)}
+        {renderEventSectionItem(
+          "registration-form",
+          "Formulário de inscrição",
+          ClipboardList
+        )}
+        {renderEventSectionItem("participants", "Participantes", Users)}
+        {renderEventSectionItem("check-in", "Check-in", CircleCheck)}
+        {renderEventSectionItem("financial", "Financeiro", ChartColumn)}
+        <Link
+          className={navItemClassName(productActive === "financial")}
+          href="/dashboard/eventos/gestao-financeira"
+        >
+          <NavItemContent icon={Wallet} label="Gestão Financeira" />
+        </Link>
+        {renderEventSectionItem(
+          "event-app",
+          "Aplicativo do Participante",
+          Smartphone
+        )}
+        <Link
+          className={navItemClassName(productActive === "api-keys")}
+          href="/dashboard/eventos/api-keys"
+        >
+          <NavItemContent icon={KeyRound} label="API Keys" />
+        </Link>
+        <Link
+          className={navItemClassName(productActive === "integrations")}
+          href="/dashboard/eventos/integracoes"
+        >
+          <NavItemContent icon={Plug} label="Integrações" />
+        </Link>
+      </div>
     </nav>
   );
 }

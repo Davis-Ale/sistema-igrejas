@@ -18,9 +18,11 @@ import {
   registerEventApiKeyRoutes,
   registerEventIntegrationRoutes,
   registerEventFinancialRoutes,
+  registerEventParticipantAppRoutes,
   registerEventRoutes,
   registerPublicEventRoutes,
   registerPublicEventsApiV1Routes,
+  registerPublicParticipantAppRoutes,
   registerRegistrationFormRoutes,
   registerTicketRoutes,
   syncEventsFinancialRefundFromProvider
@@ -374,6 +376,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   );
 
+  await registerPublicParticipantAppRoutes(
+    app,
+    prisma
+  );
+
   await registerAsaasWebhookRoutes(
     app,
     prisma,
@@ -504,6 +511,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await registerAssistantRoutes(protectedRoutes, prisma);
       await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerEventIntegrationRoutes(protectedRoutes, prisma);
+      await registerEventParticipantAppRoutes(protectedRoutes, prisma);
       await registerEventRoutes(protectedRoutes, prisma);
       await registerEventFinancialRoutes(protectedRoutes, prisma, {
         refundProvider: async ({

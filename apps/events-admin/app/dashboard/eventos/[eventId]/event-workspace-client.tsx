@@ -77,6 +77,7 @@ type EventDetail = {
   id: string;
   title: string;
   slug: string;
+  publicSlug: string | null;
   date: string;
   capacity: number;
   price: string | number;
@@ -291,14 +292,49 @@ type EventFormField = {
   }>;
 };
 
+type EventAppSessionAdmin = {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  type: string | null;
+  facilitator: string | null;
+  location: string | null;
+  details: string | null;
+  isPublished: boolean;
+  registrationIds: string[];
+};
+
+type EventAppRegistrationOption = {
+  id: string;
+  name: string;
+  status: RegistrationStatus;
+  ticketName: string | null;
+};
+
+type EventAppMapPoint = {
+  id?: string;
+  name: string;
+  location: string;
+  sortOrder: number;
+  isVisible: boolean;
+};
+
+type EventParticipantAppAdminResponse = {
+  publicSlug: string | null;
+  sessions: EventAppSessionAdmin[];
+  map: {
+    imageUrl: string | null;
+    points: EventAppMapPoint[];
+  };
+  registrations: EventAppRegistrationOption[];
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
 
-const WEB_BASE_URL =
-  process.env.NEXT_PUBLIC_WEB_BASE_URL ?? "http://localhost:3000";
-
 const EVENTS_APP_BASE_URL =
-  process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ?? "http://localhost:3001";
+  process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ?? "http://localhost:3003";
 
 function getFilenameFromContentDisposition(
   header: string | null,
@@ -797,6 +833,44 @@ export function EventWorkspaceClient({
     useState(false);
   const [activeSection, setActiveSection] =
     useState<EventWorkspaceSection>(initialSection);
+  const [
+    eventParticipantApp,
+    setEventParticipantApp
+  ] = useState<EventParticipantAppAdminResponse | null>(null);
+  const [isLoadingEventApp, setIsLoadingEventApp] =
+    useState(false);
+  const [isSavingEventApp, setIsSavingEventApp] =
+    useState(false);
+  const [eventAppError, setEventAppError] =
+    useState<string | null>(null);
+  const [eventAppMessage, setEventAppMessage] =
+    useState<string | null>(null);
+  const [editingEventAppSessionId, setEditingEventAppSessionId] =
+    useState<string | null>(null);
+  const [eventAppSessionTitle, setEventAppSessionTitle] =
+    useState("");
+  const [eventAppSessionStartsAt, setEventAppSessionStartsAt] =
+    useState("");
+  const [eventAppSessionEndsAt, setEventAppSessionEndsAt] =
+    useState("");
+  const [eventAppSessionType, setEventAppSessionType] =
+    useState("");
+  const [eventAppSessionFacilitator, setEventAppSessionFacilitator] =
+    useState("");
+  const [eventAppSessionLocation, setEventAppSessionLocation] =
+    useState("");
+  const [eventAppSessionDetails, setEventAppSessionDetails] =
+    useState("");
+  const [eventAppSessionPublished, setEventAppSessionPublished] =
+    useState(false);
+  const [
+    eventAppSessionRegistrationIds,
+    setEventAppSessionRegistrationIds
+  ] = useState<string[]>([]);
+  const [eventAppMapImageUrl, setEventAppMapImageUrl] =
+    useState("");
+  const [eventAppMapPoints, setEventAppMapPoints] =
+    useState<EventAppMapPoint[]>([]);
   const [formFields, setFormFields] =
     useState<EventFormField[]>([]);
   const [previewBaseValues, setPreviewBaseValues] =
@@ -1092,6 +1166,266 @@ export function EventWorkspaceClient({
 
     void loadEventsList();
   }, []);
+
+  async function loadEventParticipantApp() {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsLoadingEventApp(true);
+    setEventAppError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/participant-app`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      const data = await response.json() as
+        | EventParticipantAppAdminResponse
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setEventAppError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível carregar o aplicativo do evento."
+        );
+        return;
+      }
+
+      const appContent =
+        data as EventParticipantAppAdminResponse;
+      setEventParticipantApp(appContent);
+      setEventAppMapImageUrl(
+        appContent.map.imageUrl ?? ""
+      );
+      setEventAppMapPoints(appContent.map.points);
+    } catch {
+      setEventAppError(
+        "Não foi possível carregar o aplicativo do evento agora."
+      );
+    } finally {
+      setIsLoadingEventApp(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeSection !== "event-app") {
+      return;
+    }
+
+    void loadEventParticipantApp();
+  }, [activeSection, eventId]);
+
+  function resetEventAppSessionForm() {
+    setEditingEventAppSessionId(null);
+    setEventAppSessionTitle("");
+    setEventAppSessionStartsAt("");
+    setEventAppSessionEndsAt("");
+    setEventAppSessionType("");
+    setEventAppSessionFacilitator("");
+    setEventAppSessionLocation("");
+    setEventAppSessionDetails("");
+    setEventAppSessionPublished(false);
+    setEventAppSessionRegistrationIds([]);
+  }
+
+  function editEventAppSession(session: EventAppSessionAdmin) {
+    setEditingEventAppSessionId(session.id);
+    setEventAppSessionTitle(session.title);
+    setEventAppSessionStartsAt(
+      formatDateTimeLocal(session.startsAt)
+    );
+    setEventAppSessionEndsAt(
+      formatDateTimeLocal(session.endsAt)
+    );
+    setEventAppSessionType(session.type ?? "");
+    setEventAppSessionFacilitator(session.facilitator ?? "");
+    setEventAppSessionLocation(session.location ?? "");
+    setEventAppSessionDetails(session.details ?? "");
+    setEventAppSessionPublished(session.isPublished);
+    setEventAppSessionRegistrationIds(
+      session.registrationIds
+    );
+    setEventAppMessage(null);
+    setEventAppError(null);
+  }
+
+  async function saveEventAppSession(
+    formEvent: FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsSavingEventApp(true);
+    setEventAppError(null);
+    setEventAppMessage(null);
+
+    try {
+      const response = await fetch(
+        editingEventAppSessionId
+          ? `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions/${editingEventAppSessionId}`
+          : `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions`,
+        {
+          body: JSON.stringify({
+            title: eventAppSessionTitle,
+            startsAt: new Date(eventAppSessionStartsAt).toISOString(),
+            endsAt: new Date(eventAppSessionEndsAt).toISOString(),
+            type: eventAppSessionType,
+            facilitator: eventAppSessionFacilitator,
+            location: eventAppSessionLocation,
+            details: eventAppSessionDetails,
+            isPublished: eventAppSessionPublished,
+            registrationIds: eventAppSessionRegistrationIds
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: editingEventAppSessionId
+            ? "PATCH"
+            : "POST"
+        }
+      );
+      const data = await response.json() as ApiErrorResponse;
+
+      if (!response.ok) {
+        setEventAppError(
+          data.message ?? "Não foi possível salvar a sessão."
+        );
+        return;
+      }
+
+      resetEventAppSessionForm();
+      setEventAppMessage("Sessão salva.");
+      await loadEventParticipantApp();
+    } catch {
+      setEventAppError("Não foi possível salvar a sessão agora.");
+    } finally {
+      setIsSavingEventApp(false);
+    }
+  }
+
+  async function removeEventAppSession(sessionId: string) {
+    if (!window.confirm("Excluir esta sessão do cronograma?")) {
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsSavingEventApp(true);
+    setEventAppError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions/${sessionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          method: "DELETE"
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json() as ApiErrorResponse;
+        setEventAppError(
+          data.message ?? "Não foi possível excluir a sessão."
+        );
+        return;
+      }
+
+      if (editingEventAppSessionId === sessionId) {
+        resetEventAppSessionForm();
+      }
+
+      setEventAppMessage("Sessão excluída.");
+      await loadEventParticipantApp();
+    } catch {
+      setEventAppError("Não foi possível excluir a sessão agora.");
+    } finally {
+      setIsSavingEventApp(false);
+    }
+  }
+
+  async function saveEventAppMap(
+    formEvent: FormEvent<HTMLFormElement>
+  ) {
+    formEvent.preventDefault();
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setIsSavingEventApp(true);
+    setEventAppError(null);
+    setEventAppMessage(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/events/${eventId}/participant-app/map`,
+        {
+          body: JSON.stringify({
+            imageUrl: eventAppMapImageUrl,
+            points: eventAppMapPoints.map((point, index) => ({
+              name: point.name,
+              location: point.location,
+              sortOrder: index,
+              isVisible: point.isVisible
+            }))
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PUT"
+        }
+      );
+      const data = await response.json() as
+        | EventParticipantAppAdminResponse
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setEventAppError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível salvar o mapa."
+        );
+        return;
+      }
+
+      const appContent =
+        data as EventParticipantAppAdminResponse;
+      setEventParticipantApp(appContent);
+      setEventAppMapImageUrl(appContent.map.imageUrl ?? "");
+      setEventAppMapPoints(appContent.map.points);
+      setEventAppMessage("Mapa salvo.");
+    } catch {
+      setEventAppError("Não foi possível salvar o mapa agora.");
+    } finally {
+      setIsSavingEventApp(false);
+    }
+  }
 
   async function loadTickets() {
     const token = getSessionToken();
@@ -3249,7 +3583,7 @@ export function EventWorkspaceClient({
   ]);
 
   const publicRegistrationUrl = event
-    ? `${WEB_BASE_URL}/eventos/${event.id}?returnTo=${encodeURIComponent(`/dashboard/eventos/${event.id}`)}`
+    ? `/eventos/${event.id}?returnTo=${encodeURIComponent(`/dashboard/eventos/${event.id}`)}`
     : "#";
 
   const eventPreviewHref = event
@@ -3257,7 +3591,8 @@ export function EventWorkspaceClient({
     : "#";
 
   const eventAppUrl = event
-    ? `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.church.slug)}/${encodeURIComponent(event.slug)}`
+    && event.publicSlug
+    ? `${EVENTS_APP_BASE_URL}/${encodeURIComponent(event.publicSlug)}#aplicativo`
     : "#";
 
   function formatDateTimeLocal(value: string) {
@@ -11351,96 +11686,507 @@ export function EventWorkspaceClient({
 ) : null}
 
 {activeSection === "event-app" ? (
-              <section
-              id="aplicativo-do-evento"
+  <section
+    id="aplicativo-do-evento"
+    style={{
+      display: "grid",
+      gap: "20px"
+    }}
+  >
+    <header
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(30, 64, 175, 0.28), rgba(15, 23, 42, 0.86))",
+        border: "1px solid rgba(96, 165, 250, 0.26)",
+        borderRadius: "26px",
+        display: "grid",
+        gap: "14px",
+        padding: "26px"
+      }}
+    >
+      <div>
+        <p
+          style={{
+            color: "#60a5fa",
+            fontSize: "13px",
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            margin: "0 0 8px",
+            textTransform: "uppercase"
+          }}
+        >
+          Dentro deste evento
+        </p>
+        <h2
+          style={{
+            color: "#ffffff",
+            fontSize: "26px",
+            margin: "0 0 10px"
+          }}
+        >
+          Aplicativo do Participante
+        </h2>
+        <p
+          style={{
+            color: "#cbd5e1",
+            lineHeight: 1.7,
+            margin: 0,
+            maxWidth: "760px"
+          }}
+        >
+          Publique o cronograma e o mapa que serão exibidos
+          aos participantes com credencial elegível.
+        </p>
+      </div>
+      {event.publicSlug ? (
+        <div
+          style={{
+            alignItems: "center",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "12px"
+          }}
+        >
+          <a
+            href={eventAppUrl}
+            rel="noreferrer"
+            style={{
+              background: "#2563eb",
+              borderRadius: "14px",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: 900,
+              padding: "13px 18px",
+              textDecoration: "none"
+            }}
+            target="_blank"
+          >
+            Visualizar aplicativo
+          </a>
+          <code
+            style={{
+              background: "rgba(2, 6, 23, 0.5)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              borderRadius: "14px",
+              color: "#bfdbfe",
+              fontSize: "13px",
+              padding: "13px 16px",
+              wordBreak: "break-all"
+            }}
+          >
+            /{event.publicSlug}#aplicativo
+          </code>
+        </div>
+      ) : (
+        <p style={{ color: "#fbbf24", margin: 0 }}>
+          Publique o evento para gerar o endereço do aplicativo.
+        </p>
+      )}
+    </header>
+
+    {isLoadingEventApp ? (
+      <p style={{ color: "#cbd5e1", margin: 0 }}>
+        Carregando conteúdo...
+      </p>
+    ) : null}
+    {eventAppError ? (
+      <p
+        style={{
+          background: "rgba(239, 68, 68, 0.12)",
+          border: "1px solid rgba(248, 113, 113, 0.3)",
+          borderRadius: "12px",
+          color: "#fecaca",
+          margin: 0,
+          padding: "12px"
+        }}
+      >
+        {eventAppError}
+      </p>
+    ) : null}
+    {eventAppMessage ? (
+      <p
+        style={{
+          background: "rgba(16, 185, 129, 0.12)",
+          border: "1px solid rgba(52, 211, 153, 0.28)",
+          borderRadius: "12px",
+          color: "#a7f3d0",
+          margin: 0,
+          padding: "12px"
+        }}
+      >
+        {eventAppMessage}
+      </p>
+    ) : null}
+
+    {eventParticipantApp ? (
+      <>
+        <section
+          style={{
+            background: "rgba(15, 23, 42, 0.86)",
+            border: "1px solid rgba(148, 163, 184, 0.2)",
+            borderRadius: "22px",
+            display: "grid",
+            gap: "18px",
+            padding: "24px"
+          }}
+        >
+          <div>
+            <h3 style={{ color: "#ffffff", margin: "0 0 6px" }}>
+              Cronograma
+            </h3>
+            <p style={{ color: "#94a3b8", margin: 0 }}>
+              Cadastre sessões reais e publique somente quando
+              estiverem prontas.
+            </p>
+          </div>
+
+          {eventParticipantApp.sessions.length > 0 ? (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {eventParticipantApp.sessions.map((session) => (
+                <article
+                  key={session.id}
+                  style={{
+                    alignItems: "center",
+                    background: "rgba(2, 6, 23, 0.36)",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    borderRadius: "14px",
+                    display: "grid",
+                    gap: "12px",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    padding: "14px"
+                  }}
+                >
+                  <div>
+                    <strong style={{ color: "#ffffff" }}>
+                      {session.title}
+                    </strong>
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: "13px",
+                        margin: "5px 0 0"
+                      }}
+                    >
+                      {formatDateTimeCompact(session.startsAt)} até{" "}
+                      {formatDateTimeCompact(session.endsAt)}
+                      {session.location ? ` · ${session.location}` : ""}
+                      {" · "}
+                      {session.isPublished ? "Publicada" : "Rascunho"}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      onClick={() => editEventAppSession(session)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      disabled={isSavingEventApp}
+                      onClick={() => void removeEventAppSession(session.id)}
+                      type="button"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "#94a3b8", margin: 0 }}>
+              Nenhuma sessão cadastrada.
+            </p>
+          )}
+
+          <form
+            onSubmit={saveEventAppSession}
+            style={{ display: "grid", gap: "14px" }}
+          >
+            <h4 style={{ color: "#ffffff", margin: 0 }}>
+              {editingEventAppSessionId
+                ? "Editar sessão"
+                : "Nova sessão"}
+            </h4>
+            <label>
+              Título
+              <input
+                maxLength={160}
+                onChange={(changeEvent) =>
+                  setEventAppSessionTitle(changeEvent.target.value)
+                }
+                required
+                value={eventAppSessionTitle}
+              />
+            </label>
+            <div
               style={{
-                background:
-                  "linear-gradient(135deg, rgba(30, 64, 175, 0.28), rgba(15, 23, 42, 0.86))",
-                border: "1px solid rgba(96, 165, 250, 0.26)",
-                borderRadius: "26px",
                 display: "grid",
-                gap: "18px",
-                padding: "26px"
+                gap: "12px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))"
               }}
             >
-              <div>
-                <p
-                  style={{
-                    color: "#60a5fa",
-                    fontSize: "13px",
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                    margin: "0 0 8px",
-                    textTransform: "uppercase"
-                  }}
-                >
-                  Dentro deste evento
-                </p>
-
-                <h2
-                  style={{
-                    color: "#ffffff",
-                    fontSize: "26px",
-                    margin: "0 0 10px"
-                  }}
-                >
-                  Aplicativo do Evento
-                </h2>
-
-                <p
-                  style={{
-                    color: "#cbd5e1",
-                    lineHeight: 1.7,
-                    margin: 0,
-                    maxWidth: "760px"
-                  }}
-                >
-                  Área do participante com credencial, QR Code,
-                  programação, avisos, materiais e demais informações
-                  deste evento.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "12px"
-                }}
+              <label>
+                Início
+                <input
+                  onChange={(changeEvent) =>
+                    setEventAppSessionStartsAt(changeEvent.target.value)
+                  }
+                  required
+                  type="datetime-local"
+                  value={eventAppSessionStartsAt}
+                />
+              </label>
+              <label>
+                Término
+                <input
+                  onChange={(changeEvent) =>
+                    setEventAppSessionEndsAt(changeEvent.target.value)
+                  }
+                  required
+                  type="datetime-local"
+                  value={eventAppSessionEndsAt}
+                />
+              </label>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gap: "12px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))"
+              }}
+            >
+              <label>
+                Tipo
+                <input
+                  maxLength={80}
+                  onChange={(changeEvent) =>
+                    setEventAppSessionType(changeEvent.target.value)
+                  }
+                  value={eventAppSessionType}
+                />
+              </label>
+              <label>
+                Facilitador
+                <input
+                  maxLength={120}
+                  onChange={(changeEvent) =>
+                    setEventAppSessionFacilitator(changeEvent.target.value)
+                  }
+                  value={eventAppSessionFacilitator}
+                />
+              </label>
+              <label>
+                Local
+                <input
+                  maxLength={160}
+                  onChange={(changeEvent) =>
+                    setEventAppSessionLocation(changeEvent.target.value)
+                  }
+                  value={eventAppSessionLocation}
+                />
+              </label>
+            </div>
+            <label>
+              Detalhes
+              <textarea
+                maxLength={2000}
+                onChange={(changeEvent) =>
+                  setEventAppSessionDetails(changeEvent.target.value)
+                }
+                rows={3}
+                value={eventAppSessionDetails}
+              />
+            </label>
+            <label>
+              Participantes em “Meus”
+              <select
+                multiple
+                onChange={(changeEvent) =>
+                  setEventAppSessionRegistrationIds(
+                    Array.from(
+                      changeEvent.target.selectedOptions,
+                      (option) => option.value
+                    )
+                  )
+                }
+                size={Math.min(
+                  Math.max(eventParticipantApp.registrations.length, 2),
+                  7
+                )}
+                value={eventAppSessionRegistrationIds}
               >
-                <a
-                  href={eventAppUrl}
-                  rel="noreferrer"
-                  style={{
-                    background: "#2563eb",
-                    borderRadius: "14px",
-                    color: "#ffffff",
-                    fontSize: "14px",
-                    fontWeight: 900,
-                    padding: "13px 18px",
-                    textDecoration: "none"
-                  }}
-                  target="_blank"
+                {eventParticipantApp.registrations.map((registration) => (
+                  <option key={registration.id} value={registration.id}>
+                    {registration.name}
+                    {registration.ticketName
+                      ? ` · ${registration.ticketName}`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+              <small style={{ color: "#94a3b8" }}>
+                Somente inscrições elegíveis deste evento aparecem.
+                Use Ctrl ou Cmd para selecionar mais de uma.
+              </small>
+            </label>
+            <label
+              style={{
+                alignItems: "center",
+                display: "flex",
+                gap: "8px"
+              }}
+            >
+              <input
+                checked={eventAppSessionPublished}
+                onChange={(changeEvent) =>
+                  setEventAppSessionPublished(changeEvent.target.checked)
+                }
+                type="checkbox"
+              />
+              Publicar no aplicativo
+            </label>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button disabled={isSavingEventApp} type="submit">
+                {isSavingEventApp ? "Salvando..." : "Salvar sessão"}
+              </button>
+              {editingEventAppSessionId ? (
+                <button
+                  onClick={resetEventAppSessionForm}
+                  type="button"
                 >
-                  Visualizar aplicativo
-                </a>
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
 
-                <code
+        <section
+          style={{
+            background: "rgba(15, 23, 42, 0.86)",
+            border: "1px solid rgba(148, 163, 184, 0.2)",
+            borderRadius: "22px",
+            display: "grid",
+            gap: "18px",
+            padding: "24px"
+          }}
+        >
+          <div>
+            <h3 style={{ color: "#ffffff", margin: "0 0 6px" }}>
+              Mapa
+            </h3>
+            <p style={{ color: "#94a3b8", margin: 0 }}>
+              Informe uma URL HTTPS da planta e os pontos úteis.
+              Não há upload de arquivos.
+            </p>
+          </div>
+          <form
+            onSubmit={saveEventAppMap}
+            style={{ display: "grid", gap: "14px" }}
+          >
+            <label>
+              URL HTTPS da planta
+              <input
+                onChange={(changeEvent) =>
+                  setEventAppMapImageUrl(changeEvent.target.value)
+                }
+                placeholder="https://..."
+                type="url"
+                value={eventAppMapImageUrl}
+              />
+            </label>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {eventAppMapPoints.map((point, index) => (
+                <div
+                  key={point.id ?? `new-${index}`}
                   style={{
-                    background: "rgba(2, 6, 23, 0.5)",
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                    borderRadius: "14px",
-                    color: "#bfdbfe",
-                    fontSize: "13px",
-                    padding: "13px 16px",
-                    wordBreak: "break-all"
+                    alignItems: "end",
+                    display: "grid",
+                    gap: "10px",
+                    gridTemplateColumns:
+                      "minmax(0, 1fr) minmax(0, 1.4fr) auto"
                   }}
                 >
-                  /{event.church.slug}/{event.slug}
-                </code>
-              </div>
-              </section>
-            ) : null}
+                  <label>
+                    Nome
+                    <input
+                      maxLength={100}
+                      onChange={(changeEvent) =>
+                        setEventAppMapPoints((current) =>
+                          current.map((currentPoint, currentIndex) =>
+                            currentIndex === index
+                              ? {
+                                  ...currentPoint,
+                                  name: changeEvent.target.value
+                                }
+                              : currentPoint
+                          )
+                        )
+                      }
+                      required
+                      value={point.name}
+                    />
+                  </label>
+                  <label>
+                    Localização
+                    <input
+                      maxLength={200}
+                      onChange={(changeEvent) =>
+                        setEventAppMapPoints((current) =>
+                          current.map((currentPoint, currentIndex) =>
+                            currentIndex === index
+                              ? {
+                                  ...currentPoint,
+                                  location: changeEvent.target.value
+                                }
+                              : currentPoint
+                          )
+                        )
+                      }
+                      required
+                      value={point.location}
+                    />
+                  </label>
+                  <button
+                    onClick={() =>
+                      setEventAppMapPoints((current) =>
+                        current.filter(
+                          (_, currentIndex) => currentIndex !== index
+                        )
+                      )
+                    }
+                    type="button"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() =>
+                setEventAppMapPoints((current) => [
+                  ...current,
+                  {
+                    name: "",
+                    location: "",
+                    sortOrder: current.length,
+                    isVisible: true
+                  }
+                ])
+              }
+              type="button"
+            >
+              Adicionar ponto útil
+            </button>
+            <button disabled={isSavingEventApp} type="submit">
+              {isSavingEventApp ? "Salvando..." : "Salvar mapa"}
+            </button>
+          </form>
+        </section>
+      </>
+    ) : null}
+  </section>
+) : null}
               </div>
             </div>
           </>

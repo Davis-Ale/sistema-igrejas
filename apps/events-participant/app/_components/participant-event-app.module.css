@@ -1,313 +1,679 @@
-.page {
-  min-height: 100vh;
-  padding: 20px;
-  color: #f8fafc;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(37, 99, 235, 0.34),
-      transparent 34%
-    ),
-    linear-gradient(
-      160deg,
-      #020617 0%,
-      #0f172a 58%,
-      #111827 100%
-    );
-}
-
-.container {
-  display: grid;
-  gap: 18px;
-  width: 100%;
-  max-width: 560px;
-  margin: 0 auto;
-}
-
-.header {
-  display: flex;
+.accessPage {
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 2px;
+  background: #020617;
+  color: #f8fafc;
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+.accessCard {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 28px;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.42);
+  display: grid;
+  gap: 16px;
+  max-width: 480px;
+  padding: 30px;
+  width: 100%;
+}
+
+.accessCard h1,
+.accessCard p {
+  margin: 0;
+}
+
+.accessCard form {
+  display: grid;
+  gap: 9px;
+}
+
+.accessCard label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.accessCard input,
+.scheduleControls input {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  color: #f8fafc;
+  padding: 14px 16px;
+  width: 100%;
+}
+
+.accessCard button {
+  background: #2563eb;
+  border: 0;
+  border-radius: 15px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  margin-top: 6px;
+  padding: 14px;
+}
+
+.accessCard button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .eyebrow,
-.credentialLabel {
-  margin: 0 0 5px;
-  color: #60a5fa;
+.sectionLabel {
+  color: #94a3b8;
   font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
+  margin: 0 0 12px;
   text-transform: uppercase;
 }
 
-.churchName {
-  color: #ffffff;
-  font-size: 15px;
-}
-
-.appBadge {
-  padding: 7px 11px;
-  border: 1px solid rgba(96, 165, 250, 0.28);
-  border-radius: 999px;
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.2);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.eventCard {
-  display: grid;
-  gap: 20px;
-  padding: 26px;
-  border: 1px solid rgba(96, 165, 250, 0.28);
-  border-radius: 28px;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(30, 64, 175, 0.46),
-      rgba(15, 23, 42, 0.94)
-    );
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.42);
-}
-
-.eventDate {
-  margin: 0;
-  color: #bfdbfe;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.eventTitle {
-  margin: 0;
-  color: #ffffff;
-  font-size: clamp(31px, 8vw, 42px);
-  line-height: 1.04;
-  letter-spacing: -0.05em;
-}
-
-.eventStats {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.statCard {
-  padding: 15px;
-  border-radius: 18px;
-  background: rgba(2, 6, 23, 0.34);
-}
-
-.statCard span,
-.tokenCard span,
-.credentialDetails span,
-.appEventCard span {
-  display: block;
+.accessHint {
   color: #94a3b8;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.statCard strong {
-  display: block;
-  margin-top: 7px;
-  color: #ffffff;
-  font-size: 16px;
-}
-
-.panel,
-.confirmation,
-.participantApp {
-  display: grid;
-  gap: 18px;
-  padding: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 26px;
-  background: rgba(15, 23, 42, 0.92);
-}
-
-.confirmation,
-.participantApp {
-  border-color: rgba(74, 222, 128, 0.28);
-  background:
-    linear-gradient(
-      145deg,
-      rgba(21, 128, 61, 0.24),
-      rgba(15, 23, 42, 0.95)
-    );
-}
-
-.panelTitle,
-.participantName {
-  margin: 0 0 7px;
-  color: #ffffff;
-  font-size: 24px;
-}
-
-.panelText,
-.credentialStatus {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.credentialLabel {
-  color: #86efac;
-}
-
-.credentialStatus {
-  color: #bbf7d0;
-}
-
-.form {
-  display: grid;
-  gap: 14px;
-}
-
-.label {
-  display: grid;
-  gap: 7px;
-  color: #cbd5e1;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 13px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.38);
-  border-radius: 14px;
-  color: #0f172a;
-  background: #ffffff;
-  font: inherit;
-}
-
-.input:focus {
-  border-color: #60a5fa;
-  outline: 3px solid rgba(59, 130, 246, 0.2);
-}
-
-.primaryButton,
-.secondaryButton {
-  width: 100%;
-  padding: 14px 18px;
-  border-radius: 15px;
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.primaryButton {
-  border: 0;
-  color: #ffffff;
-  background:
-    linear-gradient(
-      135deg,
-      #2563eb,
-      #0ea5e9
-    );
-}
-
-.primaryButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-}
-
-.secondaryButton {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  color: #cbd5e1;
-  background: transparent;
-}
-
-.error,
-.warning {
-  padding: 13px 14px;
-  border-radius: 14px;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
 .error {
-  border: 1px solid rgba(248, 113, 113, 0.26);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 14px;
   color: #fecaca;
-  background: rgba(239, 68, 68, 0.14);
+  padding: 12px;
 }
 
-.warning {
-  border: 1px solid rgba(251, 191, 36, 0.28);
-  color: #fde68a;
-  background: rgba(245, 158, 11, 0.13);
+.appShell {
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(37, 99, 235, 0.2),
+      transparent 36%
+    ),
+    #020617;
+  color: #f8fafc;
+  min-height: 100dvh;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
-.qrContainer {
-  justify-self: center;
-  padding: 16px;
-  border-radius: 22px;
-  background: #ffffff;
-}
-
-.tokenCard,
-.appEventCard {
+.hero {
+  background:
+    radial-gradient(circle at 90% 10%, rgba(255, 255, 255, 0.12), transparent 28%),
+    linear-gradient(160deg, #172235, #070b12);
+  border-radius: 0 0 30px 30px;
+  color: #ffffff;
   display: grid;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: rgba(2, 6, 23, 0.5);
+  gap: 13px;
+  padding:
+    max(28px, env(safe-area-inset-top))
+    max(22px, calc((100vw - 720px) / 2))
+    28px;
 }
 
-.tokenCard strong {
-  overflow-wrap: anywhere;
-  color: #ffffff;
-  font-family: monospace;
-  font-size: 17px;
-}
-
-.appEventCard strong {
-  color: #ffffff;
-  font-size: 19px;
-}
-
-.appEventCard p {
+.hero p,
+.hero h1 {
   margin: 0;
-  color: #cbd5e1;
-  line-height: 1.6;
 }
 
-.credentialDetails {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.credentialDetails div {
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(2, 6, 23, 0.34);
-}
-
-.credentialDetails strong {
-  display: block;
-  margin-top: 6px;
-  color: #ffffff;
+.hero > p {
+  color: #d5dae3;
   font-size: 14px;
 }
 
+.hero > strong {
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.hero h1 {
+  font-size: clamp(28px, 8vw, 42px);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  max-width: 720px;
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.heroMeta span {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 11px;
+}
+
+.endAccess {
+  background: transparent;
+  border: 0;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 12px;
+  justify-self: start;
+  padding: 3px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.content {
+  display: grid;
+  gap: 28px;
+  margin: 0 auto;
+  max-width: 720px;
+  padding: 24px 20px 38px;
+}
+
+.participantSummary,
+.installCard,
+.sessionCard,
+.emptyCard,
+.credentialCard,
+.profile,
+.mapImageCard,
+.mapPoints article {
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.28);
+}
+
+.installCard {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.installCard strong {
+  display: block;
+}
+
+.installCard p {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.installCard button {
+  background: #2563eb;
+  border: 0;
+  border-radius: 13px;
+  color: #ffffff;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-weight: 800;
+  padding: 11px 14px;
+}
+
+.participantSummary {
+  align-items: center;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 18px;
+}
+
+.participantSummary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.participantSummary > div span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.avatar,
+.sessionInitials {
+  align-items: center;
+  background: #172235;
+  border-radius: 50%;
+  color: #ffffff;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 900;
+  height: 48px;
+  justify-content: center;
+  width: 48px;
+}
+
+.statusBadge {
+  background: rgba(16, 185, 129, 0.14);
+  border-radius: 999px;
+  color: #6ee7b7;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  justify-self: start;
+  padding: 7px 10px;
+  text-transform: uppercase;
+}
+
+.cardList {
+  display: grid;
+  gap: 11px;
+}
+
+.sessionCard {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  padding: 17px;
+}
+
+.sessionInitials {
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+}
+
+.sessionBody {
+  min-width: 0;
+  width: 100%;
+}
+
+.sessionTitleRow {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.sessionTitleRow h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.sessionTitleRow > span {
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  color: #94a3b8;
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 5px 8px;
+}
+
+.sessionBody p {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+
+.sessionBody .sessionDetails {
+  color: #cbd5e1;
+  white-space: pre-wrap;
+}
+
+.emptyCard {
+  color: #94a3b8;
+  padding: 22px;
+  text-align: center;
+}
+
+.journey {
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 24px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 22px 14px;
+}
+
+.journey span {
+  align-items: center;
+  display: flex;
+  font-size: 11px;
+  font-weight: 800;
+  justify-content: center;
+  min-width: 0;
+  position: relative;
+  text-align: center;
+}
+
+.journeyDone {
+  color: #6ee7b7;
+}
+
+.journeyPending {
+  color: #64748b;
+}
+
+.scheduleControls {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.segmented,
+.dayFilters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.segmented button,
+.dayFilters button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: #94a3b8;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-weight: 800;
+  padding: 10px 15px;
+}
+
+.segmented .active {
+  background: rgba(148, 163, 184, 0.16);
+  color: #f8fafc;
+}
+
+.dayFilters .activeDay {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.timeline {
+  display: grid;
+  gap: 22px;
+}
+
+.timelineDay {
+  display: grid;
+  gap: 14px;
+}
+
+.timelineDay h2 {
+  color: #94a3b8;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.timelineRow {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.timelineRow time {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  padding-top: 20px;
+}
+
+.credentialCard {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.credentialCard h2 {
+  margin: 0 0 18px;
+}
+
+.credentialCard code {
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 800;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+
+.credentialCard p {
+  color: #94a3b8;
+}
+
+.qrCode {
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  padding: 15px;
+}
+
+.mapImageCard {
+  overflow: hidden;
+  padding: 10px;
+}
+
+.mapImageCard img {
+  border-radius: 16px;
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.mapPoints {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mapPoints article {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.mapPoints span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.profile {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+}
+
+.profileIdentity {
+  align-items: center;
+  display: flex;
+  gap: 15px;
+}
+
+.profileIdentity h2,
+.profileIdentity p {
+  margin: 0 0 4px;
+}
+
+.profileIdentity p {
+  color: #94a3b8;
+}
+
+.credentialLink {
+  background: rgba(37, 99, 235, 0.14);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 16px;
+  color: #bfdbfe;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 15px;
+  text-align: left;
+}
+
+.profileData {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.profileData div {
+  padding: 14px 16px;
+}
+
+.profileData div + div {
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.profileData dt {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profileData dd {
+  font-weight: 700;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.bottomNav {
+  align-items: end;
+  background: rgba(2, 6, 23, 0.94);
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  left: 0;
+  padding: 8px max(8px, calc((100vw - 720px) / 2)) max(8px, env(safe-area-inset-bottom));
+  position: fixed;
+  right: 0;
+  z-index: 20;
+}
+
+.bottomNav button {
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  cursor: pointer;
+  display: grid;
+  font-size: 10px;
+  gap: 4px;
+  justify-items: center;
+  min-width: 0;
+  padding: 6px 2px;
+}
+
+.bottomNav button > span {
+  align-items: center;
+  display: flex;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  width: 24px;
+}
+
+.bottomNav .navActive {
+  color: #f8fafc;
+  font-weight: 900;
+}
+
+.bottomNav .navCredential {
+  margin-top: -24px;
+}
+
+.bottomNav .navCredential > span {
+  align-items: center;
+  background: #2563eb;
+  border: 6px solid #020617;
+  border-radius: 50%;
+  color: #ffffff;
+  display: flex;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.bottomNav .navCredential svg {
+  height: 25px;
+  width: 25px;
+}
+
 @media (max-width: 520px) {
-  .page {
-    padding: 14px;
+  .participantSummary {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .eventCard,
-  .panel,
-  .confirmation,
-  .participantApp {
-    padding: 20px;
+  .participantSummary .statusBadge {
+    grid-column: 2;
   }
 
-  .credentialDetails {
-    grid-template-columns: 1fr;
+  .journey {
+    padding-inline: 8px;
+  }
+
+  .timelineRow {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+}
+
+.appShell,
+.appShell * {
+  box-sizing: border-box;
+}
+
+.appShell {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.content,
+.profile,
+.credentialCard,
+.emptyCard,
+.scheduleControls,
+.mapImageCard {
+  min-width: 0;
+  width: 100%;
+}
+
+.profileIdentity {
+  min-width: 0;
+}
+
+.profileIdentity > div {
+  min-width: 0;
+}
+
+.profileIdentity h2 {
+  overflow-wrap: anywhere;
+}
+
+.bottomNav {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .hero {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .content {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .profile {
+    padding: 18px;
+  }
+
+  .profileIdentity {
+    align-items: flex-start;
+  }
+
+  .bottomNav {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 }

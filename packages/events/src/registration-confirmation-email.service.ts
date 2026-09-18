@@ -89,10 +89,10 @@ export async function sendRegistrationConfirmationEmail(
 
   const appBaseUrl =
     process.env.EVENTS_APP_BASE_URL ??
-    "http://localhost:3001";
+    "http://localhost:3003";
 
   const appPath = input.event.publicSlug
-    ? `/${encodeURIComponent(input.event.publicSlug)}#aplicativo`
+    ? `/${encodeURIComponent(input.event.publicSlug)}#aplicativo?checkInToken=${encodeURIComponent(input.checkInToken)}`
     : `/${encodeURIComponent(input.event.churchSlug)}/${encodeURIComponent(input.event.slug)}#aplicativo`;
 
   const appUrl = `${appBaseUrl}${appPath}`;

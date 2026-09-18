@@ -152,6 +152,9 @@ model Church {
   eventOrders         EventOrder[]
   eventPayments    EventPayment[]
   eventDiscounts   EventDiscount[]
+  eventAppSessions EventAppSession[]
+  eventAppMapPoints EventAppMapPoint[]
+  eventAppSessionRegistrations EventAppSessionRegistration[]
   transactions     Transaction[]
   userAccounts     UserAccount[]
   trialSignups     TrialSignup[]
@@ -418,6 +421,7 @@ model Event {
   publicRegistrationEnabled Boolean  @default(false)
   waitlistEnabled           Boolean  @default(true)
   trailStageId              String?
+  participantMapImageUrl    String?
   deletedAt                 DateTime?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
@@ -436,6 +440,9 @@ model Event {
   orders           EventOrder[]
   payments         EventPayment[]
   discounts        EventDiscount[]
+  appSessions      EventAppSession[]
+  appMapPoints     EventAppMapPoint[]
+  appSessionRegistrations EventAppSessionRegistration[]
   transactions     Transaction[]
 
   @@unique([churchId, slug])
@@ -448,6 +455,64 @@ model Event {
   @@index([churchId, publicRegistrationEnabled])
   @@index([churchId, trailStageId])
   @@index([churchId, deletedAt])
+}
+
+model EventAppSession {
+  id          String   @id @default(cuid())
+  churchId    String
+  eventId     String
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  type        String?
+  facilitator String?
+  location    String?
+  details     String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  church        Church                        @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event         Event                         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations EventAppSessionRegistration[]
+
+  @@index([churchId, eventId])
+  @@index([churchId, eventId, isPublished, startsAt])
+}
+
+model EventAppSessionRegistration {
+  churchId       String
+  eventId        String
+  sessionId      String
+  registrationId String
+  createdAt      DateTime @default(now())
+
+  church       Church          @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event        Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  session      EventAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  registration Registration    @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, registrationId])
+  @@index([churchId, eventId])
+  @@index([churchId, eventId, registrationId])
+}
+
+model EventAppMapPoint {
+  id        String   @id @default(cuid())
+  churchId  String
+  eventId   String
+  name      String
+  location  String
+  sortOrder Int      @default(0)
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([churchId, eventId])
+  @@index([churchId, eventId, isVisible, sortOrder])
 }
 
 model EventTicket {
@@ -642,6 +707,7 @@ model Registration {
   visitor     Visitor?          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   order       EventOrder?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
   formAnswers EventFormAnswer[]
+  appSessions EventAppSessionRegistration[]
 
   @@unique([eventId, personId])
   @@unique([eventId, visitorId])

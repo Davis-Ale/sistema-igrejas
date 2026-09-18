@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import {
   ParticipantEventApp
 } from "../_components/participant-event-app";
+import type {
+  PublicEvent
+} from "../_components/public-event";
 
 type PublicEventPageProps = {
   params: Promise<{
@@ -8,42 +12,39 @@ type PublicEventPageProps = {
   }>;
 };
 
-type PublicEvent = {
-  id: string;
-  title: string;
-  slug: string;
-  publicSlug: string | null;
-  date: string;
-  capacity: number;
-  price: string | number;
-  isPaid: boolean;
-  publicRegistrationEnabled: boolean;
-  waitlistEnabled: boolean;
-  church: {
-    name: string;
-    slug: string;
-  };
-  registrations: Array<{
-    id: string;
-    status:
-      | "PENDING"
-      | "CONFIRMED"
-      | "CANCELLED"
-      | "CHECKED_IN";
-    waitlistedAt: string | null;
-  }>;
-};
-
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:3333";
+  process.env.EVENTS_API_BASE_URL ??
+  "http://localhost:3002";
+
+function isValidPublicSlug(value: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(value);
+}
+
+export async function generateMetadata({
+  params
+}: PublicEventPageProps): Promise<Metadata> {
+  const { publicSlug } = await params;
+
+  if (!isValidPublicSlug(publicSlug)) {
+    return {};
+  }
+
+  return {
+    manifest:
+      `/${encodeURIComponent(publicSlug)}/manifest.webmanifest`
+  };
+}
 
 async function getPublicEvent(
   publicSlug: string
 ): Promise<PublicEvent | null> {
+  if (!isValidPublicSlug(publicSlug)) {
+    return null;
+  }
+
   try {
     const response = await fetch(
-      `${API_BASE_URL}/public/event-pages/${encodeURIComponent(publicSlug)}`,
+      `${API_BASE_URL}/public/event-pages/${encodeURIComponent(publicSlug)}/app`,
       {
         cache: "no-store"
       }
@@ -53,7 +54,17 @@ async function getPublicEvent(
       return null;
     }
 
-    return await response.json() as PublicEvent;
+    const data = await response.json() as PublicEvent;
+
+    return {
+      title: data.title,
+      slug: data.slug,
+      date: data.date,
+      church: {
+        name: data.church.name,
+        slug: data.church.slug
+      }
+    };
   } catch {
     return null;
   }
@@ -123,9 +134,8 @@ export default async function PublicEventPage({
 
   return (
     <ParticipantEventApp
-      churchSlug={event.church.slug}
       event={event}
-      eventSlug={event.slug}
+      publicSlug={publicSlug}
     />
   );
 }
