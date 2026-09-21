@@ -1,0 +1,146 @@
+.page {
+  background: radial-gradient(circle at top left, rgba(37, 99, 235, .18), transparent 34%), linear-gradient(135deg, #020617, #0f172a 50%, #111827);
+  color: #e2e8f0;
+  min-height: 100vh;
+  padding: 28px 24px 48px;
+}
+
+.surface {
+  color-scheme: dark;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.surface p { line-height: 1.6; }
+.surface small { font-size: 12px; font-weight: 400; line-height: 1.6; }
+
+.header {
+  background: linear-gradient(135deg, rgba(30, 64, 175, .28), rgba(15, 23, 42, .86));
+  border: 1px solid rgba(96, 165, 250, .26);
+  border-radius: 26px;
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+}
+
+.card, .integrationCard {
+  background: rgba(15, 23, 42, .86);
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 20px;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 24px;
+}
+
+.form { display: grid; gap: 20px; min-width: 0; }
+.form h4 { border-top: 1px solid rgba(148, 163, 184, .18); padding-top: 22px; font-size: 16px; }
+.field { color: #e2e8f0; display: grid; font-size: 13px; font-weight: 700; gap: 8px; min-width: 0; }
+
+.input {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 12px;
+  color: #f8fafc;
+  color-scheme: dark;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  min-height: 44px;
+  min-width: 0;
+  padding: 11px 12px;
+  width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input::placeholder { color: #64748b; opacity: 1; }
+.input:hover { border-color: #64748b; }
+.input:focus-visible { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59, 130, 246, .18); outline: none; }
+textarea.input { min-height: 112px; resize: vertical; }
+select.input[multiple] { padding: 6px; }
+.input option { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; }
+.input option:checked { background: #1e40af; color: white; }
+
+.checkField {
+  align-items: center;
+  background: rgba(2, 6, 23, .28);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 10px;
+  min-height: 44px;
+  padding: 12px;
+}
+.checkbox { accent-color: #2563eb; flex: 0 0 auto; height: 18px; margin: 0; width: 18px; }
+.scopes { border: 0; display: grid; gap: 10px; margin: 0; min-width: 0; padding: 0; }
+.scopes legend { color: #cbd5e1; font-size: 13px; font-weight: 700; margin-bottom: 10px; padding: 0; }
+
+.button, .primary, .danger {
+  align-items: center;
+  background: rgba(15, 23, 42, .68);
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 12px;
+  color: #e2e8f0;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  justify-self: start;
+  line-height: 1.4;
+  min-height: 44px;
+  padding: 11px 16px;
+  text-align: center;
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.danger { background: rgba(127, 29, 29, .2); border-color: rgba(252, 165, 165, .28); color: #fca5a5; }
+.button:hover:not(:disabled) { background: #1e293b; border-color: #64748b; }
+.primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.danger:hover:not(:disabled) { background: rgba(127, 29, 29, .4); }
+.button:focus-visible, .primary:focus-visible, .danger:focus-visible, .checkbox:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }
+.button:disabled, .primary:disabled, .danger:disabled { cursor: not-allowed; opacity: .55; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.modalActions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.columns { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+.integrationGrid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.integrationCard { grid-template-rows: auto auto 1fr; align-content: start; gap: 14px; }
+.integrationCard > .actions { align-self: end; padding-top: 8px; }
+.listItem, .sessionItem {
+  background: rgba(2, 6, 23, .32);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+}
+.sessionItem { align-items: center; grid-template-columns: minmax(0, 1fr) auto; }
+.mapPoint { align-items: end; background: rgba(2, 6, 23, .28); border: 1px solid rgba(148, 163, 184, .16); border-radius: 14px; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; padding: 16px; }
+.overlay { align-items: center; background: rgba(2, 6, 23, .78); display: flex; inset: 0; justify-content: center; overflow-y: auto; padding: 24px; position: fixed; z-index: 60; }
+.modal { background: linear-gradient(135deg, #0f172a, #1e293b); border: 1px solid rgba(148, 163, 184, .22); border-radius: 24px; box-shadow: 0 28px 90px rgba(2, 6, 23, .48); display: grid; gap: 20px; max-height: calc(100dvh - 48px); max-width: 520px; min-width: 0; overflow-y: auto; padding: 28px; width: 100%; }
+
+@media (max-width: 900px) {
+  /* Override only the existing inline grid on these settings screens. */
+  .responsiveLayout { grid-template-columns: minmax(0, 1fr) !important; }
+  .responsiveLayout > nav { position: static; }
+}
+@media (max-width: 600px) {
+  .page { padding: 20px 16px 32px; }
+  .participantPage { padding: 20px 16px !important; }
+  .header, .card, .integrationCard { border-radius: 18px; padding: 18px; }
+  .sessionItem, .mapPoint { grid-template-columns: minmax(0, 1fr); }
+  .actions > button, .modalActions > button { flex: 1 1 auto; }
+  .form > button { justify-self: stretch; }
+  .overlay { padding: 16px; }
+  .modal { max-height: calc(100dvh - 32px); padding: 20px; }
+  .input { font-size: 16px; }
+}

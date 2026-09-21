@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { validateMapImage } from "./participant-map-image.js";
 import type {
   CreateEventAppSessionInput,
   UpdateEventAppMapInput,
@@ -46,7 +47,8 @@ async function requireEvent(
     select: {
       id: true,
       publicSlug: true,
-      participantMapImageUrl: true
+      participantMapImageUrl: true,
+      appMapImage: { select: { updatedAt: true } }
     }
   });
 
@@ -177,6 +179,7 @@ export async function getEventParticipantAppAdmin(
     })),
     map: {
       imageUrl: event.participantMapImageUrl,
+      imageVersion: event.appMapImage?.updatedAt.toISOString() ?? null,
       points
     },
     registrations: registrations.map((registration) => ({
@@ -356,6 +359,7 @@ export async function updateEventAppMap(
   input: UpdateEventAppMapInput
 ) {
   const event = await requireEvent(prisma, churchId, eventId);
+  const image = input.image ? await validateMapImage(input.image) : null;
 
   await prisma.$transaction(async (transaction) => {
     await transaction.event.update({
@@ -363,9 +367,20 @@ export async function updateEventAppMap(
         id: event.id
       },
       data: {
-        participantMapImageUrl: nullableText(input.imageUrl)
+        ...(image ? { participantMapImageUrl: null } :
+          input.imageUrl !== undefined ? { participantMapImageUrl: nullableText(input.imageUrl) } : {})
       }
     });
+
+    if (image) {
+      await transaction.eventAppMapImage.upsert({
+        where: { eventId },
+        create: { eventId, ...image },
+        update: image
+      });
+    } else if (input.imageUrl !== undefined) {
+      await transaction.eventAppMapImage.deleteMany({ where: { eventId } });
+    }
 
     await transaction.eventAppMapPoint.deleteMany({
       where: {
@@ -425,6 +440,22 @@ export async function getPublicParticipantAppEvent(
   return event;
 }
 
+export async function getEventAppMapImage(prisma: PrismaClient, churchId: string, eventId: string) {
+  await requireEvent(prisma, churchId, eventId);
+  const image = await prisma.eventAppMapImage.findUnique({ where: { eventId } });
+  if (!image) throw new Error("EVENT_APP_MAP_IMAGE_NOT_FOUND");
+  return image;
+}
+
+export async function getParticipantAppMapImage(prisma: PrismaClient, publicSlug: string, checkInToken: string) {
+  await getParticipantAppAccessByPublicSlug(prisma, publicSlug, checkInToken);
+  const image = await prisma.eventAppMapImage.findFirst({
+    where: { event: { publicSlug, isPublic: true, deletedAt: null } }
+  });
+  if (!image) throw new Error("EVENT_APP_MAP_IMAGE_NOT_FOUND");
+  return image;
+}
+
 export async function getParticipantAppAccessByPublicSlug(
   prisma: PrismaClient,
   publicSlug: string,
@@ -473,6 +504,7 @@ export async function getParticipantAppAccessByPublicSlug(
           title: true,
           date: true,
           participantMapImageUrl: true,
+          appMapImage: { select: { updatedAt: true } },
           church: {
             select: {
               name: true
@@ -588,6 +620,7 @@ export async function getParticipantAppAccessByPublicSlug(
     })),
     map: {
       imageUrl: registration.event.participantMapImageUrl,
+      imageVersion: registration.event.appMapImage?.updatedAt.toISOString() ?? null,
       points: registration.event.appMapPoints
     }
   };

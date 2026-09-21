@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import Organizer from "../../../../events-organizer/app/organizer";
 import {
   CalendarDays,
   CalendarPlus,
@@ -79,13 +80,6 @@ const selectorStyle: CSSProperties = {
   fontWeight: 700,
   padding: "11px 12px",
   width: "100%"
-};
-
-const contentGridStyle: CSSProperties = {
-  alignItems: "start",
-  display: "grid",
-  gap: "24px",
-  gridTemplateColumns: "minmax(210px, 250px) minmax(0, 1fr)"
 };
 
 const contentColumnStyle: CSSProperties = {
@@ -297,6 +291,12 @@ export function EventModuleNav({
 }) {
   const isWorkspace = variant === "workspace";
   const hasSelectedEvent = Boolean(selectedEventId);
+  const [organizerOpen, setOrganizerOpen] = useState(false);
+  const organizerDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (organizerOpen) organizerDialog.current?.showModal();
+  }, [organizerOpen]);
 
   function handleSelectedEventIdChange(nextEventId: string) {
     persistSelectedEventId(nextEventId);
@@ -348,6 +348,7 @@ export function EventModuleNav({
   }
 
   return (
+    <>
     <nav className={styles.nav}>
       <div className={styles.block}>
         {events.length === 0 && !selectedEventId ? (
@@ -425,6 +426,13 @@ export function EventModuleNav({
           "Aplicativo do Participante",
           Smartphone
         )}
+        <button
+          className={navItemClassName(organizerOpen)}
+          onClick={() => setOrganizerOpen(true)}
+          type="button"
+        >
+          <NavItemContent icon={Smartphone} label="Aplicativo do Organizador" />
+        </button>
         <Link
           className={navItemClassName(productActive === "api-keys")}
           href="/dashboard/eventos/api-keys"
@@ -439,6 +447,23 @@ export function EventModuleNav({
         </Link>
       </div>
     </nav>
+    {organizerOpen ? (
+      <dialog
+        ref={organizerDialog}
+        className={styles.organizerDialog}
+        aria-label="Aplicativo do Organizador"
+        onClose={() => setOrganizerOpen(false)}
+      >
+        <button className={styles.organizerClose} type="button" onClick={() => organizerDialog.current?.close()}>
+          Fechar
+        </button>
+        <Organizer {...(selectedEventId ? { initialEvent: {
+          id: selectedEventId,
+          title: events.find((event) => event.id === selectedEventId)?.title ?? fallbackTitle ?? "Evento"
+        } } : {})} />
+      </dialog>
+    ) : null}
+    </>
   );
 }
 
@@ -477,7 +502,7 @@ export function EventModuleChrome({
         {isProduct ? "Voltar ao painel" : "Meus eventos"}
       </EventModuleBackLink>
       {header}
-      <div style={contentGridStyle}>
+      <div className={styles.layout}>
         <EventModuleNav
           activeSection={activeSection}
           events={events}

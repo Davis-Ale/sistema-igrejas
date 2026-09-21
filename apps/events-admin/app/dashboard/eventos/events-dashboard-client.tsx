@@ -273,8 +273,9 @@ export function EventsDashboardClient({
         style={{
           display: "grid",
           gap: "24px",
-          margin: "0 auto",
-          maxWidth: "1180px"
+          margin: 0,
+          width: "100%",
+          minWidth: 0
         }}
       >
         <EventModuleChrome

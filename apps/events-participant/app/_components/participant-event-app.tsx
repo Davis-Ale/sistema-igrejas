@@ -1,4 +1,5 @@
 "use client";
+import { ParticipantMapImage } from "./participant-map-image";
 
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -31,6 +32,7 @@ type ParticipantAppData = {
   sessions: EventSession[];
   map: {
     imageUrl: string | null;
+    imageVersion?: string | null;
     points: Array<{
       id: string;
       name: string;
@@ -789,11 +791,14 @@ export function ParticipantEventApp({
         {activeTab === "map" ? (
           <section>
             <p className={styles.sectionLabel}>Mapa do evento</p>
-            {appData.map.imageUrl ? (
+            {appData.map.imageUrl || appData.map.imageVersion ? (
               <div className={styles.mapImageCard}>
-                <img
-                  alt={`Planta de ${appData.event.title}`}
-                  src={appData.map.imageUrl}
+                <ParticipantMapImage
+                  publicSlug={publicSlug}
+                  checkInToken={appData.registration.checkInToken}
+                  imageVersion={appData.map.imageVersion}
+                  imageUrl={appData.map.imageUrl}
+                  title={appData.event.title}
                 />
               </div>
             ) : (

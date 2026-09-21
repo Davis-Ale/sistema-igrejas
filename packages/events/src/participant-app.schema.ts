@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_MAP_IMAGE_BASE64 } from "./participant-map-image.js";
 
 const optionalText = (max: number) =>
   z.union([
@@ -67,7 +68,11 @@ const httpsUrlSchema = z
   });
 
 export const updateEventAppMapSchema = z.object({
-  imageUrl: z.union([httpsUrlSchema, z.literal(""), z.null()]),
+  imageUrl: z.union([httpsUrlSchema, z.literal(""), z.null()]).optional(),
+  image: z.object({
+    mimeType: z.enum(["image/png", "image/jpeg"]),
+    dataBase64: z.string().min(1).max(MAX_MAP_IMAGE_BASE64)
+  }).optional(),
   points: z.array(
     z.object({
       id: z.string().trim().min(1).optional(),

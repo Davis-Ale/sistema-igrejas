@@ -1,5 +1,10 @@
 "use client";
 
+import settings from "../event-settings.module.css";
+import chromeStyles from "../event-module-chrome.module.css";
+import participantStyles from "./participant-app.module.css";
+import { EventCoverEditor } from "./event-cover-editor";
+
 import QRCode from "react-qr-code";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,6 +12,7 @@ import {
   FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import { CreateEventModal } from "../create-event-modal";
@@ -325,6 +331,7 @@ type EventParticipantAppAdminResponse = {
   sessions: EventAppSessionAdmin[];
   map: {
     imageUrl: string | null;
+    imageVersion?: string | null;
     points: EventAppMapPoint[];
   };
   registrations: EventAppRegistrationOption[];
@@ -869,6 +876,13 @@ export function EventWorkspaceClient({
   ] = useState<string[]>([]);
   const [eventAppMapImageUrl, setEventAppMapImageUrl] =
     useState("");
+  const [eventAppMapFile, setEventAppMapFile] = useState<File | null>(null);
+  const eventAppMapFileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEventAppMapFile(null);
+    if (eventAppMapFileInput.current) eventAppMapFileInput.current.value = "";
+  }, [eventId]);
   const [eventAppMapPoints, setEventAppMapPoints] =
     useState<EventAppMapPoint[]>([]);
   const [formFields, setFormFields] =
@@ -1382,11 +1396,20 @@ export function EventWorkspaceClient({
     setEventAppMessage(null);
 
     try {
+      const image = eventAppMapFile ? {
+        mimeType: eventAppMapFile.type,
+        dataBase64: await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+          reader.readAsDataURL(eventAppMapFile);
+        })
+      } : undefined;
       const response = await fetch(
         `${API_BASE_URL}/api/events/${eventId}/participant-app/map`,
         {
           body: JSON.stringify({
-            imageUrl: eventAppMapImageUrl,
+            image,
             points: eventAppMapPoints.map((point, index) => ({
               name: point.name,
               location: point.location,
@@ -1419,6 +1442,8 @@ export function EventWorkspaceClient({
       setEventParticipantApp(appContent);
       setEventAppMapImageUrl(appContent.map.imageUrl ?? "");
       setEventAppMapPoints(appContent.map.points);
+      setEventAppMapFile(null);
+      if (eventAppMapFileInput.current) eventAppMapFileInput.current.value = "";
       setEventAppMessage("Mapa salvo.");
     } catch {
       setEventAppError("Não foi possível salvar o mapa agora.");
@@ -4019,6 +4044,7 @@ export function EventWorkspaceClient({
 
   return (
     <main
+      className={activeSection === "event-app" ? settings.participantPage : undefined}
       style={{
         background:
           "radial-gradient(circle at top left, rgba(37, 99, 235, 0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 50%, #111827 100%)",
@@ -4031,8 +4057,9 @@ export function EventWorkspaceClient({
         style={{
           display: "grid",
           gap: "24px",
-          margin: "0 auto",
-          maxWidth: "1180px"
+          margin: 0,
+          width: "100%",
+          minWidth: 0
         }}
       >
         <EventModuleBackLink href="/dashboard/eventos">
@@ -4191,15 +4218,7 @@ export function EventWorkspaceClient({
               </div>
             </header>
 
-            <div
-              style={{
-                alignItems: "start",
-                display: "grid",
-                gap: "24px",
-                gridTemplateColumns:
-                  "minmax(210px, 250px) minmax(0, 1fr)"
-              }}
-            >
+            <div className={chromeStyles.layout}>
               <EventModuleNav
                 activeSection={activeSection}
                 events={eventsList}
@@ -5496,6 +5515,8 @@ export function EventWorkspaceClient({
                   </div>
                 ) : null}
               </header>
+
+              <EventCoverEditor key={event.id} eventId={event.id} apiBaseUrl={API_BASE_URL} getToken={getSessionToken} />
 
               {informationMessage ? (
                 <p
@@ -11687,22 +11708,11 @@ export function EventWorkspaceClient({
 
 {activeSection === "event-app" ? (
   <section
+    className={participantStyles.surface}
     id="aplicativo-do-evento"
-    style={{
-      display: "grid",
-      gap: "20px"
-    }}
   >
     <header
-      style={{
-        background:
-          "linear-gradient(135deg, rgba(30, 64, 175, 0.28), rgba(15, 23, 42, 0.86))",
-        border: "1px solid rgba(96, 165, 250, 0.26)",
-        borderRadius: "26px",
-        display: "grid",
-        gap: "14px",
-        padding: "26px"
-      }}
+      className={settings.header}
     >
       <div>
         <p
@@ -11821,14 +11831,7 @@ export function EventWorkspaceClient({
     {eventParticipantApp ? (
       <>
         <section
-          style={{
-            background: "rgba(15, 23, 42, 0.86)",
-            border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "22px",
-            display: "grid",
-            gap: "18px",
-            padding: "24px"
-          }}
+          className={`${participantStyles.card} ${participantStyles.scheduleCard}`}
         >
           <div>
             <h3 style={{ color: "#ffffff", margin: "0 0 6px" }}>
@@ -11841,20 +11844,11 @@ export function EventWorkspaceClient({
           </div>
 
           {eventParticipantApp.sessions.length > 0 ? (
-            <div style={{ display: "grid", gap: "10px" }}>
+            <div className={participantStyles.list}>
               {eventParticipantApp.sessions.map((session) => (
                 <article
                   key={session.id}
-                  style={{
-                    alignItems: "center",
-                    background: "rgba(2, 6, 23, 0.36)",
-                    border: "1px solid rgba(148, 163, 184, 0.16)",
-                    borderRadius: "14px",
-                    display: "grid",
-                    gap: "12px",
-                    gridTemplateColumns: "minmax(0, 1fr) auto",
-                    padding: "14px"
-                  }}
+                  className={participantStyles.sessionItem}
                 >
                   <div>
                     <strong style={{ color: "#ffffff" }}>
@@ -11874,14 +11868,14 @@ export function EventWorkspaceClient({
                       {session.isPublished ? "Publicada" : "Rascunho"}
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
+                  <div className={participantStyles.actions}>
+                    <button className={participantStyles.button}
                       onClick={() => editEventAppSession(session)}
                       type="button"
                     >
                       Editar
                     </button>
-                    <button
+                    <button className={participantStyles.danger}
                       disabled={isSavingEventApp}
                       onClick={() => void removeEventAppSession(session.id)}
                       type="button"
@@ -11893,23 +11887,23 @@ export function EventWorkspaceClient({
               ))}
             </div>
           ) : (
-            <p style={{ color: "#94a3b8", margin: 0 }}>
+            <p className={participantStyles.empty} style={{ color: "#94a3b8", margin: 0 }}>
               Nenhuma sessão cadastrada.
             </p>
           )}
 
           <form
             onSubmit={saveEventAppSession}
-            style={{ display: "grid", gap: "14px" }}
+            className={`${participantStyles.form} ${participantStyles.scheduleForm}`}
           >
             <h4 style={{ color: "#ffffff", margin: 0 }}>
               {editingEventAppSessionId
                 ? "Editar sessão"
                 : "Nova sessão"}
             </h4>
-            <label>
+            <label className={participantStyles.field}>
               Título
-              <input
+              <input className={participantStyles.input}
                 maxLength={160}
                 onChange={(changeEvent) =>
                   setEventAppSessionTitle(changeEvent.target.value)
@@ -11919,15 +11913,11 @@ export function EventWorkspaceClient({
               />
             </label>
             <div
-              style={{
-                display: "grid",
-                gap: "12px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))"
-              }}
+              className={participantStyles.columns}
             >
-              <label>
+              <label className={participantStyles.field}>
                 Início
-                <input
+                <input className={participantStyles.input}
                   onChange={(changeEvent) =>
                     setEventAppSessionStartsAt(changeEvent.target.value)
                   }
@@ -11936,9 +11926,9 @@ export function EventWorkspaceClient({
                   value={eventAppSessionStartsAt}
                 />
               </label>
-              <label>
+              <label className={participantStyles.field}>
                 Término
-                <input
+                <input className={participantStyles.input}
                   onChange={(changeEvent) =>
                     setEventAppSessionEndsAt(changeEvent.target.value)
                   }
@@ -11949,15 +11939,11 @@ export function EventWorkspaceClient({
               </label>
             </div>
             <div
-              style={{
-                display: "grid",
-                gap: "12px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))"
-              }}
+              className={participantStyles.detailsColumns}
             >
-              <label>
+              <label className={participantStyles.field}>
                 Tipo
-                <input
+                <input className={participantStyles.input}
                   maxLength={80}
                   onChange={(changeEvent) =>
                     setEventAppSessionType(changeEvent.target.value)
@@ -11965,9 +11951,9 @@ export function EventWorkspaceClient({
                   value={eventAppSessionType}
                 />
               </label>
-              <label>
+              <label className={participantStyles.field}>
                 Facilitador
-                <input
+                <input className={participantStyles.input}
                   maxLength={120}
                   onChange={(changeEvent) =>
                     setEventAppSessionFacilitator(changeEvent.target.value)
@@ -11975,9 +11961,9 @@ export function EventWorkspaceClient({
                   value={eventAppSessionFacilitator}
                 />
               </label>
-              <label>
+              <label className={participantStyles.field}>
                 Local
-                <input
+                <input className={participantStyles.input}
                   maxLength={160}
                   onChange={(changeEvent) =>
                     setEventAppSessionLocation(changeEvent.target.value)
@@ -11986,9 +11972,9 @@ export function EventWorkspaceClient({
                 />
               </label>
             </div>
-            <label>
+            <label className={`${participantStyles.field} ${participantStyles.scheduleDetails}`}>
               Detalhes
-              <textarea
+              <textarea className={participantStyles.input}
                 maxLength={2000}
                 onChange={(changeEvent) =>
                   setEventAppSessionDetails(changeEvent.target.value)
@@ -11997,9 +11983,9 @@ export function EventWorkspaceClient({
                 value={eventAppSessionDetails}
               />
             </label>
-            <label>
+            <label className={participantStyles.participants}>
               Participantes em “Meus”
-              <select
+              <select className={participantStyles.input}
                 multiple
                 onChange={(changeEvent) =>
                   setEventAppSessionRegistrationIds(
@@ -12029,14 +12015,11 @@ export function EventWorkspaceClient({
                 Use Ctrl ou Cmd para selecionar mais de uma.
               </small>
             </label>
+            <div className={participantStyles.scheduleFooter}>
             <label
-              style={{
-                alignItems: "center",
-                display: "flex",
-                gap: "8px"
-              }}
+              className={participantStyles.checkField}
             >
-              <input
+              <input className={participantStyles.checkbox}
                 checked={eventAppSessionPublished}
                 onChange={(changeEvent) =>
                   setEventAppSessionPublished(changeEvent.target.checked)
@@ -12045,12 +12028,12 @@ export function EventWorkspaceClient({
               />
               Publicar no aplicativo
             </label>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button disabled={isSavingEventApp} type="submit">
+            <div className={participantStyles.actions}>
+              <button className={participantStyles.primary} disabled={isSavingEventApp} type="submit">
                 {isSavingEventApp ? "Salvando..." : "Salvar sessão"}
               </button>
               {editingEventAppSessionId ? (
-                <button
+                <button className={participantStyles.button}
                   onClick={resetEventAppSessionForm}
                   type="button"
                 >
@@ -12058,58 +12041,60 @@ export function EventWorkspaceClient({
                 </button>
               ) : null}
             </div>
+            </div>
           </form>
         </section>
 
         <section
-          style={{
-            background: "rgba(15, 23, 42, 0.86)",
-            border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "22px",
-            display: "grid",
-            gap: "18px",
-            padding: "24px"
-          }}
+          className={`${participantStyles.card} ${participantStyles.mapCard}`}
         >
           <div>
             <h3 style={{ color: "#ffffff", margin: "0 0 6px" }}>
               Mapa
             </h3>
             <p style={{ color: "#94a3b8", margin: 0 }}>
-              Informe uma URL HTTPS da planta e os pontos úteis.
-              Não há upload de arquivos.
+              Envie a planta do evento e informe os pontos úteis.
             </p>
           </div>
           <form
             onSubmit={saveEventAppMap}
-            style={{ display: "grid", gap: "14px" }}
+            className={participantStyles.form}
           >
-            <label>
-              URL HTTPS da planta
-              <input
+            <label className={participantStyles.field}>
+              Imagem da planta
+              <input className={participantStyles.input}
+                ref={eventAppMapFileInput}
+                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                disabled={isSavingEventApp}
                 onChange={(changeEvent) =>
-                  setEventAppMapImageUrl(changeEvent.target.value)
+                  {
+                    const file = changeEvent.target.files?.[0] ?? null;
+                    setEventAppMapFile(null);
+                    setEventAppError(null);
+                    setEventAppMessage(null);
+                    if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size === 0 || file.size > 5 * 1024 * 1024)) {
+                      setEventAppError("Selecione uma imagem JPG ou PNG de até 5 MB.");
+                      changeEvent.target.value = "";
+                      return;
+                    }
+                    setEventAppMapFile(file);
+                  }
                 }
-                placeholder="https://..."
-                type="url"
-                value={eventAppMapImageUrl}
+                type="file"
               />
+              <small>JPG ou PNG, até 5 MB e 16 megapixels. A imagem será publicada ao salvar o mapa.</small>
+              {eventAppMapFile ? <small>Nova planta: {eventAppMapFile.name}</small> :
+                (eventAppMapImageUrl || eventParticipantApp.map.imageVersion) ? <small>Uma planta já está salva. Selecione outra imagem para substituí-la.</small> : null}
             </label>
-            <div style={{ display: "grid", gap: "10px" }}>
+            <div className={participantStyles.list}>
               {eventAppMapPoints.map((point, index) => (
                 <div
                   key={point.id ?? `new-${index}`}
-                  style={{
-                    alignItems: "end",
-                    display: "grid",
-                    gap: "10px",
-                    gridTemplateColumns:
-                      "minmax(0, 1fr) minmax(0, 1.4fr) auto"
-                  }}
+                  className={participantStyles.mapPoint}
                 >
-                  <label>
+                  <label className={participantStyles.field}>
                     Nome
-                    <input
+                    <input className={participantStyles.input}
                       maxLength={100}
                       onChange={(changeEvent) =>
                         setEventAppMapPoints((current) =>
@@ -12127,9 +12112,9 @@ export function EventWorkspaceClient({
                       value={point.name}
                     />
                   </label>
-                  <label>
+                  <label className={participantStyles.field}>
                     Localização
-                    <input
+                    <input className={participantStyles.input}
                       maxLength={200}
                       onChange={(changeEvent) =>
                         setEventAppMapPoints((current) =>
@@ -12147,7 +12132,7 @@ export function EventWorkspaceClient({
                       value={point.location}
                     />
                   </label>
-                  <button
+                  <button className={participantStyles.danger}
                     onClick={() =>
                       setEventAppMapPoints((current) =>
                         current.filter(
@@ -12162,7 +12147,8 @@ export function EventWorkspaceClient({
                 </div>
               ))}
             </div>
-            <button
+            <div className={participantStyles.actions}>
+            <button className={participantStyles.button}
               onClick={() =>
                 setEventAppMapPoints((current) => [
                   ...current,
@@ -12178,9 +12164,10 @@ export function EventWorkspaceClient({
             >
               Adicionar ponto útil
             </button>
-            <button disabled={isSavingEventApp} type="submit">
+            <button className={participantStyles.primary} disabled={isSavingEventApp} type="submit">
               {isSavingEventApp ? "Salvando..." : "Salvar mapa"}
             </button>
+            </div>
           </form>
         </section>
       </>

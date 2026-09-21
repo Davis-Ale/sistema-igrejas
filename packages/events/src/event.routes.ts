@@ -31,6 +31,7 @@ import {
 } from "./event.service.js";
 import { listEventRegistrations } from "./registration-list.service.js";
 import { createEventRegistrationsCsvExport } from "./registration-export.service.js";
+import { registerEventCoverRoutes } from "./event-cover.routes.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -170,6 +171,7 @@ export async function registerEventRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
+  await registerEventCoverRoutes(app, prisma);
   app.get("/events", async (request, reply) => {
     try {
       const churchId = getChurchId(request);

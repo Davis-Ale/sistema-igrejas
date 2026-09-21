@@ -442,6 +442,8 @@ model Event {
   discounts        EventDiscount[]
   appSessions      EventAppSession[]
   appMapPoints     EventAppMapPoint[]
+  appMapImage      EventAppMapImage?
+  coverImage      EventCoverImage?
   appSessionRegistrations EventAppSessionRegistration[]
   transactions     Transaction[]
 
@@ -455,6 +457,22 @@ model Event {
   @@index([churchId, publicRegistrationEnabled])
   @@index([churchId, trailStageId])
   @@index([churchId, deletedAt])
+}
+
+model EventCoverImage {
+  eventId     String   @id
+  data        Bytes
+  contentType String
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventAppMapImage {
+  eventId     String   @id
+  data        Bytes
+  contentType String
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 model EventAppSession {

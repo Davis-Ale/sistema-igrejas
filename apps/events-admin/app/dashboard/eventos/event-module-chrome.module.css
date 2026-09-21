@@ -1,3 +1,20 @@
+.layout {
+  align-items: start;
+  display: grid;
+  column-gap: 12px;
+  row-gap: 24px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+  transition: grid-template-columns 220ms ease;
+}
+
+.layout:has(> .nav:hover) {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.layout > :not(.nav) { min-width: 0; }
+
 .nav {
   background: rgba(15, 23, 42, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -7,6 +24,8 @@
   padding: 14px 12px;
   position: sticky;
   top: 24px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .block {
@@ -82,6 +101,24 @@
 
 .label {
   min-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 160ms ease;
+}
+
+.nav:hover .label { opacity: 1; }
+.nav:not(:hover) .selector { opacity: 0; }
+.nav:not(:hover) .emptyHint { opacity: 0; }
+.selector { transition: opacity 160ms ease; }
+
+@media (hover: none) {
+  .layout, .layout:has(> .nav:hover) { grid-template-columns: minmax(0, 1fr); }
+  .nav { position: static; }
+  .nav .label, .nav .selector, .nav .emptyHint { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout, .label, .selector { transition: none; }
 }
 
 .selector {
@@ -102,4 +139,50 @@
   font-size: 12px;
   margin: 0 0 4px;
   padding: 4px 10px 8px;
+}
+.organizerDialog {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.48);
+  color: #f8fafc;
+  color-scheme: dark;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 16px;
+  width: min(680px, calc(100vw - 32px));
+}
+
+.organizerDialog::backdrop {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.organizerClose {
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: #93c5fd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 10px;
+}
+
+.organizerClose:hover {
+  background: #1e293b;
+}
+
+.organizerClose:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .organizerDialog {
+    max-height: calc(100dvh - 24px);
+    padding: 12px;
+    width: calc(100vw - 24px);
+  }
 }

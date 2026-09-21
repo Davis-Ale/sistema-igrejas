@@ -1,5 +1,7 @@
 "use client";
 
+import settings from "../event-settings.module.css";
+
 import { FormEvent, useEffect, useState } from "react";
 import { CreateEventModal } from "../create-event-modal";
 import {
@@ -325,11 +327,7 @@ export function EventApiKeysClient() {
 
   return (
     <main
-      style={{
-        color: "#e2e8f0",
-        minHeight: "100vh",
-        padding: "28px 24px 48px"
-      }}
+      className={`${settings.page} ${settings.surface}`}
     >
       <section
         style={{
@@ -342,13 +340,7 @@ export function EventApiKeysClient() {
         <EventModuleChrome
           header={
             <header
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.78))",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "28px",
-                padding: "28px"
-              }}
+              className={settings.header}
             >
               <p
                 style={{
@@ -427,40 +419,20 @@ export function EventApiKeysClient() {
                 {revealedToken}
               </code>
               <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "10px"
-                }}
+                className={settings.actions}
               >
                 <button
                   onClick={() => {
                     void handleCopyToken();
                   }}
-                  style={{
-                    background: "#2563eb",
-                    border: 0,
-                    borderRadius: "10px",
-                    color: "#ffffff",
-                    cursor: "pointer",
-                    fontWeight: 800,
-                    padding: "10px 14px"
-                  }}
+                  className={settings.primary}
                   type="button"
                 >
                   Copiar
                 </button>
                 <button
                   onClick={closeRevealBanner}
-                  style={{
-                    background: "rgba(15, 23, 42, 0.68)",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                    borderRadius: "10px",
-                    color: "#e2e8f0",
-                    cursor: "pointer",
-                    fontWeight: 800,
-                    padding: "10px 14px"
-                  }}
+                  className={settings.button}
                   type="button"
                 >
                   Entendi
@@ -497,14 +469,7 @@ export function EventApiKeysClient() {
           ) : null}
 
           <section
-            style={{
-              background: "rgba(15, 23, 42, 0.82)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "20px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
+            className={settings.card}
           >
             <h2
               style={{
@@ -517,70 +482,35 @@ export function EventApiKeysClient() {
             </h2>
             <form
               onSubmit={handleCreateKey}
-              style={{
-                display: "grid",
-                gap: "14px"
-              }}
+              className={settings.form}
             >
               <label
-                style={{
-                  color: "#e2e8f0",
-                  display: "grid",
-                  fontSize: "13px",
-                  fontWeight: 800,
-                  gap: "8px"
-                }}
+                className={settings.field}
               >
                 Nome
                 <input
                   onChange={(changeEvent) => setName(changeEvent.target.value)}
                   required
-                  style={{
-                    background: "#0f172a",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                    borderRadius: "12px",
-                    color: "#ffffff",
-                    font: "inherit",
-                    padding: "11px 12px"
-                  }}
+                  className={settings.input}
                   type="text"
                   value={name}
                 />
               </label>
               <label
-                style={{
-                  color: "#e2e8f0",
-                  display: "grid",
-                  fontSize: "13px",
-                  fontWeight: 800,
-                  gap: "8px"
-                }}
+                className={settings.field}
               >
                 Descrição (opcional)
                 <input
                   onChange={(changeEvent) =>
                     setDescription(changeEvent.target.value)
                   }
-                  style={{
-                    background: "#0f172a",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                    borderRadius: "12px",
-                    color: "#ffffff",
-                    font: "inherit",
-                    padding: "11px 12px"
-                  }}
+                  className={settings.input}
                   type="text"
                   value={description}
                 />
               </label>
               <fieldset
-                style={{
-                  border: 0,
-                  display: "grid",
-                  gap: "8px",
-                  margin: 0,
-                  padding: 0
-                }}
+                className={settings.scopes}
               >
                 <legend
                   style={{
@@ -595,16 +525,9 @@ export function EventApiKeysClient() {
                 {SCOPE_OPTIONS.map((option) => (
                   <label
                     key={option.value}
-                    style={{
-                      alignItems: "center",
-                      color: "#e2e8f0",
-                      display: "flex",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      gap: "8px"
-                    }}
+                    className={settings.checkField}
                   >
-                    <input
+                    <input className={settings.checkbox}
                       checked={selectedScopes.includes(option.value)}
                       onChange={() => toggleScope(option.value)}
                       type="checkbox"
@@ -615,21 +538,7 @@ export function EventApiKeysClient() {
               </fieldset>
               <button
                 disabled={isCreating || selectedScopes.length === 0}
-                style={{
-                  background: "#2563eb",
-                  border: 0,
-                  borderRadius: "12px",
-                  color: "#ffffff",
-                  cursor:
-                    isCreating || selectedScopes.length === 0
-                      ? "not-allowed"
-                      : "pointer",
-                  fontWeight: 900,
-                  justifySelf: "start",
-                  opacity:
-                    isCreating || selectedScopes.length === 0 ? 0.72 : 1,
-                  padding: "11px 16px"
-                }}
+                className={settings.primary}
                 type="submit"
               >
                 {isCreating ? "Criando..." : "Criar chave"}
@@ -638,14 +547,7 @@ export function EventApiKeysClient() {
           </section>
 
           <section
-            style={{
-              background: "rgba(15, 23, 42, 0.82)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "20px",
-              display: "grid",
-              gap: "14px",
-              padding: "22px"
-            }}
+            className={settings.card}
           >
             <h2
               style={{
@@ -673,13 +575,7 @@ export function EventApiKeysClient() {
                   return (
                     <article
                       key={item.id}
-                      style={{
-                        border: "1px solid rgba(148, 163, 184, 0.16)",
-                        borderRadius: "14px",
-                        display: "grid",
-                        gap: "8px",
-                        padding: "14px"
-                      }}
+                      className={settings.listItem}
                     >
                       <div
                         style={{
@@ -749,17 +645,7 @@ export function EventApiKeysClient() {
                             setRevokeError(null);
                             setRevokingKey(item);
                           }}
-                          style={{
-                            background: "rgba(127, 29, 29, 0.2)",
-                            border: "1px solid rgba(252, 165, 165, 0.28)",
-                            borderRadius: "10px",
-                            color: "#fca5a5",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 800,
-                            justifySelf: "start",
-                            padding: "8px 12px"
-                          }}
+                          className={settings.danger}
                           type="button"
                         >
                           Revogar
@@ -786,30 +672,11 @@ export function EventApiKeysClient() {
               setRevokeError(null);
             }
           }}
-          style={{
-            alignItems: "center",
-            background: "rgba(2, 6, 23, 0.72)",
-            display: "flex",
-            inset: 0,
-            justifyContent: "center",
-            padding: "24px",
-            position: "fixed",
-            zIndex: 60
-          }}
+          className={settings.overlay}
         >
           <div
             onClick={(clickEvent) => clickEvent.stopPropagation()}
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
-              border: "1px solid rgba(148, 163, 184, 0.22)",
-              borderRadius: "28px",
-              display: "grid",
-              gap: "18px",
-              maxWidth: "520px",
-              padding: "28px",
-              width: "100%"
-            }}
+            className={settings.modal}
           >
             <h2
               style={{
@@ -844,11 +711,7 @@ export function EventApiKeysClient() {
               </p>
             ) : null}
             <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end"
-              }}
+              className={settings.modalActions}
             >
               <button
                 disabled={isRevoking}
@@ -856,15 +719,7 @@ export function EventApiKeysClient() {
                   setRevokingKey(null);
                   setRevokeError(null);
                 }}
-                style={{
-                  background: "rgba(15, 23, 42, 0.68)",
-                  border: "1px solid rgba(148, 163, 184, 0.3)",
-                  borderRadius: "12px",
-                  color: "#e2e8f0",
-                  cursor: isRevoking ? "not-allowed" : "pointer",
-                  fontWeight: 900,
-                  padding: "11px 16px"
-                }}
+                className={settings.button}
                 type="button"
               >
                 Cancelar
@@ -874,15 +729,7 @@ export function EventApiKeysClient() {
                 onClick={() => {
                   void handleRevokeKey();
                 }}
-                style={{
-                  background: "rgba(127, 29, 29, 0.2)",
-                  border: "1px solid rgba(252, 165, 165, 0.35)",
-                  borderRadius: "12px",
-                  color: "#fca5a5",
-                  cursor: isRevoking ? "not-allowed" : "pointer",
-                  fontWeight: 900,
-                  padding: "11px 16px"
-                }}
+                className={settings.danger}
                 type="button"
               >
                 {isRevoking ? "Revogando..." : "Revogar"}

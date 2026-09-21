@@ -1,0 +1,181 @@
+.surface {
+  composes: surface from "../event-settings.module.css";
+  container-type: inline-size;
+  display: grid;
+  gap: 24px;
+}
+
+.card {
+  composes: card from "../event-settings.module.css";
+  gap: 24px;
+  padding: 28px;
+}
+
+.card > div:first-child { padding-bottom: 18px; border-bottom: 1px solid rgba(148, 163, 184, .16); }
+.card h3 { font-size: 20px; line-height: 1.3; }
+.card p { font-size: 14px; }
+
+.form {
+  composes: form from "../event-settings.module.css";
+  gap: 22px;
+}
+
+.form h4 { padding-top: 24px; line-height: 1.4; }
+.field { composes: field from "../event-settings.module.css"; gap: 9px; line-height: 1.5; }
+.input {
+  composes: input from "../event-settings.module.css";
+  background: rgba(2, 6, 23, .5);
+  min-height: 46px;
+  max-width: 100%;
+}
+
+.input[type="datetime-local"] { display: block; }
+.input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .8; padding: 4px; }
+textarea.input { min-height: 120px; }
+
+.columns, .detailsColumns { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.detailsColumns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.participants {
+  composes: field;
+  background: rgba(2, 6, 23, .24);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 14px;
+  gap: 12px;
+  padding: 18px;
+}
+
+.participants select { min-height: 144px; padding: 6px; }
+.participants option { padding: 12px; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.participants small { font-weight: 400; line-height: 1.6; }
+
+.checkField { composes: checkField from "../event-settings.module.css"; padding: 14px 16px; gap: 12px; }
+.checkbox { composes: checkbox from "../event-settings.module.css"; }
+.button { composes: button from "../event-settings.module.css"; }
+.primary { composes: primary from "../event-settings.module.css"; }
+.danger { composes: danger from "../event-settings.module.css"; }
+.actions { composes: actions from "../event-settings.module.css"; align-items: center; }
+.form > .actions { border-top: 1px solid rgba(148, 163, 184, .16); padding-top: 20px; }
+.list { display: grid; gap: 12px; min-width: 0; }
+.empty { background: rgba(2, 6, 23, .24); border: 1px dashed rgba(148, 163, 184, .24); border-radius: 14px; padding: 18px; }
+
+.sessionItem {
+  composes: sessionItem from "../event-settings.module.css";
+  gap: 18px;
+  padding: 18px;
+}
+.sessionItem strong { display: block; font-size: 15px; line-height: 1.5; }
+.sessionItem > div { min-width: 0; }
+.sessionItem .actions { justify-content: flex-end; }
+
+.mapPoint {
+  composes: mapPoint from "../event-settings.module.css";
+  gap: 16px;
+  padding: 18px;
+}
+.mapPoint .danger { min-height: 46px; }
+
+.card.mapCard { gap: 18px; padding: 22px; }
+.mapCard > div:first-child { padding-bottom: 14px; }
+.mapCard h3 { font-size: 18px; }
+.mapCard > div:first-child p { font-size: 13px; line-height: 1.5; }
+.mapCard .form { gap: 16px; }
+.mapCard .field { gap: 6px; }
+.mapCard .input { min-height: 44px; padding: 10px 12px; }
+.mapCard input[type="file"] { padding: 6px; cursor: pointer; }
+.mapCard input[type="file"]::file-selector-button { background: #1e293b; border: 1px solid rgba(148, 163, 184, .3); border-radius: 8px; color: #e2e8f0; cursor: pointer; font: inherit; margin-right: 12px; padding: 8px 12px; }
+.mapCard .field small { color: #94a3b8; font-size: 12px; font-weight: 400; line-height: 1.5; }
+.mapCard .list { gap: 12px; }
+.mapCard .list:empty { display: none; }
+.mapCard .mapPoint {
+  background: rgba(2, 6, 23, .3);
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 14px;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  padding: 16px;
+}
+.mapCard .mapPoint .danger { grid-column: auto; min-height: 44px; padding: 10px 14px; }
+.mapCard .form > .actions { justify-content: space-between; gap: 12px; padding-top: 16px; }
+.mapCard .actions > button { min-height: 44px; }
+
+.card.scheduleCard { padding: 18px; gap: 12px; }
+.scheduleCard > div:first-child { padding-bottom: 10px; }
+.scheduleCard h3 { font-size: 18px; }
+.scheduleCard > div:first-child p { font-size: 13px; line-height: 1.4; }
+.form.scheduleForm { gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.scheduleForm > * { grid-column: 1 / -1; }
+.scheduleForm h4 { padding-top: 10px; font-size: 14px; line-height: 1.3; }
+.scheduleForm .field { gap: 4px; font-size: 12px; }
+.scheduleForm .input { min-height: 36px; padding: 6px 9px; font-size: 14px; line-height: 1.4; }
+.scheduleForm .columns { gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scheduleForm .detailsColumns { gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scheduleForm .detailsColumns > :last-child { grid-column: auto; }
+.scheduleForm .scheduleDetails, .scheduleForm .participants { grid-column: auto; }
+.scheduleForm textarea.input { height: 80px; min-height: 80px; max-height: 90px; overflow-y: auto; }
+.scheduleForm .participants {
+  align-content: start;
+  align-self: start;
+  grid-template-rows: auto auto auto;
+  padding: 0;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+}
+.scheduleForm .participants select.input[multiple] {
+  display: block;
+  height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  border-radius: 10px;
+  padding: 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #0f172a;
+}
+.scheduleForm .participants option { padding: 5px 8px; line-height: 1.4; }
+.scheduleForm .participants small {
+  display: block;
+  margin-top: 2px;
+  padding-inline: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.scheduleFooter {
+  align-items: center;
+  border-top: 1px solid rgba(148, 163, 184, .16);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+.scheduleFooter .checkField { background: transparent; border: 0; min-height: 36px; padding: 0; gap: 8px; font-size: 12px; }
+.scheduleFooter .actions { gap: 8px; }
+.scheduleFooter .primary, .scheduleFooter .button { min-height: 36px; padding: 8px 12px; font-size: 12px; }
+
+@container (max-width: 680px) {
+  .mapCard .mapPoint { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mapCard .mapPoint .danger { grid-column: 1 / -1; justify-self: end; }
+  .detailsColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detailsColumns > :last-child { grid-column: 1 / -1; }
+  .sessionItem { grid-template-columns: minmax(0, 1fr); }
+  .sessionItem .actions { justify-content: flex-start; }
+  .mapPoint { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mapPoint .danger { grid-column: 1 / -1; }
+}
+
+@container (max-width: 480px) {
+  .card.mapCard { padding: 16px; gap: 16px; }
+  .mapCard .mapPoint { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .mapCard .mapPoint .danger { justify-self: stretch; }
+  .card { padding: 18px; gap: 20px; }
+  .columns, .detailsColumns, .mapPoint { grid-template-columns: minmax(0, 1fr); }
+  .participants, .mapPoint { padding: 14px; }
+  .input { font-size: 16px; }
+  .actions > button { flex: 1 1 100%; }
+  .mapPoint .danger { justify-self: stretch; }
+  .scheduleForm .scheduleDetails, .scheduleForm .participants { grid-column: 1 / -1; }
+  .scheduleFooter .actions > button { flex: 0 1 auto; }
+}

@@ -1,5 +1,8 @@
 "use client";
 
+import settings from "../event-settings.module.css";
+import brands from "./integration-brands.module.css";
+
 import { FormEvent, useEffect, useState } from "react";
 import { CreateEventModal } from "../create-event-modal";
 import {
@@ -26,6 +29,15 @@ type IntegrationProvider =
   | "RD_STATION";
 
 type IntegrationStatus = "DISCONNECTED" | "CONNECTED" | "ERROR";
+
+const PROVIDER_LOGO: Record<IntegrationProvider, string> = {
+  GOOGLE_ANALYTICS: "/integrations/google-analytics.svg",
+  GOOGLE_ADS: "/integrations/google-ads.svg",
+  META_PIXEL: "/integrations/meta.svg",
+  WHATSAPP_BUSINESS_CLOUD: "/integrations/whatsapp.svg",
+  MAILCHIMP: "/integrations/mailchimp.png",
+  RD_STATION: "/integrations/rd-station.png"
+};
 
 type IntegrationPublicConfig = {
   measurementId: string | null;
@@ -122,23 +134,6 @@ function statusColors(status: IntegrationStatus) {
 function readErrorMessage(data: ApiErrorResponse, fallback: string) {
   return data.message ?? fallback;
 }
-
-const inputStyle = {
-  background: "#0f172a",
-  border: "1px solid rgba(148, 163, 184, 0.3)",
-  borderRadius: "12px",
-  color: "#ffffff",
-  font: "inherit",
-  padding: "11px 12px"
-} as const;
-
-const labelStyle = {
-  color: "#e2e8f0",
-  display: "grid",
-  fontSize: "13px",
-  fontWeight: 800,
-  gap: "8px"
-} as const;
 
 export function EventIntegrationsClient() {
   const [events, setEvents] = useState<EventListItem[]>([]);
@@ -437,11 +432,7 @@ export function EventIntegrationsClient() {
 
   return (
     <main
-      style={{
-        color: "#e2e8f0",
-        minHeight: "100vh",
-        padding: "28px 24px 48px"
-      }}
+      className={`${settings.page} ${settings.surface}`}
     >
       <section
         style={{
@@ -454,13 +445,7 @@ export function EventIntegrationsClient() {
         <EventModuleChrome
           header={
             <header
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.78))",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                borderRadius: "28px",
-                padding: "28px"
-              }}
+              className={settings.header}
             >
               <p
                 style={{
@@ -522,11 +507,7 @@ export function EventIntegrationsClient() {
           ) : null}
 
           <section
-            style={{
-              display: "grid",
-              gap: "16px",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))"
-            }}
+            className={settings.integrationGrid}
           >
             {isLoading ? (
               <p style={{ color: "#cbd5e1", margin: 0 }}>
@@ -544,33 +525,17 @@ export function EventIntegrationsClient() {
                   return (
                     <article
                       key={item.provider}
-                      style={{
-                        background: "rgba(15, 23, 42, 0.82)",
-                        border: "1px solid rgba(148, 163, 184, 0.18)",
-                        borderRadius: "20px",
-                        display: "grid",
-                        gap: "12px",
-                        padding: "22px"
-                      }}
+                      className={settings.integrationCard}
                     >
-                      <div
-                        style={{
-                          alignItems: "center",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "10px",
-                          justifyContent: "space-between"
-                        }}
-                      >
-                        <strong
-                          style={{
-                            color: "#ffffff",
-                            fontSize: "16px"
-                          }}
-                        >
-                          {item.name}
-                        </strong>
+                      <div className={brands.heading}>
+                        <div className={brands.identity}>
+                          <span className={brands.logo} data-provider={item.provider} aria-hidden="true">
+                            <img src={PROVIDER_LOGO[item.provider]} alt="" width={26} height={26} />
+                          </span>
+                          <strong>{item.name}</strong>
+                        </div>
                         <span
+                          className={brands.status}
                           style={{
                             background: colors.background,
                             borderRadius: "999px",
@@ -642,25 +607,12 @@ export function EventIntegrationsClient() {
                         </p>
                       ) : null}
                       <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "10px"
-                        }}
+                        className={settings.actions}
                       >
                         {canConnect ? (
                           <button
                             onClick={() => openConnectModal(item)}
-                            style={{
-                              background: "#2563eb",
-                              border: 0,
-                              borderRadius: "10px",
-                              color: "#ffffff",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              fontWeight: 800,
-                              padding: "10px 14px"
-                            }}
+                            className={settings.primary}
                             type="button"
                           >
                             Conectar
@@ -672,16 +624,7 @@ export function EventIntegrationsClient() {
                               setFormError(null);
                               setDisconnectingProvider(item);
                             }}
-                            style={{
-                              background: "rgba(127, 29, 29, 0.2)",
-                              border: "1px solid rgba(252, 165, 165, 0.28)",
-                              borderRadius: "10px",
-                              color: "#fca5a5",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              fontWeight: 800,
-                              padding: "10px 14px"
-                            }}
+                            className={settings.danger}
                             type="button"
                           >
                             Desconectar
@@ -704,30 +647,11 @@ export function EventIntegrationsClient() {
       {connectingProvider ? (
         <div
           onClick={closeConnectModal}
-          style={{
-            alignItems: "center",
-            background: "rgba(2, 6, 23, 0.72)",
-            display: "flex",
-            inset: 0,
-            justifyContent: "center",
-            padding: "24px",
-            position: "fixed",
-            zIndex: 60
-          }}
+          className={settings.overlay}
         >
           <div
             onClick={(clickEvent) => clickEvent.stopPropagation()}
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
-              border: "1px solid rgba(148, 163, 184, 0.22)",
-              borderRadius: "28px",
-              display: "grid",
-              gap: "18px",
-              maxWidth: "520px",
-              padding: "28px",
-              width: "100%"
-            }}
+            className={settings.modal}
           >
             <h2
               style={{
@@ -763,13 +687,10 @@ export function EventIntegrationsClient() {
             ) : null}
             <form
               onSubmit={handleConnect}
-              style={{
-                display: "grid",
-                gap: "14px"
-              }}
+              className={settings.form}
             >
               {connectingProvider.provider === "GOOGLE_ANALYTICS" ? (
-                <label style={labelStyle}>
+                <label className={settings.field}>
                   Measurement ID (GA4)
                   <input
                     onChange={(changeEvent) =>
@@ -777,7 +698,7 @@ export function EventIntegrationsClient() {
                     }
                     placeholder="G-XXXXXXXX"
                     required
-                    style={inputStyle}
+                    className={settings.input}
                     type="text"
                     value={measurementId}
                   />
@@ -785,7 +706,7 @@ export function EventIntegrationsClient() {
               ) : null}
               {connectingProvider.provider === "GOOGLE_ADS" ? (
                 <>
-                  <label style={labelStyle}>
+                  <label className={settings.field}>
                     Conversion ID
                     <input
                       onChange={(changeEvent) =>
@@ -793,19 +714,19 @@ export function EventIntegrationsClient() {
                       }
                       placeholder="AW-000000000"
                       required
-                      style={inputStyle}
+                      className={settings.input}
                       type="text"
                       value={conversionId}
                     />
                   </label>
-                  <label style={labelStyle}>
+                  <label className={settings.field}>
                     Rótulo de conversão
                     <input
                       onChange={(changeEvent) =>
                         setConversionLabel(changeEvent.target.value)
                       }
                       required
-                      style={inputStyle}
+                      className={settings.input}
                       type="text"
                       value={conversionLabel}
                     />
@@ -813,21 +734,21 @@ export function EventIntegrationsClient() {
                 </>
               ) : null}
               {connectingProvider.provider === "META_PIXEL" ? (
-                <label style={labelStyle}>
+                <label className={settings.field}>
                   Pixel ID
                   <input
                     onChange={(changeEvent) =>
                       setPixelId(changeEvent.target.value)
                     }
                     required
-                    style={inputStyle}
+                    className={settings.input}
                     type="text"
                     value={pixelId}
                   />
                 </label>
               ) : null}
               {connectingProvider.provider === "MAILCHIMP" ? (
-                <label style={labelStyle}>
+                <label className={settings.field}>
                   API key
                   <input
                     autoComplete="off"
@@ -836,7 +757,7 @@ export function EventIntegrationsClient() {
                     }
                     placeholder="chave-us14"
                     required
-                    style={inputStyle}
+                    className={settings.input}
                     type="password"
                     value={apiKey}
                   />
@@ -844,7 +765,7 @@ export function EventIntegrationsClient() {
               ) : null}
               {connectingProvider.provider === "WHATSAPP_BUSINESS_CLOUD" ? (
                 <>
-                  <label style={labelStyle}>
+                  <label className={settings.field}>
                     Token de acesso
                     <input
                       autoComplete="off"
@@ -852,19 +773,19 @@ export function EventIntegrationsClient() {
                         setAccessToken(changeEvent.target.value)
                       }
                       required
-                      style={inputStyle}
+                      className={settings.input}
                       type="password"
                       value={accessToken}
                     />
                   </label>
-                  <label style={labelStyle}>
+                  <label className={settings.field}>
                     Phone Number ID
                     <input
                       onChange={(changeEvent) =>
                         setPhoneNumberId(changeEvent.target.value)
                       }
                       required
-                      style={inputStyle}
+                      className={settings.input}
                       type="text"
                       value={phoneNumberId}
                     />
@@ -872,39 +793,19 @@ export function EventIntegrationsClient() {
                 </>
               ) : null}
               <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  justifyContent: "flex-end"
-                }}
+                className={settings.modalActions}
               >
                 <button
                   disabled={isSaving}
                   onClick={closeConnectModal}
-                  style={{
-                    background: "rgba(15, 23, 42, 0.68)",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                    borderRadius: "12px",
-                    color: "#e2e8f0",
-                    cursor: isSaving ? "not-allowed" : "pointer",
-                    fontWeight: 900,
-                    padding: "11px 16px"
-                  }}
+                  className={settings.button}
                   type="button"
                 >
                   Cancelar
                 </button>
                 <button
                   disabled={isSaving}
-                  style={{
-                    background: "#2563eb",
-                    border: 0,
-                    borderRadius: "12px",
-                    color: "#ffffff",
-                    cursor: isSaving ? "not-allowed" : "pointer",
-                    fontWeight: 900,
-                    padding: "11px 16px"
-                  }}
+                  className={settings.primary}
                   type="submit"
                 >
                   {isSaving ? "Conectando..." : "Conectar"}
@@ -923,30 +824,11 @@ export function EventIntegrationsClient() {
               setFormError(null);
             }
           }}
-          style={{
-            alignItems: "center",
-            background: "rgba(2, 6, 23, 0.72)",
-            display: "flex",
-            inset: 0,
-            justifyContent: "center",
-            padding: "24px",
-            position: "fixed",
-            zIndex: 60
-          }}
+          className={settings.overlay}
         >
           <div
             onClick={(clickEvent) => clickEvent.stopPropagation()}
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.96))",
-              border: "1px solid rgba(148, 163, 184, 0.22)",
-              borderRadius: "28px",
-              display: "grid",
-              gap: "18px",
-              maxWidth: "520px",
-              padding: "28px",
-              width: "100%"
-            }}
+            className={settings.modal}
           >
             <h2
               style={{
@@ -982,11 +864,7 @@ export function EventIntegrationsClient() {
               </p>
             ) : null}
             <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end"
-              }}
+              className={settings.modalActions}
             >
               <button
                 disabled={isSaving}
@@ -994,15 +872,7 @@ export function EventIntegrationsClient() {
                   setDisconnectingProvider(null);
                   setFormError(null);
                 }}
-                style={{
-                  background: "rgba(15, 23, 42, 0.68)",
-                  border: "1px solid rgba(148, 163, 184, 0.3)",
-                  borderRadius: "12px",
-                  color: "#e2e8f0",
-                  cursor: isSaving ? "not-allowed" : "pointer",
-                  fontWeight: 900,
-                  padding: "11px 16px"
-                }}
+                className={settings.button}
                 type="button"
               >
                 Cancelar
@@ -1012,15 +882,7 @@ export function EventIntegrationsClient() {
                 onClick={() => {
                   void handleDisconnect();
                 }}
-                style={{
-                  background: "rgba(127, 29, 29, 0.2)",
-                  border: "1px solid rgba(252, 165, 165, 0.35)",
-                  borderRadius: "12px",
-                  color: "#fca5a5",
-                  cursor: isSaving ? "not-allowed" : "pointer",
-                  fontWeight: 900,
-                  padding: "11px 16px"
-                }}
+                className={settings.danger}
                 type="button"
               >
                 {isSaving ? "Desconectando..." : "Desconectar"}

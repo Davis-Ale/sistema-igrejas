@@ -17,6 +17,8 @@ import {
   createEventAppSession,
   deleteEventAppSession,
   getEventParticipantAppAdmin,
+  getEventAppMapImage,
+  getParticipantAppMapImage,
   getPublicParticipantAppEvent,
   getParticipantAppAccessByPublicSlug,
   updateEventAppMap,
@@ -79,6 +81,14 @@ async function sendParticipantAppError(
       code: "EVENT_NOT_FOUND",
       message: "Evento não encontrado."
     },
+    EVENT_APP_MAP_IMAGE_INVALID: {
+      status: 400, code: "EVENT_APP_MAP_IMAGE_INVALID",
+      message: "Selecione uma imagem JPG ou PNG válida, de até 5 MB e 16 megapixels."
+    },
+    EVENT_APP_MAP_IMAGE_NOT_FOUND: {
+      status: 404, code: "EVENT_APP_MAP_IMAGE_NOT_FOUND",
+      message: "A planta do evento ainda não foi publicada."
+    },
     EVENT_APP_SESSION_NOT_FOUND: {
       status: 404,
       code: "EVENT_APP_SESSION_NOT_FOUND",
@@ -137,6 +147,16 @@ export async function registerPublicParticipantAppRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ) {
+  app.post("/public/event-pages/:publicSlug/map-image", async (request, reply) => {
+    try {
+      const params = publicSlugParamsSchema.parse(request.params);
+      const input = participantAppAccessSchema.parse(request.body);
+      const image = await getParticipantAppMapImage(prisma, params.publicSlug, input.checkInToken);
+      return sendMapImage(reply, image);
+    } catch (error) {
+      await sendParticipantAppError(error, reply);
+    }
+  });
   app.get(
     "/public/event-pages/:publicSlug/app",
     async (request, reply) => {
@@ -181,6 +201,15 @@ export async function registerEventParticipantAppRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ) {
+  app.get("/events/:eventId/participant-app/map/image", async (request, reply) => {
+    try {
+      const params = eventParticipantAppParamsSchema.parse(request.params);
+      const image = await getEventAppMapImage(prisma, getChurchId(request), params.eventId);
+      return sendMapImage(reply, image);
+    } catch (error) {
+      await sendParticipantAppError(error, reply);
+    }
+  });
   app.get(
     "/events/:eventId/participant-app",
     async (request, reply) => {
@@ -274,7 +303,7 @@ export async function registerEventParticipantAppRoutes(
 
   app.put(
     "/events/:eventId/participant-app/map",
-    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]), bodyLimit: 7 * 1024 * 1024 },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -293,4 +322,14 @@ export async function registerEventParticipantAppRoutes(
       }
     }
   );
+}
+
+function sendMapImage(reply: FastifyReply, image: { data: Uint8Array; contentType: string }) {
+  return reply
+    .header("Cache-Control", "private, no-store")
+    .header("X-Content-Type-Options", "nosniff")
+    .header("Content-Security-Policy", "default-src 'none'; sandbox")
+    .header("Content-Disposition", `inline; filename="planta.${image.contentType === "image/png" ? "png" : "jpg"}"`)
+    .type(image.contentType)
+    .send(Buffer.from(image.data));
 }
