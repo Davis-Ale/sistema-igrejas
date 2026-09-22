@@ -4711,7 +4711,12 @@ export function EventWorkspaceClient({
                           border:
                             "1px solid rgba(148, 163, 184, 0.14)",
                           borderRadius: "18px",
-                          padding: "16px"
+                          boxSizing: "border-box",
+                          maxWidth: "100%",
+                          minWidth: 0,
+                          overflow: "hidden",
+                          padding: "16px",
+                          width: "100%"
                         }}
                       >
                         {(() => {
@@ -4788,7 +4793,7 @@ export function EventWorkspaceClient({
                             1,
                             Math.ceil(series.length / 8)
                           );
-                          const plotHeight = 240;
+                          const plotHeight = 200;
                           const yAxisWidth = 36;
                           const viewW = 1000;
                           const viewH = plotHeight;
@@ -4878,7 +4883,9 @@ export function EventWorkspaceClient({
                                   preserveAspectRatio="none"
                                   style={{
                                     display: "block",
-                                    overflow: "visible"
+                                    maxWidth: "100%",
+                                    overflow: "hidden",
+                                    width: "100%"
                                   }}
                                 >
                                   <defs>
