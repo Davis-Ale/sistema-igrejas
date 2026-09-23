@@ -23,7 +23,8 @@ export async function addPersonToCell(
     prisma.celula.findFirst({
       where: {
         id: input.groupId,
-        churchId
+        churchId,
+        leader: { churchId }
       },
       select: {
         id: true

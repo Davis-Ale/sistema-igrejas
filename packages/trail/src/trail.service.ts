@@ -22,7 +22,10 @@ export async function listTrails(prisma: PrismaClient, churchId: string) {
     },
     include: {
       stages: {
-        where: { churchId },
+        where: {
+          churchId,
+          OR: [{ requiresEventId: null }, { requiresEvent: { churchId } }]
+        },
         orderBy: {
           order: "asc"
         }
@@ -77,7 +80,8 @@ export async function listTrailStages(
     where: {
       churchId,
       trailId,
-      trail: { churchId }
+      trail: { churchId },
+      OR: [{ requiresEventId: null }, { requiresEvent: { churchId } }]
     },
     orderBy: {
       order: "asc"

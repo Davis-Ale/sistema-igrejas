@@ -11,7 +11,11 @@ export async function listPersonTrailProgress(
       churchId,
       personId,
       person: { churchId },
-      stage: { churchId, trail: { churchId } },
+      stage: {
+        churchId,
+        trail: { churchId },
+        OR: [{ requiresEventId: null }, { requiresEvent: { churchId } }]
+      },
       OR: [{ approvedBy: null }, { approver: { churchId } }]
     },
     include: {
@@ -43,7 +47,8 @@ export async function completeTrailStage(
     where: {
       id: input.stageId,
       churchId,
-      trail: { churchId }
+      trail: { churchId },
+      OR: [{ requiresEventId: null }, { requiresEvent: { churchId } }]
     },
     include: {
       trail: {
