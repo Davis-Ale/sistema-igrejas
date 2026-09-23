@@ -9,7 +9,10 @@ export async function listPersonTrailProgress(
   return prisma.trailProgress.findMany({
     where: {
       churchId,
-      personId
+      personId,
+      person: { churchId },
+      stage: { churchId, trail: { churchId } },
+      OR: [{ approvedBy: null }, { approver: { churchId } }]
     },
     include: {
       stage: {
@@ -39,7 +42,8 @@ export async function completeTrailStage(
   const stage = await prisma.trailStage.findFirst({
     where: {
       id: input.stageId,
-      churchId
+      churchId,
+      trail: { churchId }
     },
     include: {
       trail: {
@@ -69,9 +73,14 @@ export async function completeTrailStage(
     throw new Error("PERSON_NOT_FOUND");
   }
 
+  if (!await prisma.person.findFirst({
+    where: { id: approvedBy, churchId }, select: { id: true }
+  })) throw new Error("APPROVER_NOT_FOUND");
+
   return prisma.$transaction(async (tx) => {
     const progress = await tx.trailProgress.upsert({
       where: {
+        churchId,
         personId_stageId: {
           personId: input.personId,
           stageId: input.stageId
@@ -101,7 +110,8 @@ export async function completeTrailStage(
 
     await tx.person.update({
       where: {
-        id: input.personId
+        id: input.personId,
+        churchId
       },
       data: personUpdateData
     });

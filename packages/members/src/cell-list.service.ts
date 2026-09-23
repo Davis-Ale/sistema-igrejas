@@ -8,6 +8,7 @@ export async function listPaginatedCells(
 ) {
   const where: Prisma.CelulaWhereInput = {
     churchId,
+    AND: [{ leader: { churchId } }],
     ...(query.status === "ALL"
       ? {}
       : {
@@ -75,7 +76,7 @@ export async function listPaginatedCells(
         },
         _count: {
           select: {
-            people: true
+            people: { where: { churchId } }
           }
         }
       },

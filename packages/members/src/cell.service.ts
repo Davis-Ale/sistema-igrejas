@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { ensureCampusBelongsToChurch } from "@sistema-igrejas/database";
 import type {
   CreateCellInput,
   UpdateCellInput
@@ -48,6 +49,7 @@ export async function createCell(
   input: CreateCellInput
 ) {
   await ensureLeaderBelongsToChurch(prisma, churchId, input.leaderId);
+  await ensureCampusBelongsToChurch(prisma, churchId, input.campusId);
 
   const location = buildCellLocation(input);
 
@@ -86,12 +88,14 @@ export async function updateCell(
   }
 
   await ensureLeaderBelongsToChurch(prisma, churchId, input.leaderId);
+  await ensureCampusBelongsToChurch(prisma, churchId, input.campusId);
 
   const location = buildCellLocation(input);
 
   return prisma.celula.update({
     where: {
-      id: cell.id
+      id: cell.id,
+      churchId
     },
     data: {
       campusId: input.campusId ?? null,
@@ -109,6 +113,7 @@ export async function listCells(prisma: PrismaClient, churchId: string) {
   return prisma.celula.findMany({
     where: {
       churchId,
+      leader: { churchId },
       status: "ACTIVE"
     },
     include: {
@@ -121,6 +126,7 @@ export async function listCells(prisma: PrismaClient, churchId: string) {
         }
       },
       people: {
+        where: { churchId },
         select: {
           id: true,
           name: true,
@@ -148,7 +154,8 @@ export async function getCellById(
   const cell = await prisma.celula.findFirst({
     where: {
       id: cellId,
-      churchId
+      churchId,
+      leader: { churchId }
     },
     include: {
       leader: {
@@ -160,6 +167,7 @@ export async function getCellById(
         }
       },
       people: {
+        where: { churchId },
         select: {
           id: true,
           name: true,
@@ -174,6 +182,9 @@ export async function getCellById(
       },
       memberships: {
         where: {
+          churchId,
+          person: { churchId },
+          OR: [{ approvedBy: null }, { approver: { churchId } }],
           removedAt: null
         },
         include: {

@@ -1,4 +1,5 @@
 import { Role, type PrismaClient } from "@prisma/client";
+import { ensureCampusBelongsToChurch } from "@sistema-igrejas/database";
 import type { CreateMemberInput, ListMembersQueryInput } from "./member.schema.js";
 
 const memberSelect = {
@@ -61,6 +62,7 @@ export async function createMember(
   churchId: string,
   input: CreateMemberInput
 ) {
+  await ensureCampusBelongsToChurch(prisma, churchId, input.campusId);
   return prisma.person.create({
     data: {
       churchId,

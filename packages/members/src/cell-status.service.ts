@@ -31,7 +31,8 @@ async function changeCellStatus(
 
   return prisma.celula.update({
     where: {
-      id: cell.id
+      id: cell.id,
+      churchId
     },
     data: {
       status,

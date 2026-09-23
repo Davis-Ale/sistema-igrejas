@@ -39,6 +39,10 @@ export async function addPersonToCell(
     throw new Error("CELL_NOT_FOUND");
   }
 
+  if (!await prisma.person.findFirst({
+    where: { id: approvedBy, churchId }, select: { id: true }
+  })) throw new Error("APPROVER_NOT_FOUND");
+
   return prisma.$transaction(async (tx) => {
     const membership = await tx.membership.create({
       data: {
@@ -52,7 +56,8 @@ export async function addPersonToCell(
 
     await tx.person.update({
       where: {
-        id: input.personId
+        id: input.personId,
+        churchId
       },
       data: {
         celulaId: input.groupId
@@ -73,6 +78,8 @@ export async function removePersonFromCell(
       churchId,
       personId: input.personId,
       groupId: input.groupId,
+      person: { churchId },
+      celula: { churchId },
       removedAt: null
     },
     select: {
@@ -87,7 +94,8 @@ export async function removePersonFromCell(
   return prisma.$transaction(async (tx) => {
     const removedMembership = await tx.membership.update({
       where: {
-        id: membership.id
+        id: membership.id,
+        churchId
       },
       data: {
         removedAt: new Date(),
@@ -97,7 +105,8 @@ export async function removePersonFromCell(
 
     await tx.person.update({
       where: {
-        id: input.personId
+        id: input.personId,
+        churchId
       },
       data: {
         celulaId: null

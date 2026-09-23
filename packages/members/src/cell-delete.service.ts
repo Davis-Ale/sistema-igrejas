@@ -35,7 +35,8 @@ export async function deleteCellSafely(
 
     await transaction.celula.delete({
       where: {
-        id: cell.id
+        id: cell.id,
+        churchId
       }
     });
 

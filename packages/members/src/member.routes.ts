@@ -14,6 +14,10 @@ function getChurchId(request: FastifyRequest): string {
 }
 
 async function sendMemberRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof Error && ["CAMPUS_NOT_FOUND", "EVENT_NOT_FOUND", "APPROVER_NOT_FOUND", "ACTOR_NOT_FOUND"].includes(error.message)) {
+    await reply.code(404).send({ error: error.message, message: "Referência não encontrada nesta igreja." });
+    return;
+  }
   if (error instanceof ZodError) {
     await reply.code(400).send({
       error: "VALIDATION_ERROR",

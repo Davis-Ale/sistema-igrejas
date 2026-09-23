@@ -22,6 +22,7 @@ export async function listTrails(prisma: PrismaClient, churchId: string) {
     },
     include: {
       stages: {
+        where: { churchId },
         orderBy: {
           order: "asc"
         }
@@ -52,6 +53,10 @@ export async function createTrailStage(
     throw new Error("TRAIL_NOT_FOUND");
   }
 
+  if (input.requiresEventId && !await prisma.event.findFirst({
+    where: { id: input.requiresEventId, churchId }, select: { id: true }
+  })) throw new Error("EVENT_NOT_FOUND");
+
   return prisma.trailStage.create({
     data: {
       churchId,
@@ -71,7 +76,8 @@ export async function listTrailStages(
   return prisma.trailStage.findMany({
     where: {
       churchId,
-      trailId
+      trailId,
+      trail: { churchId }
     },
     orderBy: {
       order: "asc"

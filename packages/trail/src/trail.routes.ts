@@ -1,4 +1,5 @@
 import type {} from "@sistema-igrejas/auth";
+import { resolveTenantActorPersonId } from "@sistema-igrejas/database";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import {
@@ -31,6 +32,10 @@ function getUserId(request: FastifyRequest): string {
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof Error && ["CAMPUS_NOT_FOUND", "EVENT_NOT_FOUND", "APPROVER_NOT_FOUND", "ACTOR_NOT_FOUND"].includes(error.message)) {
+    await reply.code(404).send({ error: error.message, message: "Referência não encontrada nesta igreja." });
+    return;
+  }
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -139,7 +144,7 @@ export async function registerTrailRoutes(
   app.post("/trails/progress/complete", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
-      const approvedBy = getUserId(request);
+      const approvedBy = await resolveTenantActorPersonId(prisma, churchId, getUserId(request));
       const input = completeTrailStageSchema.parse(request.body);
       const progress = await completeTrailStage(prisma, churchId, approvedBy, input);
 

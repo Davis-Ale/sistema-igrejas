@@ -1,4 +1,5 @@
 import type {} from "@sistema-igrejas/auth";
+import { resolveTenantActorPersonId } from "@sistema-igrejas/database";
 import type { PrismaClient } from "@prisma/client";
 import type {
   FastifyInstance,
@@ -42,6 +43,10 @@ async function sendRouteError(
   error: unknown,
   reply: FastifyReply
 ): Promise<void> {
+  if (error instanceof Error && ["CAMPUS_NOT_FOUND", "APPROVER_NOT_FOUND", "ACTOR_NOT_FOUND"].includes(error.message)) {
+    await reply.code(404).send({ error: error.message, message: "Referência não encontrada nesta igreja." });
+    return;
+  }
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -158,7 +163,7 @@ export async function registerCellRoutes(
   app.post("/cells/members", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
-      const approvedBy = getUserId(request);
+      const approvedBy = await resolveTenantActorPersonId(prisma, churchId, getUserId(request));
       const input = addPersonToCellSchema.parse(request.body);
       const membership = await addPersonToCell(
         prisma,

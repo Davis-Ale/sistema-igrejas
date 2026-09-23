@@ -49,7 +49,9 @@ export async function listVolunteerLogs(
   return prisma.volunteerLog.findMany({
     where: {
       churchId,
-      personId
+      personId,
+      person: { churchId },
+      changer: { churchId }
     },
     include: {
       changer: {
@@ -113,7 +115,8 @@ export async function updateVolunteerStatus(
   return prisma.$transaction(async (tx) => {
     const updatedPerson = await tx.person.update({
       where: {
-        id: input.personId
+        id: input.personId,
+        churchId
       },
       data: personUpdateData,
       select: {

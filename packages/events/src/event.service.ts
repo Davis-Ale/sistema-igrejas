@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
+import { ensureCampusBelongsToChurch } from "@sistema-igrejas/database";
 import { resolveApplicableEventDiscount } from "./discount.service.js";
 import type {
   CheckInByTokenInput,
@@ -17,6 +18,17 @@ import {
   resolveCurrentPlatformFeePercent
 } from "./platform-fee.js";
 import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
+
+async function ensureEventReferencesBelongToChurch(
+  prisma: Pick<PrismaClient, "campus" | "trailStage">,
+  churchId: string,
+  input: { campusId?: string | null | undefined; trailStageId?: string | null | undefined }
+) {
+  await ensureCampusBelongsToChurch(prisma, churchId, input.campusId);
+  if (input.trailStageId && !await prisma.trailStage.findFirst({
+    where: { id: input.trailStageId, churchId, trail: { churchId } }, select: { id: true }
+  })) throw new Error("TRAIL_STAGE_NOT_FOUND");
+}
 
 function buildRegistrationStatus(event: { isPaid: boolean }, isWaitlisted: boolean) {
   if (isWaitlisted) {
@@ -178,6 +190,7 @@ export async function createEvent(
   churchId: string,
   input: CreateEventInput
 ) {
+  await ensureEventReferencesBelongToChurch(prisma, churchId, input);
   return prisma.event.create({
     data: {
       churchId,
@@ -232,6 +245,8 @@ export async function duplicateEvent(
       if (!source) {
         throw new Error("EVENT_NOT_FOUND");
       }
+
+      await ensureEventReferencesBelongToChurch(transaction, churchId, source);
 
       const duplicated =
         await transaction.event.create({
@@ -427,6 +442,8 @@ export async function updateEvent(
     },
     select: {
       id: true,
+      campusId: true,
+      trailStageId: true,
       isPublic: true,
       publicRegistrationEnabled: true
     }
@@ -437,6 +454,7 @@ export async function updateEvent(
   }
 
   const data: Prisma.EventUpdateInput = {};
+  await ensureEventReferencesBelongToChurch(prisma, churchId, event);
 
   if (input.title !== undefined) {
     data.title = input.title;
@@ -491,7 +509,8 @@ export async function updateEvent(
 
   return prisma.event.update({
     where: {
-      id: event.id
+      id: event.id,
+      churchId
     },
     data
   });
@@ -555,11 +574,13 @@ async function countEventOperationalHistory(
 
 async function archiveEventFromLists(
   prisma: Prisma.TransactionClient,
+  churchId: string,
   eventId: string
 ) {
   await prisma.event.update({
     where: {
-      id: eventId
+      id: eventId,
+      churchId
     },
     data: {
       deletedAt: new Date(),
@@ -613,7 +634,7 @@ export async function deleteEvent(
     );
 
     if (historyCount > 0) {
-      await archiveEventFromLists(transaction, lockedEventId);
+      await archiveEventFromLists(transaction, churchId, lockedEventId);
       return;
     }
 
@@ -677,13 +698,14 @@ export async function deleteEvent(
     );
 
     if (historyCountAfterConfig > 0) {
-      await archiveEventFromLists(transaction, lockedEventId);
+      await archiveEventFromLists(transaction, churchId, lockedEventId);
       return;
     }
 
     await transaction.event.delete({
       where: {
-        id: lockedEventId
+        id: lockedEventId,
+        churchId
       }
     });
   });
@@ -815,6 +837,8 @@ export async function getEventById(
   if (!event) {
     throw new Error("EVENT_NOT_FOUND");
   }
+
+  await ensureEventReferencesBelongToChurch(prisma, churchId, event);
 
   const registrationScope = {
     churchId,
@@ -1237,6 +1261,10 @@ export async function createRegistration(
   if (input.visitorId && !visitor) {
     throw new Error("VISITOR_NOT_FOUND");
   }
+
+  if (input.paymentId && !await prisma.eventPayment.findFirst({
+    where: { id: input.paymentId, churchId, eventId: input.eventId }, select: { id: true }
+  })) throw new Error("EVENT_PAYMENT_NOT_FOUND");
 
   const activeRegistrations = event.registrations.filter(
     (registration) => !registration.waitlistedAt

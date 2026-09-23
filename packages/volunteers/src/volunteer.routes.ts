@@ -1,4 +1,5 @@
 import type {} from "@sistema-igrejas/auth";
+import { resolveTenantActorPersonId } from "@sistema-igrejas/database";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { updateVolunteerStatusSchema } from "./volunteer.schema.js";
@@ -25,6 +26,10 @@ function getUserId(request: FastifyRequest): string {
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof Error && ["CAMPUS_NOT_FOUND", "EVENT_NOT_FOUND", "APPROVER_NOT_FOUND", "ACTOR_NOT_FOUND"].includes(error.message)) {
+    await reply.code(404).send({ error: error.message, message: "Referência não encontrada nesta igreja." });
+    return;
+  }
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -90,7 +95,7 @@ export async function registerVolunteerRoutes(
   app.post("/volunteers/status", async (request, reply) => {
     try {
       const churchId = getChurchId(request);
-      const changedBy = getUserId(request);
+      const changedBy = await resolveTenantActorPersonId(prisma, churchId, getUserId(request));
       const input = updateVolunteerStatusSchema.parse(request.body);
       const result = await updateVolunteerStatus(prisma, churchId, changedBy, input);
 
