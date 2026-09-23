@@ -912,7 +912,7 @@ describe("Event financial management E2E", () => {
     expect(parsed.rows.map((columns) => columns[9])).not.toContain("80");
   });
 
-  it("allows LEADER on event financial routes and keeps church financial forbidden", async () => {
+  it("denies LEADER consistently on equivalent financial routes", async () => {
     const fixture = await createPaidEventFixture(`leader-${Date.now()}`);
     await createLinkedEventCharge({
       eventId: fixture.event.id,
@@ -923,8 +923,8 @@ describe("Event financial management E2E", () => {
       .get(`/api/events/financial/summary?eventId=${fixture.event.id}`)
       .set("Authorization", `Bearer ${leaderToken}`);
 
-    expect(summary.status).toBe(200);
-    expect(summary.body.eventSales).toBeDefined();
+    expect(summary.status).toBe(403);
+    expect(summary.body.error).toBe("FINANCIAL_ACCESS_DENIED");
 
     const list = await request(app.server)
       .get(
@@ -932,14 +932,14 @@ describe("Event financial management E2E", () => {
       )
       .set("Authorization", `Bearer ${leaderToken}`);
 
-    expect(list.status).toBe(200);
-    expect(list.body.pagination.total).toBe(1);
+    expect(list.status).toBe(403);
+    expect(list.body.error).toBe("FINANCIAL_ACCESS_DENIED");
 
     const exported = await request(app.server)
       .get(`/api/events/financial/export?eventId=${fixture.event.id}`)
       .set("Authorization", `Bearer ${leaderToken}`);
 
-    expect(exported.status).toBe(200);
+    expect(exported.status).toBe(403);
 
     const pastorSummary = await request(app.server)
       .get(`/api/events/financial/summary?eventId=${fixture.event.id}`)
@@ -1395,8 +1395,8 @@ describe("Event financial management E2E", () => {
       .get("/api/events/financial/receiving-account")
       .set("Authorization", `Bearer ${leaderToken}`);
 
-    expect(visible.status).toBe(200);
-    expect(visible.body.canUpdate).toBe(false);
+    expect(visible.status).toBe(403);
+    expect(visible.body.error).toBe("FINANCIAL_ACCESS_DENIED");
 
     const blocked = await request(app.server)
       .put("/api/events/financial/receiving-account")

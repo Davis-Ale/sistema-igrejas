@@ -1,8 +1,9 @@
+import { ensureCanAccessFinancial } from "./financial.authorization.js";
 import type {} from "@sistema-igrejas/auth";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AsaasClientError } from "./asaas.client.js";
-import { createTransaction, updateTransaction } from "./financial.service.js";
+import { createTransaction } from "./financial.service.js";
 import { createAsaasChargeSchema } from "./asaas.schema.js";
 import {
   createAsaasCustomer,
@@ -21,14 +22,6 @@ type AsaasWebhookBody = {
   event?: unknown;
   payment?: AsaasWebhookPayment;
 };
-
-type FinancialRole =
-  | "SUPER_ADMIN"
-  | "PASTOR"
-  | "LEADER"
-  | "VOLUNTEER"
-  | "MEMBER"
-  | "VISITOR";
 
 export type PaymentProviderStatus =
   | "PENDING"
@@ -63,31 +56,6 @@ function getChurchId(request: FastifyRequest): string {
   }
 
   return request.churchId;
-}
-
-function getUserRole(
-  request: FastifyRequest
-): FinancialRole {
-  if (!request.user?.role) {
-    throw new Error("USER_CONTEXT_REQUIRED");
-  }
-
-  return request.user.role;
-}
-
-function ensureCanAccessFinancial(
-  request: FastifyRequest
-): void {
-  const role = getUserRole(request);
-
-  if (
-    role !== "SUPER_ADMIN" &&
-    role !== "PASTOR"
-  ) {
-    throw new Error(
-      "FINANCIAL_ACCESS_DENIED"
-    );
-  }
 }
 
 function getAsaasWebhookToken(
@@ -354,8 +322,9 @@ export async function registerAsaasRoutes(app: FastifyInstance, prisma: PrismaCl
 
       const payment = await createAsaasPayment(paymentInput);
 
-      await updateTransaction(prisma, churchId, transaction.id, {
-        asaasId: payment.id
+      await prisma.transaction.update({
+        where: { id: transaction.id, churchId, status: "ACTIVE" },
+        data: { asaasId: payment.id }
       });
 
       await reply.code(201).send({

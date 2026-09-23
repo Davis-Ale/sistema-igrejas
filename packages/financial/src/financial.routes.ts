@@ -1,3 +1,4 @@
+import { ensureCanAccessFinancial, ensureCanReverseFinancial } from "./financial.authorization.js";
 import type {} from "@sistema-igrejas/auth";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -18,7 +19,6 @@ import {
   type TransactionReversalProviderHandler
 } from "./financial.service.js";
 
-type FinancialRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER" | "VISITOR";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -36,23 +36,23 @@ function getUserId(request: FastifyRequest): string {
   return request.user.userId;
 }
 
-function getUserRole(request: FastifyRequest): FinancialRole {
-  if (!request.user?.role) {
-    throw new Error("USER_CONTEXT_REQUIRED");
-  }
-
-  return request.user.role;
-}
-
-function ensureCanAccessFinancial(request: FastifyRequest): void {
-  const role = getUserRole(request);
-
-  if (role !== "SUPER_ADMIN" && role !== "PASTOR") {
-    throw new Error("FINANCIAL_ACCESS_DENIED");
-  }
-}
-
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof Error && "code" in error && error.code === "P2025") {
+    await reply.code(409).send({ error: "TRANSACTION_NOT_ACTIVE", message: "O lançamento foi alterado. Atualize os dados antes de tentar novamente." });
+    return;
+  }
+  if (error instanceof Error && error.message === "FINANCIAL_OPERATION_DENIED") {
+    await reply.code(403).send({ error: error.message, message: "Você não tem permissão para executar esta operação financeira." });
+    return;
+  }
+  if (error instanceof Error && ["PAYMENT_PROVIDER_TRANSACTION_LOCKED", "PAYMENT_PROVIDER_REFERENCE_READ_ONLY"].includes(error.message)) {
+    await reply.code(409).send({ error: error.message, message: "Cobranças do provedor devem ser alteradas pelo fluxo integrado de pagamentos." });
+    return;
+  }
+  if (error instanceof Error && error.message === "CAMPUS_NOT_FOUND") {
+    await reply.code(404).send({ error: error.message, message: "Campus não encontrado." });
+    return;
+  }
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",
@@ -216,7 +216,7 @@ export async function registerFinancialRoutes(
 
   app.post("/financial/transactions/:transactionId/reverse", async (request, reply) => {
     try {
-      ensureCanAccessFinancial(request);
+      ensureCanReverseFinancial(request);
 
       const churchId = getChurchId(request);
       const userId = getUserId(request);

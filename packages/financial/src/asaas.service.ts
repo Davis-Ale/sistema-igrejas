@@ -1,6 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
 import { createAsaasClient } from "./asaas.client.js";
-import { updateTransaction } from "./financial.service.js";
 
 type AsaasClient = ReturnType<typeof createAsaasClient>;
 
@@ -291,18 +290,16 @@ export async function createAsaasChargeForExistingTransaction(
       paymentInput
     );
 
-  await updateTransaction(
-    prisma,
-    churchId,
-    transaction.id,
-    {
+  await prisma.transaction.update({
+    where: { id: transaction.id, churchId, status: "ACTIVE", asaasId: null },
+    data: {
       asaasId: payment.id,
       method:
         payment.billingType === "PIX"
           ? "PIX"
           : "CARD"
     }
-  );
+  });
 
   const pixQrCode =
     payment.billingType === "PIX"

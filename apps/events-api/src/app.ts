@@ -28,6 +28,7 @@ import {
 } from "@sistema-igrejas/events";
 import {
   AsaasClientError,
+  authorizeFinancialRoute,
   createAsaasChargeForExistingTransaction,
   deleteAsaasPayment,
   finalizeProviderTransactionCancellation,
@@ -494,6 +495,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         "preHandler",
         createAuthPreHandler(prisma)
       );
+      protectedRoutes.addHook("preHandler", authorizeFinancialRoute);
       await registerEventApiKeyRoutes(protectedRoutes, prisma);
       await registerEventIntegrationRoutes(protectedRoutes, prisma);
       await registerEventParticipantAppRoutes(protectedRoutes, prisma);

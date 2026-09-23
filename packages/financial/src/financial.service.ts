@@ -8,13 +8,19 @@ import type {
 } from "./financial.schema.js";
 
 async function ensureRelatedRecordsBelongToChurch(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "campus" | "person" | "event">,
   churchId: string,
   input: {
-    personId?: string | undefined;
-    eventId?: string | undefined;
+    campusId?: string | null | undefined;
+    personId?: string | null | undefined;
+    eventId?: string | null | undefined;
   }
 ) {
+  if (input.campusId && !await prisma.campus.findFirst({
+    where: { id: input.campusId, churchId }, select: { id: true }
+  })) {
+    throw new Error("CAMPUS_NOT_FOUND");
+  }
   const [person, event] = await Promise.all([
     input.personId
       ? prisma.person.findFirst({
@@ -319,6 +325,7 @@ export async function createTransaction(
   churchId: string,
   input: CreateTransactionInput
 ) {
+  if (input.asaasId) throw new Error("PAYMENT_PROVIDER_REFERENCE_READ_ONLY");
   await ensureRelatedRecordsBelongToChurch(prisma, churchId, input);
 
   return prisma.transaction.create({
@@ -353,7 +360,9 @@ export async function updateTransaction(
     },
     select: {
       id: true,
-      status: true
+      status: true,
+      asaasId: true,
+      eventPayment: { select: { id: true } }
     }
   });
 
@@ -365,11 +374,20 @@ export async function updateTransaction(
     throw new Error("TRANSACTION_NOT_ACTIVE");
   }
 
+  if (transaction.asaasId || transaction.eventPayment) {
+    throw new Error("PAYMENT_PROVIDER_TRANSACTION_LOCKED");
+  }
+  if (input.asaasId) throw new Error("PAYMENT_PROVIDER_REFERENCE_READ_ONLY");
+
   await ensureRelatedRecordsBelongToChurch(prisma, churchId, input);
 
   return prisma.transaction.update({
     where: {
-      id: transactionId
+      id: transactionId,
+      churchId,
+      status: "ACTIVE",
+      asaasId: null,
+      eventPayment: { is: null }
     },
     data: {
       ...(input.campusId !== undefined ? { campusId: input.campusId } : {}),
@@ -420,7 +438,9 @@ export async function cancelTransaction(
     },
     select: {
       id: true,
-      status: true
+      status: true,
+      asaasId: true,
+      eventPayment: { select: { id: true } }
     }
   });
 
@@ -432,9 +452,18 @@ export async function cancelTransaction(
     throw new Error("TRANSACTION_NOT_ACTIVE");
   }
 
+  // Provider charges must use the authorized reversal flow, which checks provider status.
+  if (transaction.asaasId || transaction.eventPayment) {
+    throw new Error("PAYMENT_PROVIDER_TRANSACTION_LOCKED");
+  }
+
   return prisma.transaction.update({
     where: {
-      id: transactionId
+      id: transactionId,
+      churchId,
+      status: "ACTIVE",
+      asaasId: null,
+      eventPayment: { is: null }
     },
     data: {
       status: "CANCELLED",
@@ -494,7 +523,8 @@ export async function finalizeProviderTransactionCancellation(
 
   return prisma.transaction.update({
     where: {
-      id: transaction.id
+      id: transaction.id,
+      churchId
     },
     data: {
       status: "CANCELLED",
@@ -535,7 +565,8 @@ export async function finalizeProviderTransactionReversal(
           await tx.transaction.findUnique({
             where: {
               id:
-                transaction.reversalTransactionId
+                transaction.reversalTransactionId,
+              churchId
             }
           });
 
@@ -553,6 +584,8 @@ export async function finalizeProviderTransactionReversal(
           "TRANSACTION_NOT_ACTIVE"
         );
       }
+
+      await ensureRelatedRecordsBelongToChurch(tx, churchId, transaction);
 
       const claimed =
         await tx.transaction.updateMany({
@@ -574,7 +607,8 @@ export async function finalizeProviderTransactionReversal(
         const current =
           await tx.transaction.findUnique({
             where: {
-              id: transaction.id
+              id: transaction.id,
+              churchId
             }
           });
 
@@ -586,7 +620,8 @@ export async function finalizeProviderTransactionReversal(
             await tx.transaction.findUnique({
               where: {
                 id:
-                  current.reversalTransactionId
+                  current.reversalTransactionId,
+                churchId
               }
             });
 
@@ -636,7 +671,8 @@ export async function finalizeProviderTransactionReversal(
       const originalTransaction =
         await tx.transaction.update({
           where: {
-            id: transaction.id
+            id: transaction.id,
+            churchId
           },
           data: {
             reversalTransactionId:
@@ -666,7 +702,8 @@ export async function reverseTransaction(
       where: {
         id: transactionId,
         churchId
-      }
+      },
+      include: { eventPayment: { select: { churchId: true, providerPaymentId: true } } }
     });
 
   if (!transaction) {
@@ -679,6 +716,16 @@ export async function reverseTransaction(
     throw new Error(
       "TRANSACTION_NOT_ACTIVE"
     );
+  }
+
+  await ensureRelatedRecordsBelongToChurch(prisma, churchId, transaction);
+  if (transaction.eventPayment && (
+    transaction.eventPayment.churchId !== churchId ||
+    !transaction.asaasId ||
+    transaction.eventPayment.providerPaymentId !== transaction.asaasId
+  )) throw new Error("PAYMENT_PROVIDER_REVERSAL_FAILED");
+  if (transaction.asaasId && !providerHandler) {
+    throw new Error("PAYMENT_PROVIDER_REVERSAL_FAILED");
   }
 
   const mode =
@@ -700,7 +747,8 @@ export async function reverseTransaction(
     const originalTransaction =
       await prisma.transaction.update({
         where: {
-          id: transaction.id
+          id: transaction.id,
+          churchId
         },
         data: {
           status: "CANCELLED",
@@ -721,7 +769,8 @@ export async function reverseTransaction(
 
   await prisma.transaction.update({
     where: {
-      id: transaction.id
+      id: transaction.id,
+      churchId
     },
     data: {
       cancelledByUserId:
@@ -735,7 +784,8 @@ export async function reverseTransaction(
     const originalTransaction =
       await prisma.transaction.findUnique({
         where: {
-          id: transaction.id
+          id: transaction.id,
+          churchId
         }
       });
 
