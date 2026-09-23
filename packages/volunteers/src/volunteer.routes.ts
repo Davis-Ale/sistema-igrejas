@@ -1,4 +1,6 @@
 import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
+import { ZodError } from "zod";
 import { resolveTenantActorPersonId } from "@sistema-igrejas/database";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -26,6 +28,18 @@ function getUserId(request: FastifyRequest): string {
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") {
+    await reply.code(409).send({ error: "VOLUNTEER_CONFLICT", message: "Os vínculos foram alterados. Atualize os dados e tente novamente." });
+    return;
+  }
+  if (error instanceof ZodError) {
+    await reply.code(400).send({ error: "VALIDATION_ERROR", message: "Dados inválidos." });
+    return;
+  }
+  if (error instanceof Error && ["INVALID_VOLUNTEER_ROLE", "PERSON_RELATION_CONFLICT"].includes(error.message)) {
+    await reply.code(409).send({ error: error.message, message: "Pessoa incompatível com esta operação." });
+    return;
+  }
   if (error instanceof Error && ["CAMPUS_NOT_FOUND", "EVENT_NOT_FOUND", "APPROVER_NOT_FOUND", "ACTOR_NOT_FOUND"].includes(error.message)) {
     await reply.code(404).send({ error: error.message, message: "Referência não encontrada nesta igreja." });
     return;
@@ -72,7 +86,7 @@ export async function registerVolunteerRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.get("/volunteers", async (request, reply) => {
+  app.get("/volunteers", { preHandler: requireRole(["SUPER_ADMIN", "PASTOR", "LEADER"]) }, async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       return await listVolunteers(prisma, churchId);
@@ -81,7 +95,7 @@ export async function registerVolunteerRoutes(
     }
   });
 
-  app.get("/volunteers/:personId/logs", async (request, reply) => {
+  app.get("/volunteers/:personId/logs", { preHandler: requireRole(["SUPER_ADMIN", "PASTOR", "LEADER"]) }, async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       const params = request.params as { personId: string };
@@ -92,7 +106,7 @@ export async function registerVolunteerRoutes(
     }
   });
 
-  app.post("/volunteers/status", async (request, reply) => {
+  app.post("/volunteers/status", { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) }, async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       const changedBy = await resolveTenantActorPersonId(prisma, churchId, getUserId(request));

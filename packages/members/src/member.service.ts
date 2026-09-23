@@ -25,6 +25,7 @@ export async function listMembers(
     where: {
       churchId,
       role: Role.MEMBER,
+      AND: [{ OR: [{ campusId: null }, { campus: { churchId } }] }],
       ...(search
         ? {
             OR: [

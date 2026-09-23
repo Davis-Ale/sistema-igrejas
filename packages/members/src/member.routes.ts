@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { createMemberSchema, listMembersQuerySchema } from "./member.schema.js";
 import { createMember, listMembers } from "./member.service.js";
+import { readPeople, managePeople, registerPersonManagementRoutes } from "./person-management.routes.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -45,7 +46,8 @@ export async function registerMemberRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.get("/members", async (request, reply) => {
+  registerPersonManagementRoutes(app, prisma, "members");
+  app.get("/members", readPeople, async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       const query = listMembersQuerySchema.parse(request.query);
@@ -57,7 +59,7 @@ export async function registerMemberRoutes(
     }
   });
 
-  app.post("/members", async (request, reply) => {
+  app.post("/members", managePeople, async (request, reply) => {
     try {
       const churchId = getChurchId(request);
       const input = createMemberSchema.parse(request.body);

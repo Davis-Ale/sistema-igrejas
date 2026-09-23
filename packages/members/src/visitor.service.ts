@@ -25,6 +25,7 @@ export async function listVisitors(
     where: {
       churchId,
       role: Role.VISITOR,
+      AND: [{ OR: [{ campusId: null }, { campus: { churchId } }] }],
       ...(search
         ? {
             OR: [

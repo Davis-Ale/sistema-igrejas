@@ -1,11 +1,19 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { UpdateVolunteerStatusInput } from "./volunteer.schema.js";
 
 export async function listVolunteers(prisma: PrismaClient, churchId: string) {
   return prisma.person.findMany({
     where: {
       churchId,
-      role: "VOLUNTEER"
+      role: { in: ["MEMBER", "VOLUNTEER", "LEADER", "PASTOR", "SUPER_ADMIN"] },
+      OR: [{ role: "VOLUNTEER" }, { volunteerStatus: { in: ["ELIGIBLE", "ACTIVE", "SUSPENDED"] } }],
+      AND: [
+        { OR: [{ celulaId: null }, { celula: { churchId, leader: { churchId } } }] },
+        { OR: [{ trailStageId: null }, { trailStage: {
+          churchId, trail: { churchId },
+          OR: [{ requiresEventId: null }, { requiresEvent: { churchId } }]
+        } }] }
+      ]
     },
     select: {
       id: true,
@@ -73,46 +81,51 @@ export async function updateVolunteerStatus(
   changedBy: string,
   input: UpdateVolunteerStatusInput
 ) {
-  const [person, changer] = await Promise.all([
-    prisma.person.findFirst({
-      where: {
-        id: input.personId,
-        churchId
-      },
-      select: {
-        id: true
-      }
-    }),
-    prisma.person.findFirst({
-      where: {
-        id: changedBy,
-        churchId
-      },
-      select: {
-        id: true
-      }
-    })
-  ]);
-
-  if (!person) {
-    throw new Error("PERSON_NOT_FOUND");
-  }
-
-  if (!changer) {
-    throw new Error("CHANGER_NOT_FOUND");
-  }
-
-  const personUpdateData =
-    input.status === "ACTIVE"
-      ? {
-          role: "VOLUNTEER" as const,
-          volunteerStatus: input.status
-        }
-      : {
-          volunteerStatus: input.status
-        };
-
   return prisma.$transaction(async (tx) => {
+    const [person, changer] = await Promise.all([
+      tx.person.findFirst({
+        where: {
+          id: input.personId,
+          churchId
+        },
+        select: {
+          id: true,
+          role: true,
+          userAccount: { select: { churchId: true } }
+        }
+      }),
+      tx.person.findFirst({
+        where: {
+          id: changedBy,
+          churchId
+        },
+        select: {
+          id: true
+        }
+      })
+    ]);
+
+    if (!person) {
+      throw new Error("PERSON_NOT_FOUND");
+    }
+
+    if (!changer) {
+      throw new Error("CHANGER_NOT_FOUND");
+    }
+
+    if (person.role === "VISITOR") throw new Error("INVALID_VOLUNTEER_ROLE");
+    if (person.userAccount && person.userAccount.churchId !== churchId) throw new Error("PERSON_RELATION_CONFLICT");
+
+    const personUpdateData =
+      input.status === "ACTIVE" && person.role === "MEMBER"
+        ? {
+            role: "VOLUNTEER" as const,
+            volunteerStatus: input.status
+          }
+        : {
+            volunteerStatus: input.status
+          };
+
     const updatedPerson = await tx.person.update({
       where: {
         id: input.personId,
@@ -143,5 +156,5 @@ export async function updateVolunteerStatus(
       person: updatedPerson,
       log
     };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
