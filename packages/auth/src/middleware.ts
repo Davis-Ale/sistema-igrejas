@@ -1,7 +1,15 @@
 import "@fastify/jwt";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import type { JWTPayload } from "./types.js";
+
+const tokenPayloadSchema = z.object({
+  userId: z.string().trim().min(1),
+  churchId: z.string().trim().min(1),
+  role: z.enum(["SUPER_ADMIN", "PASTOR", "LEADER", "VOLUNTEER", "MEMBER"]),
+  campusId: z.string().trim().min(1).optional()
+});
 
 function getBearerToken(request: FastifyRequest): string | null {
   const authorization = request.headers.authorization;
@@ -10,9 +18,9 @@ function getBearerToken(request: FastifyRequest): string | null {
     return null;
   }
 
-  const [scheme, token] = authorization.split(" ");
+  const [scheme, token, extra] = authorization.split(" ");
 
-  if (scheme !== "Bearer" || !token) {
+  if (scheme !== "Bearer" || !token || extra !== undefined) {
     return null;
   }
 
@@ -100,28 +108,61 @@ export function createAuthPreHandler(prisma: PrismaClient) {
       return;
     }
 
+    let payload: z.infer<typeof tokenPayloadSchema>;
     try {
-      const payload = await request.server.jwt.verify<JWTPayload>(token);
+      payload = tokenPayloadSchema.parse(await request.server.jwt.verify(token));
+    } catch {
+      await sendInvalidToken(reply);
+      return;
+    }
 
-      if (!payload.userId || !payload.churchId || !payload.role) {
+    try {
+      const account = await prisma.userAccount.findUnique({
+        where: { id: payload.userId },
+        select: {
+          id: true, churchId: true, status: true, role: true,
+          person: { select: { churchId: true, campusId: true, campus: { select: { churchId: true } } } }
+        }
+      });
+
+      if (!account || account.churchId !== payload.churchId) {
+        await sendInvalidToken(reply);
+        return;
+      }
+      if (account.status !== "ACTIVE") {
+        await reply.code(403).send({ error: "ACCOUNT_DISABLED", message: "Conta de usuário desativada." });
+        return;
+      }
+      const currentRole = tokenPayloadSchema.shape.role.safeParse(account.role);
+      if (!currentRole.success) {
+        await sendInvalidToken(reply);
+        return;
+      }
+      if (account.person && (account.person.churchId !== account.churchId ||
+        (account.person.campus && account.person.campus.churchId !== account.churchId))) {
         await sendInvalidToken(reply);
         return;
       }
 
-      const canAccessSystem = await ensureChurchCanAccessSystem(prisma, payload, reply);
+      // Operation guards must use current account permissions, never stale JWT claims.
+      const currentUser: JWTPayload = {
+        userId: account.id, churchId: account.churchId, role: currentRole.data,
+        ...(account.person?.campusId ? { campusId: account.person.campusId } : {})
+      };
+      const canAccessSystem = await ensureChurchCanAccessSystem(prisma, currentUser, reply);
 
       if (!canAccessSystem) {
         return;
       }
 
-      request.user = payload;
-      request.churchId = payload.churchId;
-
-      if (payload.campusId) {
-        request.campusId = payload.campusId;
+      request.user = currentUser;
+      request.churchId = currentUser.churchId;
+      delete request.campusId;
+      if (currentUser.campusId) {
+        request.campusId = currentUser.campusId;
       }
     } catch {
-      await sendInvalidToken(reply);
+      await reply.code(503).send({ error: "AUTH_UNAVAILABLE", message: "Não foi possível validar o acesso." });
     }
   };
 }

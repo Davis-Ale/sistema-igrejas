@@ -4,6 +4,7 @@ import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   createAuthPreHandler,
+  getJwtSecret,
   registerAuthRoutes,
   requireRole
 } from "@sistema-igrejas/auth";
@@ -57,6 +58,7 @@ import Fastify, {
 import { registerAssistantRoutes } from "./assistant/assistant.routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
+  const jwtSecret = getJwtSecret();
   const app = Fastify({
     logger: {
       redact: [
@@ -79,9 +81,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   const prisma = new PrismaClient({
     adapter
   });
-
-  const jwtSecret =
-    process.env.JWT_SECRET ?? "dev-secret-change-me";
 
   await app.register(cors, {
     origin: true,
