@@ -1,4 +1,5 @@
 import type {} from "@sistema-igrejas/auth";
+import { ZodError } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { assistantMessageSchema } from "./assistant.schema.js";
@@ -21,6 +22,14 @@ function getUserRole(request: FastifyRequest) {
 }
 
 async function sendRouteError(error: unknown, reply: FastifyReply): Promise<void> {
+  if (error instanceof ZodError) {
+    await reply.code(400).send({ error: "INVALID_INPUT", message: "Informe uma mensagem válida de até 2000 caracteres." });
+    return;
+  }
+  if (error instanceof Error && ["ASSISTANT_ACCESS_DENIED", "FINANCIAL_ACCESS_DENIED"].includes(error.message)) {
+    await reply.code(403).send({ error: error.message, message: "Sem permissão para esta consulta." });
+    return;
+  }
   if (!(error instanceof Error)) {
     await reply.code(500).send({
       error: "INTERNAL_SERVER_ERROR",

@@ -1,14 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
+import type { FastifyRequest } from "fastify";
+import { ensureCanAccessFinancial } from "@sistema-igrejas/financial";
 
 type AssistantRole = "SUPER_ADMIN" | "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER";
 import type { AssistantMessageInput } from "./assistant.schema.js";
 
 type AssistantContext = {
-  membersCount: number;
-  visitorsCount: number;
-  cellsCount: number;
-  eventsCount: number;
-  volunteersCount: number;
+  membersCount?: number;
+  visitorsCount?: number;
+  volunteersCount?: number;
 };
 
 type CellSummary = {
@@ -37,14 +37,10 @@ type EventSummary = {
   isPaid: boolean;
   publicRegistrationEnabled: boolean;
   registrations: {
-    id: string;
     status: string;
-    paymentStatus: string;
-    checkedInAt: Date | null;
+    waitlistedAt: Date | null;
   }[];
 };
-
-const WEB_BASE_URL = process.env.WEB_BASE_URL ?? "http://localhost:3000";
 
 function normalizeMessage(message: string) {
   return message
@@ -79,94 +75,33 @@ function formatCurrency(value: unknown) {
   }).format(amount);
 }
 
-function getEventPublicLink(eventId: string) {
-  return `/eventos/`;
+function getEventPublicLink(event: EventSummary) {
+  if (!event.isPublic) return "indisponível (evento interno)";
+  // Same Events frontend used by the dashboard redirect; /eventos/[eventId] is the public registration page.
+  const base = (process.env.NEXT_PUBLIC_EVENTS_APP_URL ?? "http://localhost:3001").replace(/\/$/, "");
+  return `${base}/eventos/${encodeURIComponent(event.id)}`;
 }
 
-function canViewFinancialSummary(role: AssistantRole) {
-  return role === "SUPER_ADMIN" || role === "PASTOR";
+type AssistantTopic = "members" | "visitors" | "cells" | "events" | "volunteers" | "financial" | "help";
+
+function getTopic(message: string): AssistantTopic {
+  // Finance takes precedence over other topics in mixed questions.
+  if (hasAny(message, ["financeiro", "dizimo", "oferta", "entrada", "saida", "valor", "saldo", "receita", "despesa", "arrecad", "transac", "pagamento"])) return "financial";
+  if (hasAny(message, ["membro"])) return "members";
+  if (hasAny(message, ["visitante"])) return "visitors";
+  if (hasAny(message, ["celula", "bairro", "regiao", "perfil"])) return "cells";
+  if (hasAny(message, ["evento", "inscricao", "check-in", "checkin", "link", "pagina"])) return "events";
+  if (hasAny(message, ["voluntario"])) return "volunteers";
+  return "help";
 }
 
-async function getFinancialSummary(prisma: PrismaClient, churchId: string) {
-  const [income, expenses, totalTransactions] = await Promise.all([
-    prisma.transaction.aggregate({
-      _sum: {
-        amount: true
-      },
-      where: {
-        churchId,
-        direction: "IN"
-      }
-    }),
-    prisma.transaction.aggregate({
-      _sum: {
-        amount: true
-      },
-      where: {
-        churchId,
-        direction: "OUT"
-      }
-    }),
-    prisma.transaction.count({
-      where: {
-        churchId
-      }
-    })
-  ]);
-
-  const incomeTotal = Number(income._sum.amount ?? 0);
-  const expenseTotal = Number(expenses._sum.amount ?? 0);
-
-  return {
-    balance: incomeTotal - expenseTotal,
-    expenseTotal,
-    incomeTotal,
-    totalTransactions
-  };
-}
-
-async function getAssistantContext(
-  prisma: PrismaClient,
-  churchId: string
-): Promise<AssistantContext> {
-  const [membersCount, visitorsCount, cellsCount, eventsCount, volunteersCount] =
-    await Promise.all([
-      prisma.person.count({
-        where: {
-          churchId,
-          role: "MEMBER"
-        }
-      }),
-      prisma.visitor.count({
-        where: {
-          churchId
-        }
-      }),
-      prisma.celula.count({
-        where: {
-          churchId
-        }
-      }),
-      prisma.event.count({
-        where: {
-          churchId
-        }
-      }),
-      prisma.person.count({
-        where: {
-          churchId,
-          role: "VOLUNTEER"
-        }
-      })
-    ]);
-
-  return {
-    membersCount,
-    visitorsCount,
-    cellsCount,
-    eventsCount,
-    volunteersCount
-  };
+function authorizeTopic(role: AssistantRole, topic: AssistantTopic) {
+  if (topic === "financial") {
+    // The shared financial guard only reads the authenticated role.
+    ensureCanAccessFinancial({ user: { role } } as FastifyRequest);
+  } else if (topic !== "help" && !["SUPER_ADMIN", "PASTOR", "LEADER"].includes(role)) {
+    throw new Error("ASSISTANT_ACCESS_DENIED");
+  }
 }
 
 async function getCells(prisma: PrismaClient, churchId: string) {
@@ -192,13 +127,15 @@ async function getCells(prisma: PrismaClient, churchId: string) {
         }
       },
       people: {
+        where: { churchId },
         select: {
           id: true
         }
       }
     },
     where: {
-      churchId
+      churchId,
+      leader: { is: { churchId } }
     }
   });
 }
@@ -219,16 +156,16 @@ async function getEvents(prisma: PrismaClient, churchId: string) {
       isPaid: true,
       publicRegistrationEnabled: true,
       registrations: {
+        where: { churchId, status: { not: "CANCELLED" } },
         select: {
-          id: true,
           status: true,
-          paymentStatus: true,
-          checkedInAt: true
+          waitlistedAt: true
         }
       }
     },
     where: {
-      churchId
+      churchId,
+      deletedAt: null
     }
   });
 }
@@ -341,7 +278,10 @@ function buildEventList(events: EventSummary[]) {
   return events
     .map((event) => {
       const registrationsCount = event.registrations.length;
-      const checkedInCount = event.registrations.filter((registration) => registration.checkedInAt).length;
+      const checkedInCount = event.registrations.filter((registration) => registration.status === "CHECKED_IN").length;
+      const confirmedCount = event.registrations.filter((registration) => registration.status === "CONFIRMED" && !registration.waitlistedAt).length;
+      const waitingCount = event.registrations.filter((registration) => registration.waitlistedAt && registration.status !== "CHECKED_IN").length;
+      const pendingCount = event.registrations.filter((registration) => registration.status === "PENDING" && !registration.waitlistedAt).length;
       const publicStatus = event.isPublic ? "público" : "interno";
       const registrationStatus = event.publicRegistrationEnabled
         ? "inscrição pública habilitada"
@@ -354,8 +294,8 @@ function buildEventList(events: EventSummary[]) {
         `- ${event.title}`,
         `  Data: ${formatDate(event.date)}.`,
         `  Evento ${publicStatus}, ${paymentStatus}, ${registrationStatus}.`,
-        `  Capacidade: ${event.capacity}. Inscritos: ${registrationsCount}. Check-ins: ${checkedInCount}.`,
-        `  Link público: ${getEventPublicLink(event.id)}`
+        `  Capacidade: ${event.capacity}. Inscritos ativos: ${registrationsCount}. Confirmados: ${confirmedCount}. Pendentes: ${pendingCount}. Lista de espera: ${waitingCount}. Check-ins: ${checkedInCount}.`,
+        `  Link público: ${getEventPublicLink(event)}`
       ].join("\n");
     })
     .join("\n\n");
@@ -364,27 +304,27 @@ function buildEventList(events: EventSummary[]) {
 async function buildLocalAssistantAnswer(
   prisma: PrismaClient,
   churchId: string,
-  userRole: AssistantRole,
+  topic: AssistantTopic,
   input: AssistantMessageInput,
   context: AssistantContext
 ) {
   const message = normalizeMessage(input.message);
 
-  if (hasAny(message, ["membro", "membros"])) {
+  if (topic === "members") {
     return [
       `Hoje existem ${context.membersCount} membro(s) cadastrados no sistema.`,
       "Esse número considera pessoas com papel MEMBER na igreja atual."
     ].join("\n");
   }
 
-  if (hasAny(message, ["visitante", "visitantes"])) {
+  if (topic === "visitors") {
     return [
       `Hoje existem ${context.visitorsCount} visitante(s) cadastrados.`,
       "Esse total vem do cadastro real de visitantes da igreja atual."
     ].join("\n");
   }
 
-  if (hasAny(message, ["celula", "celulas", "célula", "células", "bairro", "regiao", "região", "perfil"])) {
+  if (topic === "cells") {
     const cells = await getCells(prisma, churchId);
     const matchedCells = findCellsMentionedInMessage(message, cells);
 
@@ -438,20 +378,20 @@ async function buildLocalAssistantAnswer(
     ].join("\n");
   }
 
-  if (hasAny(message, ["evento", "eventos", "inscricao", "inscrição", "check-in", "checkin", "link", "pagina", "página"])) {
+  if (topic === "events") {
     const events = await getEvents(prisma, churchId);
 
     return buildEventAnswer(events, message);
   }
 
-  if (hasAny(message, ["voluntario", "voluntarios", "voluntário", "voluntários"])) {
+  if (topic === "volunteers") {
     return [
       `Hoje existem ${context.volunteersCount} voluntário(s) cadastrados.`,
       "Esse número considera pessoas com papel VOLUNTEER na igreja atual."
     ].join("\n");
   }
 
-  if (hasAny(message, ["financeiro", "dizimo", "dízimo", "oferta", "entrada", "saida", "saída", "valor", "valores"])) {
+  if (topic === "financial") {
     return [
       "O módulo financeiro envolve valores e precisa respeitar permissão de acesso.",
       "Neste corte, eu ainda não vou exibir relatório financeiro pelo assistente.",
@@ -460,7 +400,7 @@ async function buildLocalAssistantAnswer(
   }
 
   return [
-    "Posso consultar dados reais do sistema e responder sobre membros, visitantes, células, eventos, trilho e voluntários.",
+    "Posso consultar dados reais do sistema e responder sobre membros, visitantes, células, eventos e voluntários, conforme sua permissão.",
     "Também posso orientar sobre financeiro, mas relatórios com valores precisam de controle de permissão antes de serem exibidos aqui.",
     "Eu não altero banco, não cadastro nada sozinho e não executo ações administrativas."
   ].join("\n");
@@ -472,10 +412,16 @@ export async function answerAssistantMessage(
   userRole: AssistantRole,
   input: AssistantMessageInput
 ) {
-  const context = await getAssistantContext(prisma, churchId);
+  if (!churchId) throw new Error("CHURCH_CONTEXT_REQUIRED");
+  const topic = getTopic(normalizeMessage(input.message));
+  authorizeTopic(userRole, topic);
+  const context: AssistantContext = {};
+  if (topic === "members") context.membersCount = await prisma.person.count({ where: { churchId, role: "MEMBER" } });
+  if (topic === "visitors") context.visitorsCount = await prisma.visitor.count({ where: { churchId } });
+  if (topic === "volunteers") context.volunteersCount = await prisma.person.count({ where: { churchId, role: "VOLUNTEER" } });
 
   return {
-    answer: await buildLocalAssistantAnswer(prisma, churchId, userRole, input, context),
+    answer: await buildLocalAssistantAnswer(prisma, churchId, topic, input, context),
     context,
     safety: {
       canExecuteBusinessRules: false,
