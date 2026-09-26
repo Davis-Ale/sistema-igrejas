@@ -109,6 +109,11 @@ enum EventIntegrationStatus {
   ERROR
 }
 
+enum MinistryStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Church {
   id                    String       @id @default(cuid())
   churchId              String       @unique @default(cuid())
@@ -135,6 +140,8 @@ model Church {
   eventsFinancialOperationAudits EventsFinancialOperationAudit[]
   campuses                     Campus[]
   people           Person[]
+  ministries       Ministry[]
+  ministryMembers  MinistryMember[]
   trails           Trail[]
   trailStages      TrailStage[]
   trailProgress    TrailProgress[]
@@ -250,7 +257,10 @@ model Person {
   registrations      Registration[]
   transactions       Transaction[]
   userAccount        UserAccount?
+  ledMinistries      Ministry[]       @relation("MinistryLeader")
+  ministryMemberships MinistryMember[]
 
+  @@unique([churchId, id])
   @@index([churchId])
   @@index([churchId, campusId])
   @@index([churchId, email])
@@ -259,6 +269,39 @@ model Person {
   @@index([churchId, volunteerStatus])
   @@index([churchId, celulaId])
   @@index([churchId, trailStageId])
+}
+
+model Ministry {
+  id          String         @id @default(cuid())
+  churchId    String
+  name        String
+  description String         @default("")
+  status      MinistryStatus @default(ACTIVE)
+  leaderId    String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  church  Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  leader  Person           @relation("MinistryLeader", fields: [churchId, leaderId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  members MinistryMember[]
+
+  @@unique([churchId, id])
+  @@index([churchId, status])
+  @@index([churchId, leaderId])
+}
+
+model MinistryMember {
+  churchId   String
+  ministryId String
+  personId   String
+  createdAt  DateTime @default(now())
+
+  church   Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  ministry Ministry @relation(fields: [churchId, ministryId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  person   Person   @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([churchId, ministryId, personId])
+  @@index([churchId, personId])
 }
 
 model Trail {

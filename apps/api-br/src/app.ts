@@ -52,6 +52,7 @@ import {
 } from "@sistema-igrejas/members";
 import { registerTrailRoutes } from "@sistema-igrejas/trail";
 import { registerVolunteerRoutes } from "@sistema-igrejas/volunteers";
+import { registerMinistryRoutes } from "@sistema-igrejas/ministries";
 import Fastify, {
   type FastifyInstance
 } from "fastify";
@@ -782,6 +783,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await registerVisitorRoutes(protectedRoutes, prisma);
       await registerTrailRoutes(protectedRoutes, prisma);
       await registerVolunteerRoutes(protectedRoutes, prisma);
+      await registerMinistryRoutes(protectedRoutes, prisma);
     },
     {
       prefix: "/api"

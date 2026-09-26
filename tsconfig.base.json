@@ -17,6 +17,7 @@
       "@sistema-igrejas/database": ["./packages/database/src/index.ts"],
       "@sistema-igrejas/domain": ["./packages/domain/src/index.ts"],
       "@sistema-igrejas/members": ["./packages/members/src/index.ts"],
+      "@sistema-igrejas/ministries": ["./packages/ministries/src/index.ts"],
       "@sistema-igrejas/trail": ["./packages/trail/src/index.ts"],
       "@sistema-igrejas/volunteers": ["./packages/volunteers/src/index.ts"],
       "@sistema-igrejas/events": ["./packages/events/src/index.ts"],

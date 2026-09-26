@@ -109,6 +109,17 @@ const navigationItems = [
     )
   },
   {
+    label: "Ministérios",
+    href: "/dashboard/ministerios",
+    icon: (
+      <DashboardNavIcon>
+        <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path d="M5 20a7 7 0 0 1 14 0" />
+        <path d="M3 5h4M5 3v4M17 5h4M19 3v4" />
+      </DashboardNavIcon>
+    )
+  },
+  {
     label: "Assistente IA",
     href: "/dashboard/assistente",
     icon: (
@@ -122,6 +133,7 @@ const navigationItems = [
 ];
 
 const moduleShortcuts = [
+  { label: "Ministérios", href: "/dashboard/ministerios" },
   { label: "Membros", href: "/dashboard/membros" },
   { label: "Visitantes", href: "/dashboard/visitantes" },
   { label: "Células", href: "/dashboard/celulas" },
