@@ -1,0 +1,31 @@
+.header { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin: 12px 0 30px; }
+.header h1 { margin: 7px 0 10px; font-size: clamp(27px, 2.7vw, 38px); letter-spacing: -.045em; font-weight: 600; overflow-wrap: anywhere; }
+.header > div > p:last-child { color: var(--ui-muted); font-size: 13px; line-height: 1.7; }
+.welcome { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 40px; padding: 32px; background: radial-gradient(ellipse at top left, #234575, transparent 75%), #14233a; border: 1px solid #3b557a; border-radius: 16px; margin-bottom: 32px; }
+.welcomeIcon { display: grid; place-items: center; width: 53px; height: 53px; background: #284c7c; border: 1px solid #5277a7; border-radius: 14px; color: #c2ddff; margin-bottom: 24px; }
+.welcome h2 { font-size: clamp(23px, 2.2vw, 31px); font-weight: 500; letter-spacing: -.035em; margin: 9px 0 12px; }
+.welcome > div > p:last-child { max-width: 480px; font-size: 13px; color: #b1c5e0; line-height: 1.8; }
+.sessionInfo { display: grid; align-content: center; gap: 19px; padding: 25px; border: 1px solid #3a5272; border-radius: 12px; background: #0c182b70; min-width: 0; }
+.sessionInfo > span { display: flex; gap: 12px; align-items: center; color: #9ab9e3; }
+.sessionInfo > span > span { min-width: 0; font-size: 11px; color: #a3b8d4; }
+.sessionInfo strong { display: block; margin-top: 5px; color: #e8f0fd; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.contentGrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+.sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 20px; }
+.sectionHeading h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.sectionHeading p { margin-top: 6px; font-size: 12px; color: var(--ui-muted); }
+.moduleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.moduleCard { position: relative; display: block; min-width: 0; padding: 21px; background: #111f32; border: 1px solid #2d405b; border-radius: 12px; text-decoration: none; transition: border-color .16s, background .16s; }
+.moduleCard:hover { border-color: #5881b4; background: #192f4c; }
+.moduleIcon { display: grid; place-items: center; width: 40px; height: 40px; background: #203857; border: 1px solid #3a587f; border-radius: 11px; color: #bad6ff; margin-bottom: 20px; }
+.cardArrow { position: absolute; right: 18px; top: 21px; color: #7c9bc5; }
+.moduleCard h3 { font-weight: 550; font-size: 15px; letter-spacing: -.02em; }
+.moduleCard p { color: var(--ui-muted); font-size: 11px; margin-top: 8px; line-height: 1.6; }
+.assistantCard { padding: 28px; background: linear-gradient(145deg, #292947, #15223a); border: 1px solid #494b76; border-radius: 14px; margin-top: 0; }
+.assistantIcon { display: grid; place-items: center; color: #d4d0ff; width: 52px; height: 52px; border-radius: 15px; border: 1px solid #66628e; background: #3a375a; margin-bottom: 25px; }
+.assistantCard h2 { font-size: 25px; font-weight: 500; letter-spacing: -.035em; line-height: 1.35; margin: 13px 0; }
+.assistantCard > p:not(:first-child) { color: #b4b9d0; font-size: 13px; line-height: 1.8; }
+.assistantCard > a { margin-top: 27px; width: 100%; }
+@media (max-width: 1180px) { .moduleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .contentGrid { grid-template-columns: minmax(0, 1fr) 270px; gap: 20px; } }
+@media (max-width: 900px) { .welcome, .contentGrid { grid-template-columns: minmax(0, 1fr); } .welcome { gap: 24px; } .sessionInfo { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 660px) { .header { align-items: flex-start; } .welcome { padding: 23px; } .sessionInfo { grid-template-columns: minmax(0, 1fr); padding: 18px; } .moduleGrid { gap: 11px; } .moduleCard { padding: 17px; } .assistantCard { padding: 24px; } }
+@media (prefers-reduced-motion: reduce) { .moduleCard { transition: none; } }

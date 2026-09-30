@@ -12,13 +12,10 @@ export function DashboardNavIcon({
       aria-hidden="true"
       style={{
         alignItems: "center",
-        background: "rgba(15, 23, 42, 0.34)",
-        border: "1px solid rgba(148, 163, 184, 0.16)",
-        borderRadius: "12px",
         display: "inline-flex",
-        height: "30px",
+        height: "26px",
         justifyContent: "center",
-        width: "30px"
+        width: "26px"
       }}
     >
       <svg

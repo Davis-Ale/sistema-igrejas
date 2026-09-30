@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import styles from "./celulas.module.css";
+
+import { Network } from "lucide-react";
+import { PageHeader } from "../ui";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 import { CellEditList } from "./cell-edit-list";
@@ -366,67 +369,23 @@ export default function CelulasPage() {
   return (
     <DashboardAuthGuard>
       <main
-        style={{
-          background:
-            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
-          color: "#f8fafc",
-          minHeight: "100vh",
-          padding: "40px"
-        }}
+        className={styles.page}
       >
         <section
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.74))",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "28px",
-            boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
-            display: "grid",
-            gap: "28px",
-            margin: "0 auto",
-            maxWidth: "1120px",
-            padding: "28px"
-          }}
+          className={styles.container}
         >
-          <div>
-            <Link
-              href="/dashboard"
-              style={{
-                color: "#93c5fd",
-                display: "inline-flex",
-                fontSize: "14px",
-                fontWeight: 800,
-                marginBottom: "22px",
-                textDecoration: "none"
-              }}
-            >
-              ← Voltar ao painel
-            </Link>
-
-
-          </div>
+          <PageHeader title="Células" description="Organize os encontros, os perfis e a liderança de cada grupo." icon={Network} />
 
           <form
             onSubmit={handleSaveCell}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
+            className={styles.form}
           >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
+            <h2 className={styles.sectionTitle}>
               {editingCellId ? "Editar célula" : "Cadastrar célula"}
             </h2>
 
             <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
-              }}
+              className={styles.fields}
             >
               <CellLocationFields
                 disabled={isLoadingLocation}
@@ -434,34 +393,34 @@ export default function CelulasPage() {
                 neighborhoods={neighborhoods}
                 onNeighborhoodChange={setNeighborhood}
               />
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label className={styles.field}>
                 Dia de encontro
                 <input
                   onChange={(event) => setMeetDay(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  className={styles.input}
                   type="text"
                   value={meetDay}
                 />
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label className={styles.field}>
                 Horário
                 <input
                   onChange={(event) => setMeetTime(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  className={styles.input}
                   type="time"
                   value={meetTime}
                 />
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label className={styles.field}>
                 Tipo/perfil
                 <select
                   onChange={(event) => setProfile(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  className={styles.input}
                   value={profile}
                 >
                   <option value="">Selecione</option>
@@ -474,12 +433,12 @@ export default function CelulasPage() {
                 </select>
               </label>
 
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
+              <label className={styles.field}>
                 Líder
                 <select
                   onChange={(event) => setLeaderId(event.target.value)}
                   required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
+                  className={styles.input}
                   value={leaderId}
                 >
                   <option value="">Selecione um líder</option>
@@ -492,20 +451,10 @@ export default function CelulasPage() {
               </label>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            <div className={styles.actions}>
               <button
                 disabled={isCreating || members.length === 0}
-                style={{
-                  background: "#2563eb",
-                  border: 0,
-                  borderRadius: "14px",
-                  color: "#ffffff",
-                  cursor: isCreating || members.length === 0 ? "not-allowed" : "pointer",
-                  font: "inherit",
-                  fontWeight: 900,
-                  opacity: isCreating || members.length === 0 ? 0.72 : 1,
-                  padding: "13px 18px"
-                }}
+                className={styles.primary}
                 type="submit"
               >
                 {isCreating
@@ -520,7 +469,7 @@ export default function CelulasPage() {
               {!editingCellId ? (
                 <button
                   onClick={() => setShowCellList((current) => !current)}
-                  style={{ background: "transparent", border: "1px solid rgba(96, 165, 250, 0.38)", borderRadius: "14px", color: "#bfdbfe", cursor: "pointer", font: "inherit", fontWeight: 900, padding: "13px 18px" }}
+                  className={styles.button}
                   type="button"
                 >
                   {showCellList ? "Fechar lista" : "Gerenciar células"}
@@ -531,16 +480,7 @@ export default function CelulasPage() {
                 <button
                   disabled={isCreating}
                   onClick={handleCancelEdit}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid rgba(148, 163, 184, 0.38)",
-                    borderRadius: "14px",
-                    color: "#cbd5e1",
-                    cursor: isCreating ? "not-allowed" : "pointer",
-                    font: "inherit",
-                    fontWeight: 900,
-                    padding: "13px 18px"
-                  }}
+                  className={styles.button}
                   type="button"
                 >
                   Cancelar edição
@@ -551,37 +491,18 @@ export default function CelulasPage() {
 
           <form
             onSubmit={handleChangeLeader}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
+            className={styles.form}
           >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
+            <h2 className={styles.sectionTitle}>
               Alterar líder da célula
             </h2>
 
-            <div style={{ display: "grid", gap: "16px" }}>
+            <div className={styles.stack}>
               <div
-                style={{
-                  alignItems: "start",
-                  display: "grid",
-                  gap: "14px",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(240px, 1fr))"
-                }}
+                className={styles.fields}
               >
                 <label
-                  style={{
-                    color: "#cbd5e1",
-                    display: "grid",
-                    fontSize: "14px",
-                    fontWeight: 800,
-                    gap: "8px"
-                  }}
+                  className={styles.field}
                 >
                   Célula
                   <select
@@ -595,15 +516,7 @@ export default function CelulasPage() {
                       setSelectedLeaderId(cell?.leaderId ?? "");
                     }}
                     required
-                    style={{
-                      border: "1px solid rgba(148, 163, 184, 0.38)",
-                      borderRadius: "14px",
-                      boxSizing: "border-box",
-                      font: "inherit",
-                      height: "48px",
-                      padding: "0 14px",
-                      width: "100%"
-                    }}
+                    className={styles.input}
                     value={selectedCellId}
                   >
                     <option value="">Selecione uma célula</option>
@@ -617,13 +530,7 @@ export default function CelulasPage() {
                 </label>
 
                 <label
-                  style={{
-                    color: "#cbd5e1",
-                    display: "grid",
-                    fontSize: "14px",
-                    fontWeight: 800,
-                    gap: "8px"
-                  }}
+                  className={styles.field}
                 >
                   Novo líder
                   <select
@@ -631,15 +538,7 @@ export default function CelulasPage() {
                       setSelectedLeaderId(event.target.value)
                     }
                     required
-                    style={{
-                      border: "1px solid rgba(148, 163, 184, 0.38)",
-                      borderRadius: "14px",
-                      boxSizing: "border-box",
-                      font: "inherit",
-                      height: "48px",
-                      padding: "0 14px",
-                      width: "100%"
-                    }}
+                    className={styles.input}
                     value={selectedLeaderId}
                   >
                     <option value="">Selecione um novo líder</option>
@@ -652,26 +551,12 @@ export default function CelulasPage() {
                 </label>
 
                 <label
-                  style={{
-                    color: "#cbd5e1",
-                    display: "grid",
-                    fontSize: "14px",
-                    fontWeight: 800,
-                    gap: "8px"
-                  }}
+                  className={styles.field}
                 >
                   Telefone do novo líder
                   <input
                     readOnly
-                    style={{
-                      border: "1px solid rgba(148, 163, 184, 0.38)",
-                      borderRadius: "14px",
-                      boxSizing: "border-box",
-                      font: "inherit",
-                      height: "48px",
-                      padding: "0 14px",
-                      width: "100%"
-                    }}
+                    className={styles.input}
                     type="text"
                     value={
                       selectedLeaderId
@@ -696,28 +581,7 @@ export default function CelulasPage() {
                 cells.length === 0 ||
                 members.length === 0
               }
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor:
-                  isUpdatingLeader ||
-                  cells.length === 0 ||
-                  members.length === 0
-                    ? "not-allowed"
-                    : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity:
-                  isUpdatingLeader ||
-                  cells.length === 0 ||
-                  members.length === 0
-                    ? 0.72
-                    : 1,
-                padding: "13px 18px"
-              }}
+              className={styles.primary}
               type="submit"
             >
               {isUpdatingLeader ? "Alterando..." : "Alterar líder"}
@@ -725,13 +589,13 @@ export default function CelulasPage() {
           </form>
 
           {error ? (
-            <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
+            <p className={styles.error}>
               {error}
             </p>
           ) : null}
 
           {successMessage ? (
-            <p style={{ background: "rgba(34, 197, 94, 0.14)", border: "1px solid rgba(74, 222, 128, 0.26)", borderRadius: "14px", color: "#bbf7d0", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
+            <p className={styles.success}>
               {successMessage}
             </p>
           ) : null}

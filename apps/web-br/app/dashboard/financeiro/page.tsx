@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { PageHeader } from "../ui";
+import ui from "../ui.module.css";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, Wallet, Plus, SlidersHorizontal, ReceiptText, Pencil, Ban, RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
+import styles from "./financeiro.module.css";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 
 type LoginSession = {
@@ -123,6 +126,14 @@ function getStatusColor(status: TransactionStatus) {
 }
 
 export default function FinanceiroPage() {
+  const entryRef = useRef<HTMLFormElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  function focusEntry() {
+    entryRef.current?.scrollIntoView({ block: "start" });
+    amountInputRef.current?.focus({ preventScroll: true });
+  }
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<FinancialSummary>({
     income: 0,
@@ -419,535 +430,137 @@ export default function FinanceiroPage() {
 
   return (
     <DashboardAuthGuard>
-      <main
-        style={{
-          background:
-            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
-          color: "#f8fafc",
-          minHeight: "100vh",
-          padding: "40px"
-        }}
-      >
-        <section
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.74))",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "28px",
-            boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
-            display: "grid",
-            gap: "28px",
-            margin: "0 auto",
-            maxWidth: "1120px",
-            padding: "28px"
-          }}
-        >
-          <div>
-            <Link
-              href="/dashboard"
-              style={{
-                color: "#93c5fd",
-                display: "inline-flex",
-                fontSize: "14px",
-                fontWeight: 800,
-                marginBottom: "22px",
-                textDecoration: "none"
-              }}
-            >
-              Voltar ao painel
-            </Link>
+      <main className={`${ui.page} ${styles.page}`}>
+        <div className={styles.container}>
+          <PageHeader title="Financeiro" description="Acompanhe as movimentações e organize os lançamentos da igreja." icon={Wallet} action={<button className={styles.primaryButton} type="button" onClick={focusEntry}><Plus size={17} aria-hidden="true" />{editingTransactionId ? "Continuar edição" : "Novo lançamento"}</button>} />
 
+          {error && <div className={styles.errorAlert} role="alert"><AlertCircle size={19} aria-hidden="true" /><p>{error}</p></div>}
+          {successMessage && <div className={styles.successAlert} role="status"><CheckCircle2 size={19} aria-hidden="true" /><p>{successMessage}</p></div>}
 
+          <section className={styles.summaryGrid} aria-label="Resumo financeiro" aria-busy={isLoading}>
+            <article className={styles.summaryCard} data-tone="income">
+              <div className={styles.summaryTop}><span>Entradas</span><span className={styles.metricIcon}><ArrowDownLeft size={20} aria-hidden="true" /></span></div>
+              <strong>{isLoading ? "—" : formatMoney(summary.income)}</strong><p>Total de entradas na consulta</p>
+            </article>
+            <article className={styles.summaryCard} data-tone="expense">
+              <div className={styles.summaryTop}><span>Saídas</span><span className={styles.metricIcon}><ArrowUpRight size={20} aria-hidden="true" /></span></div>
+              <strong>{isLoading ? "—" : formatMoney(summary.expense)}</strong><p>Total de saídas na consulta</p>
+            </article>
+            <article className={styles.summaryCard} data-tone="balance">
+              <div className={styles.summaryTop}><span>Saldo</span><span className={styles.metricIcon}><Wallet size={20} aria-hidden="true" /></span></div>
+              <strong>{isLoading ? "—" : formatMoney(getSummaryBalance(summary))}</strong><p>Entradas menos saídas na consulta</p>
+            </article>
+          </section>
+
+          <div className={styles.workspace}>
+            <aside className={styles.entryColumn} aria-label="Lançamento financeiro">
+              <form ref={entryRef} onSubmit={handleSubmit} className={styles.entryPanel} id="financial-entry">
+                <div className={styles.panelHeading}>
+                  <span className={styles.sectionIcon}>{editingTransactionId ? <Pencil size={19} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}</span>
+                  <div><h2>{editingTransactionId ? "Corrigir lançamento" : "Novo lançamento"}</h2><p>{editingTransactionId ? "Revise os dados antes de salvar." : "Registre uma movimentação."}</p></div>
+                </div>
+                {editingTransactionId && <p className={styles.editNotice} role="status">Editando um lançamento existente.</p>}
+                <div className={styles.entryBody}>
+                  <fieldset className={styles.directionPicker}>
+                    <legend className={styles.srOnly}>Direção do lançamento</legend>
+                    <label className={styles.directionChoice} data-direction="IN"><input className={styles.srOnly} type="radio" name="direction" value="IN" checked={direction === "IN"} onChange={() => setDirection("IN")} required /><ArrowDownLeft size={17} aria-hidden="true" /> Entrada</label>
+                    <label className={styles.directionChoice} data-direction="OUT"><input className={styles.srOnly} type="radio" name="direction" value="OUT" checked={direction === "OUT"} onChange={() => setDirection("OUT")} required /><ArrowUpRight size={17} aria-hidden="true" /> Saída</label>
+                  </fieldset>
+                  <label className={styles.amountField}>
+                    <span>Valor do lançamento</span>
+                    <span className={styles.amountControl}><span aria-hidden="true">R$</span><input ref={amountInputRef} min="0.01" onChange={(event) => setAmount(event.target.value)} required step="0.01" type="number" inputMode="decimal" value={amount} placeholder="0,00" aria-label="Valor do lançamento em reais" /></span>
+                  </label>
+                  <div className={styles.entryFields}>
+                    <label className={styles.field}><span>Tipo</span><select onChange={(event) => setType(event.target.value as TransactionType)} required value={type}>
+                      <option value="TITHE">Dízimo</option><option value="OFFERING">Oferta</option><option value="EVENT">Evento</option><option value="EXPENSE">Despesa</option><option value="OTHER">Outro</option>
+                    </select></label>
+                    <label className={styles.field}><span>Método</span><select onChange={(event) => setMethod(event.target.value as PaymentMethod)} required value={method}>
+                      <option value="PIX">PIX</option><option value="CARD">Cartão</option><option value="CASH">Dinheiro</option><option value="BOLETO">Boleto</option>
+                    </select></label>
+                    <label className={[styles.field, styles.fullField].join(" ")}><span>Centro de custo</span><input onChange={(event) => setCostCenter(event.target.value)} required type="text" value={costCenter} /></label>
+                    <label className={[styles.field, styles.fullField].join(" ")}><span>Data <small>Opcional</small></span><input onChange={(event) => setAt(event.target.value)} type="date" value={at} /></label>
+                  </div>
+                </div>
+                <div className={styles.entryFooter}>
+                  <button disabled={isSubmitting} className={styles.primaryButton} type="submit">
+                    {isSubmitting ? <span className={styles.spinner} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+                    {isSubmitting ? editingTransactionId ? "Salvando correção..." : "Lançando..." : editingTransactionId ? "Salvar correção" : "Lançar transação"}
+                  </button>
+                  {editingTransactionId && <button disabled={isSubmitting} onClick={cancelEditingTransaction} className={styles.secondaryButton} type="button">Cancelar edição</button>}
+                </div>
+              </form>
+            </aside>
+
+            <div className={styles.ledgerColumn}>
+              <form onSubmit={handleFilterSubmit} className={styles.filterPanel}>
+                <div className={styles.filterHeading}><div className={styles.sectionTitle}><SlidersHorizontal size={18} aria-hidden="true" /><h2>Filtros</h2></div><span className={styles.filterHint}>Aplicados à lista e ao resumo</span></div>
+                <div className={styles.filterGrid}>
+                  <label className={styles.field}><span>Tipo</span><select onChange={(event) => setFilterType(event.target.value)} value={filterType}>
+                    <option value="">Todos os tipos</option><option value="TITHE">Dízimo</option><option value="OFFERING">Oferta</option><option value="EVENT">Evento</option><option value="EXPENSE">Despesa</option><option value="OTHER">Outro</option>
+                  </select></label>
+                  <label className={styles.field}><span>Direção</span><select onChange={(event) => setFilterDirection(event.target.value)} value={filterDirection}>
+                    <option value="">Todas</option><option value="IN">Entrada</option><option value="OUT">Saída</option>
+                  </select></label>
+                  <label className={styles.field}><span>Status</span><select onChange={(event) => setFilterStatus(event.target.value)} value={filterStatus}>
+                    <option value="">Todos</option><option value="ACTIVE">Ativo</option><option value="CANCELLED">Cancelado</option><option value="REVERSED">Estornado</option>
+                  </select></label>
+                  <label className={styles.field}><span>Método</span><select onChange={(event) => setFilterMethod(event.target.value)} value={filterMethod}>
+                    <option value="">Todos</option><option value="PIX">PIX</option><option value="CARD">Cartão</option><option value="CASH">Dinheiro</option><option value="BOLETO">Boleto</option>
+                  </select></label>
+                  <label className={[styles.field, styles.costFilter].join(" ")}><span>Centro de custo</span><input onChange={(event) => setFilterCostCenter(event.target.value)} placeholder="Geral, Eventos, Missões..." type="text" value={filterCostCenter} /></label>
+                  <label className={styles.field}><span>De</span><input onChange={(event) => setFilterFrom(event.target.value)} type="date" value={filterFrom} /></label>
+                  <label className={styles.field}><span>Até</span><input onChange={(event) => setFilterTo(event.target.value)} type="date" value={filterTo} /></label>
+                </div>
+                <div className={styles.filterActions}>
+                  <button disabled={isLoading} onClick={clearFinancialFilters} className={styles.textButton} type="button">Limpar filtros</button>
+                  <button disabled={isLoading} className={styles.secondaryButton} type="submit">{isLoading ? <span className={styles.spinner} aria-hidden="true" /> : <SlidersHorizontal size={15} aria-hidden="true" />}Aplicar filtros</button>
+                </div>
+              </form>
+
+              <section className={styles.transactionsPanel} aria-labelledby="transactions-title" aria-busy={isLoading}>
+                <div className={styles.transactionsHeading}>
+                  <div><div className={styles.sectionTitle}><h2 id="transactions-title">Transações</h2>{!isLoading && <span className={styles.countBadge}>{transactions.length}</span>}</div><p>Consulte os lançamentos e acompanhe seu status.</p></div>
+                  <ReceiptText size={21} className={styles.mutedIcon} aria-hidden="true" />
+                </div>
+                {isLoading && <div className={styles.emptyState} role="status"><span className={styles.spinner} aria-hidden="true" /><p>Carregando financeiro...</p></div>}
+                {!isLoading && transactions.length === 0 && <div className={styles.emptyState}><span className={styles.emptyIcon}><ReceiptText size={27} aria-hidden="true" /></span><h3>Nenhuma transação encontrada</h3><p>Revise os filtros ou registre um novo lançamento.</p><button className={styles.secondaryButton} type="button" onClick={focusEntry}><Plus size={16} aria-hidden="true" /> Novo lançamento</button></div>}
+                {!isLoading && transactions.length > 0 && <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <caption className={styles.srOnly}>Lançamentos financeiros da consulta atual</caption>
+                    <thead><tr><th scope="col">Lançamento</th><th scope="col">Data</th><th scope="col">Método / centro</th><th scope="col" className={styles.valueHeading}>Valor</th><th scope="col">Status</th><th scope="col" className={styles.actionsHeading}>Ações</th></tr></thead>
+                    {transactions.map((transaction) => <tbody key={transaction.id} className={styles.transactionGroup} data-editing={editingTransactionId === transaction.id}>
+                      <tr className={styles.transactionRow}>
+                        <td className={styles.movementCell}><div className={styles.movement}><span className={styles.directionIcon} data-direction={transaction.direction}>{transaction.direction === "IN" ? <ArrowDownLeft size={17} aria-hidden="true" /> : <ArrowUpRight size={17} aria-hidden="true" />}</span><div><strong>{transactionTypeLabels[transaction.type]}</strong><span>{transactionDirectionLabels[transaction.direction]}</span></div></div></td>
+                        <td className={styles.dateCell}><span className={styles.mobileLabel}>Data</span><time dateTime={transaction.at}>{formatDate(transaction.at)}</time></td>
+                        <td className={styles.methodCell}><span className={styles.mobileLabel}>Método / centro</span><strong>{paymentMethodLabels[transaction.method]}</strong><span className={styles.costCenter}>{transaction.costCenter}</span></td>
+                        <td className={styles.amountCell} data-direction={transaction.direction}><span className={styles.srOnly}>Valor: </span>{transaction.direction === "IN" ? "+" : "−"} {formatMoney(transaction.amount)}</td>
+                        <td className={styles.statusCell}><span className={styles.statusBadge} data-status={transaction.status} style={{ color: getStatusColor(transaction.status) }}><span aria-hidden="true" />{transactionStatusLabels[transaction.status]}</span></td>
+                        <td className={styles.actionsCell}>
+                          {transaction.status === "ACTIVE" ? <div className={styles.rowActions}>
+                            <button disabled={processingTransactionId === transaction.id} onClick={() => { startEditingTransaction(transaction); focusEntry(); }} className={styles.rowAction} type="button" title="Editar lançamento" aria-label={"Editar " + transactionTypeLabels[transaction.type] + " de " + formatMoney(transaction.amount)}><Pencil size={15} aria-hidden="true" /><span className={styles.actionLabel}>Editar</span></button>
+                            <button disabled={processingTransactionId === transaction.id} onClick={() => handleTransactionControl(transaction, "cancel")} className={styles.rowAction} data-action="cancel" type="button" title="Cancelar lançamento" aria-label={"Cancelar " + transactionTypeLabels[transaction.type] + " de " + formatMoney(transaction.amount)}><Ban size={15} aria-hidden="true" /><span className={styles.actionLabel}>Cancelar</span></button>
+                            <button disabled={processingTransactionId === transaction.id} onClick={() => handleTransactionControl(transaction, "reverse")} className={styles.rowAction} data-action="reverse" type="button" title="Estornar lançamento" aria-label={"Estornar " + transactionTypeLabels[transaction.type] + " de " + formatMoney(transaction.amount)}><RotateCcw size={15} aria-hidden="true" /><span className={styles.actionLabel}>Estornar</span></button>
+                          </div> : <span className={styles.noActions}>—<span className={styles.srOnly}> Sem ações disponíveis</span></span>}
+                          {processingTransactionId === transaction.id && <span className={styles.processingLabel} role="status">Processando...</span>}
+                        </td>
+                      </tr>
+                      {(transaction.cancelledAt || transaction.cancelReason || transaction.person || transaction.event || transaction.asaasId || transaction.nfseId) && <tr className={styles.detailRow}><td colSpan={6}>
+                        <div className={styles.transactionDetails}>
+                          {transaction.cancelledAt && <span><b>Controle em</b> {formatDateTime(transaction.cancelledAt)}</span>}
+                          {transaction.person && <span><b>Pessoa</b> {transaction.person.name}</span>}
+                          {transaction.event && <span><b>Evento</b> {transaction.event.title}</span>}
+                          {transaction.asaasId && <span><b>Asaas</b> {transaction.asaasId}</span>}
+                          {transaction.nfseId && <span><b>NFS-e</b> {transaction.nfseId}</span>}
+                          {transaction.cancelReason && <p><b>Motivo</b> {transaction.cancelReason}</p>}
+                        </div>
+                      </td></tr>}
+                    </tbody>)}
+                  </table>
+                </div>}
+              </section>
+            </div>
           </div>
-
-          <section
-            style={{
-              display: "grid",
-              gap: "14px",
-              gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))"
-            }}
-          >
-            <article
-              style={{
-                background: "rgba(22, 163, 74, 0.14)",
-                border: "1px solid rgba(74, 222, 128, 0.24)",
-                borderRadius: "20px",
-                padding: "18px"
-              }}
-            >
-              <p style={{ color: "#bbf7d0", fontSize: "13px", fontWeight: 900, margin: "0 0 8px" }}>
-                Entradas
-              </p>
-              <strong style={{ color: "#ffffff", fontSize: "24px" }}>
-                {formatMoney(summary.income)}
-              </strong>
-            </article>
-
-            <article
-              style={{
-                background: "rgba(239, 68, 68, 0.14)",
-                border: "1px solid rgba(248, 113, 113, 0.24)",
-                borderRadius: "20px",
-                padding: "18px"
-              }}
-            >
-              <p style={{ color: "#fecaca", fontSize: "13px", fontWeight: 900, margin: "0 0 8px" }}>
-                Saídas
-              </p>
-              <strong style={{ color: "#ffffff", fontSize: "24px" }}>
-                {formatMoney(summary.expense)}
-              </strong>
-            </article>
-
-            <article
-              style={{
-                background: "rgba(37, 99, 235, 0.14)",
-                border: "1px solid rgba(96, 165, 250, 0.24)",
-                borderRadius: "20px",
-                padding: "18px"
-              }}
-            >
-              <p style={{ color: "#bfdbfe", fontSize: "13px", fontWeight: 900, margin: "0 0 8px" }}>
-                Saldo
-              </p>
-              <strong style={{ color: "#ffffff", fontSize: "24px" }}>
-                {formatMoney(getSummaryBalance(summary))}
-              </strong>
-            </article>
-          </section>
-
-
-          <form
-            onSubmit={handleFilterSubmit}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <div>
-              <h2 style={{ color: "#ffffff", fontSize: "20px", margin: "0 0 6px" }}>
-                Filtros financeiros
-              </h2>
-              <p style={{ color: "#94a3b8", fontSize: "14px", margin: 0 }}>
-                Filtre lançamentos e resumo por tipo, direção, método, centro de custo e período.
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))"
-              }}
-            >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Tipo
-                <select
-                  onChange={(event) => setFilterType(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={filterType}
-                >
-                  <option value="">Todos</option>
-                  <option value="TITHE">Dízimo</option>
-                  <option value="OFFERING">Oferta</option>
-                  <option value="EVENT">Evento</option>
-                  <option value="EXPENSE">Despesa</option>
-                  <option value="OTHER">Outro</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Direção
-                <select
-                  onChange={(event) => setFilterDirection(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={filterDirection}
-                >
-                  <option value="">Todas</option>
-                  <option value="IN">Entrada</option>
-                  <option value="OUT">Saída</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Status
-                <select
-                  onChange={(event) => setFilterStatus(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={filterStatus}
-                >
-                  <option value="">Todos</option>
-                  <option value="ACTIVE">Ativo</option>
-                  <option value="CANCELLED">Cancelado</option>
-                  <option value="REVERSED">Estornado</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Método
-                <select
-                  onChange={(event) => setFilterMethod(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={filterMethod}
-                >
-                  <option value="">Todos</option>
-                  <option value="PIX">PIX</option>
-                  <option value="CARD">Cartão</option>
-                  <option value="CASH">Dinheiro</option>
-                  <option value="BOLETO">Boleto</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Centro de custo
-                <input
-                  onChange={(event) => setFilterCostCenter(event.target.value)}
-                  placeholder="Ex.: Geral, Eventos, Missões"
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="text"
-                  value={filterCostCenter}
-                />
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                De
-                <input
-                  onChange={(event) => setFilterFrom(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="date"
-                  value={filterFrom}
-                />
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Até
-                <input
-                  onChange={(event) => setFilterTo(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="date"
-                  value={filterTo}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              <button
-                disabled={isLoading}
-                style={{
-                  background: "#2563eb",
-                  border: 0,
-                  borderRadius: "14px",
-                  color: "#ffffff",
-                  cursor: isLoading ? "not-allowed" : "pointer",
-                  font: "inherit",
-                  fontWeight: 900,
-                  opacity: isLoading ? 0.72 : 1,
-                  padding: "13px 18px"
-                }}
-                type="submit"
-              >
-                Aplicar filtros
-              </button>
-
-              <button
-                disabled={isLoading}
-                onClick={clearFinancialFilters}
-                style={{
-                  background: "rgba(15, 23, 42, 0.72)",
-                  border: "1px solid rgba(148, 163, 184, 0.32)",
-                  borderRadius: "14px",
-                  color: "#e5e7eb",
-                  cursor: isLoading ? "not-allowed" : "pointer",
-                  font: "inherit",
-                  fontWeight: 900,
-                  opacity: isLoading ? 0.72 : 1,
-                  padding: "13px 18px"
-                }}
-                type="button"
-              >
-                Limpar filtros
-              </button>
-            </div>
-          </form>
-
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              {editingTransactionId ? "Corrigir lançamento" : "Novo lançamento"}
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))"
-              }}
-            >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Tipo
-                <select
-                  onChange={(event) => setType(event.target.value as TransactionType)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={type}
-                >
-                  <option value="TITHE">Dízimo</option>
-                  <option value="OFFERING">Oferta</option>
-                  <option value="EVENT">Evento</option>
-                  <option value="EXPENSE">Despesa</option>
-                  <option value="OTHER">Outro</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Direção
-                <select
-                  onChange={(event) => setDirection(event.target.value as TransactionDirection)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={direction}
-                >
-                  <option value="IN">Entrada</option>
-                  <option value="OUT">Saída</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Método
-                <select
-                  onChange={(event) => setMethod(event.target.value as PaymentMethod)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={method}
-                >
-                  <option value="PIX">PIX</option>
-                  <option value="CARD">Cartão</option>
-                  <option value="CASH">Dinheiro</option>
-                  <option value="BOLETO">Boleto</option>
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Valor
-                <input
-                  min="0.01"
-                  onChange={(event) => setAmount(event.target.value)}
-                  required
-                  step="0.01"
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="number"
-                  value={amount}
-                />
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Centro de custo
-                <input
-                  onChange={(event) => setCostCenter(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="text"
-                  value={costCenter}
-                />
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Data
-                <input
-                  onChange={(event) => setAt(event.target.value)}
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="date"
-                  value={at}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              <button
-              disabled={isSubmitting}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isSubmitting ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isSubmitting ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isSubmitting
-                ? editingTransactionId
-                  ? "Salvando correção..."
-                  : "Lançando..."
-                : editingTransactionId
-                  ? "Salvar correção"
-                  : "Lançar transação"}
-              </button>
-
-              {editingTransactionId ? (
-                <button
-                  disabled={isSubmitting}
-                  onClick={cancelEditingTransaction}
-                  style={{
-                    background: "rgba(15, 23, 42, 0.72)",
-                    border: "1px solid rgba(148, 163, 184, 0.32)",
-                    borderRadius: "14px",
-                    color: "#e5e7eb",
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
-                    font: "inherit",
-                    fontWeight: 900,
-                    opacity: isSubmitting ? 0.72 : 1,
-                    padding: "13px 18px"
-                  }}
-                  type="button"
-                >
-                  Cancelar edição
-                </button>
-              ) : null}
-            </div>
-          </form>
-
-          {error ? (
-            <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
-              {error}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p style={{ background: "rgba(34, 197, 94, 0.14)", border: "1px solid rgba(74, 222, 128, 0.26)", borderRadius: "14px", color: "#bbf7d0", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
-              {successMessage}
-            </p>
-          ) : null}
-
-          <section
-            style={{
-              background: "rgba(15, 23, 42, 0.58)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "14px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Transações
-            </h2>
-
-            {isLoading ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando financeiro...</p>
-            ) : null}
-
-            {!isLoading && transactions.length === 0 ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhuma transação lançada ainda.
-              </p>
-            ) : null}
-
-            {!isLoading && transactions.length > 0 ? (
-              <div style={{ display: "grid", gap: "10px" }}>
-                {transactions.map((transaction) => (
-                  <article
-                    key={transaction.id}
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border: "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "18px",
-                      display: "grid",
-                      gap: "8px",
-                      padding: "14px"
-                    }}
-                  >
-                    <div style={{ alignItems: "start", display: "flex", gap: "12px", justifyContent: "space-between" }}>
-                      <div>
-                        <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
-                          {transactionTypeLabels[transaction.type]} - {transactionDirectionLabels[transaction.direction]} - {transactionStatusLabels[transaction.status]}
-                        </h3>
-
-                        <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                          {paymentMethodLabels[transaction.method]} - {transaction.costCenter} - {formatDate(transaction.at)}
-                        </p>
-
-                        <p style={{ color: getStatusColor(transaction.status), fontSize: "13px", fontWeight: 900, margin: "6px 0 0" }}>
-                          Status: {transactionStatusLabels[transaction.status]}
-                          {transaction.cancelledAt ? ` - controle em ${formatDateTime(transaction.cancelledAt)}` : ""}
-                        </p>
-
-                        {transaction.cancelReason ? (
-                          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: "4px 0 0" }}>
-                            Motivo: {transaction.cancelReason}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div style={{ alignItems: "end", display: "grid", gap: "8px", justifyItems: "end" }}>
-                        <strong style={{ color: transaction.direction === "IN" ? "#bbf7d0" : "#fecaca", fontSize: "16px", whiteSpace: "nowrap" }}>
-                          {transaction.direction === "IN" ? "+" : "-"} {formatMoney(transaction.amount)}
-                        </strong>
-
-                        {transaction.status === "ACTIVE" ? (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "end" }}>
-                            <button
-                              disabled={processingTransactionId === transaction.id}
-                              onClick={() => startEditingTransaction(transaction)}
-                              style={{ background: "rgba(37, 99, 235, 0.16)", border: "1px solid rgba(96, 165, 250, 0.32)", borderRadius: "999px", color: "#bfdbfe", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
-                              type="button"
-                            >
-                              Editar
-                            </button>
-
-                            <button
-                              disabled={processingTransactionId === transaction.id}
-                              onClick={() => handleTransactionControl(transaction, "cancel")}
-                              style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.32)", borderRadius: "999px", color: "#fecaca", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
-                              type="button"
-                            >
-                              Cancelar
-                            </button>
-
-                            <button
-                              disabled={processingTransactionId === transaction.id}
-                              onClick={() => handleTransactionControl(transaction, "reverse")}
-                              style={{ background: "rgba(14, 165, 233, 0.14)", border: "1px solid rgba(125, 211, 252, 0.32)", borderRadius: "999px", color: "#bae6fd", cursor: processingTransactionId === transaction.id ? "not-allowed" : "pointer", font: "inherit", fontSize: "12px", fontWeight: 900, opacity: processingTransactionId === transaction.id ? 0.72 : 1, padding: "8px 12px" }}
-                              type="button"
-                            >
-                              Estornar
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {transaction.person || transaction.event || transaction.asaasId || transaction.nfseId ? (
-                      <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: 0 }}>
-                        {transaction.person ? `Pessoa: ${transaction.person.name}. ` : ""}
-                        {transaction.event ? `Evento: ${transaction.event.title}. ` : ""}
-                        {transaction.asaasId ? `Asaas: ${transaction.asaasId}. ` : ""}
-                        {transaction.nfseId ? `NFS-e: ${transaction.nfseId}.` : ""}
-                      </p>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        </section>
+        </div>
       </main>
     </DashboardAuthGuard>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import styles from "./celulas.module.css";
+
 import { useEffect, useState } from "react";
 import {
   archiveCell,
@@ -17,13 +19,6 @@ type CellEditListProps = {
   isOpen: boolean;
   onSelectCell: (cell: CellListItem) => void;
   onStatusChange: () => void | Promise<void>;
-};
-
-const fieldStyle = {
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  borderRadius: "14px",
-  font: "inherit",
-  padding: "12px 14px"
 };
 
 function formatArchivedAt(archivedAt: string | null): string {
@@ -253,25 +248,14 @@ export function CellEditList({
 
   return (
     <section
-      style={{
-        background: "rgba(15, 23, 42, 0.58)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        borderRadius: "22px",
-        display: "grid",
-        gap: "16px",
-        padding: "22px"
-      }}
+      className={styles.manager}
     >
-      <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
+      <h2 className={styles.sectionTitle}>
         Gerenciar células
       </h2>
 
       <div
-        style={{
-          display: "grid",
-          gap: "12px",
-          gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))"
-        }}
+        className={styles.fields}
       >
         <select
           onChange={(event) =>
@@ -280,8 +264,8 @@ export function CellEditList({
               event.target.value as CellStatusFilter
             )
           }
-          style={fieldStyle}
-          value={status}
+          className={styles.input}
+          aria-label="Status das células" value={status}
         >
           <option value="ACTIVE">Ativas</option>
           <option value="ARCHIVED">Arquivadas</option>
@@ -293,17 +277,17 @@ export function CellEditList({
             changeFilter(setNeighborhood, event.target.value)
           }
           placeholder="Buscar por bairro"
-          style={fieldStyle}
+          className={styles.input}
           type="search"
-          value={neighborhood}
+          aria-label="Buscar por bairro" value={neighborhood}
         />
 
         <select
           onChange={(event) =>
             changeFilter(setProfile, event.target.value)
           }
-          style={fieldStyle}
-          value={profile}
+          className={styles.input}
+          aria-label="Perfil das células" value={profile}
         >
           <option value="">Todos os perfis</option>
           <option value="Famílias">Famílias</option>
@@ -321,36 +305,36 @@ export function CellEditList({
             changeFilter(setLeader, event.target.value)
           }
           placeholder="Buscar por líder"
-          style={fieldStyle}
+          className={styles.input}
           type="search"
-          value={leader}
+          aria-label="Buscar por líder" value={leader}
         />
       </div>
 
       {error ? (
-        <p style={{ color: "#fecaca", margin: 0 }}>{error}</p>
+        <p className={styles.error}>{error}</p>
       ) : null}
 
       {successMessage ? (
-        <p style={{ color: "#bbf7d0", margin: 0 }}>
+        <p className={styles.success}>
           {successMessage}
         </p>
       ) : null}
 
       {isLoading ? (
-        <p style={{ color: "#cbd5e1", margin: 0 }}>
+        <p className={styles.muted}>
           Carregando células...
         </p>
       ) : null}
 
       {!isLoading && !error && items.length === 0 ? (
-        <p style={{ color: "#cbd5e1", margin: 0 }}>
+        <p className={styles.muted}>
           Nenhuma célula encontrada.
         </p>
       ) : null}
 
       {!isLoading && items.length > 0 ? (
-        <div style={{ display: "grid", gap: "8px" }}>
+        <div className={styles.stack}>
           {items.map((cell) => {
             const isChangingStatus =
               changingStatusCellId === cell.id;
@@ -362,32 +346,15 @@ export function CellEditList({
             return (
               <div
                 key={cell.id}
-                style={{
-                  alignItems: "center",
-                  background: "rgba(15, 23, 42, 0.82)",
-                  border: "1px solid rgba(148, 163, 184, 0.16)",
-                  borderRadius: "14px",
-                  display: "grid",
-                  gap: "12px",
-                  gridTemplateColumns:
-                    "minmax(150px, 1fr) minmax(130px, 1fr) minmax(160px, 1fr) auto auto",
-                  padding: "12px 14px"
-                }}
+                className={styles.cellRow}
               >
-                <div style={{ display: "grid", gap: "4px" }}>
-                  <strong style={{ color: "#ffffff" }}>
+                <div className={styles.stack}>
+                  <strong className={styles.strong}>
                     {cell.profile}
                   </strong>
 
                   <span
-                    style={{
-                      color:
-                        cell.status === "ACTIVE"
-                          ? "#bbf7d0"
-                          : "#fde68a",
-                      fontSize: "12px",
-                      fontWeight: 800
-                    }}
+                    className={cell.status === "ACTIVE" ? styles.activeStatus : styles.archivedStatus}
                   >
                     {cell.status === "ACTIVE"
                       ? "Ativa"
@@ -397,48 +364,27 @@ export function CellEditList({
                   </span>
                 </div>
 
-                <span style={{ color: "#cbd5e1" }}>
+                <span className={styles.muted}>
                   {cell.neighborhood || cell.region}
                 </span>
 
-                <span style={{ color: "#cbd5e1" }}>
+                <span className={styles.muted}>
                   {cell.leader.name}
                 </span>
 
                 <span
-                  style={{
-                    color: "#94a3b8",
-                    whiteSpace: "nowrap"
-                  }}
+                  className={styles.muted}
                 >
                   {cell.meetDay} • {cell.meetTime}
                 </span>
 
                 <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                    justifyContent: "flex-end"
-                  }}
+                  className={styles.actions}
                 >
                   <button
                     disabled={isAnyActionRunning}
                     onClick={() => onSelectCell(cell)}
-                    style={{
-                      background: "transparent",
-                      border:
-                        "1px solid rgba(96, 165, 250, 0.38)",
-                      borderRadius: "999px",
-                      color: "#bfdbfe",
-                      cursor: isAnyActionRunning
-                        ? "not-allowed"
-                        : "pointer",
-                      font: "inherit",
-                      fontSize: "12px",
-                      fontWeight: 900,
-                      padding: "7px 11px"
-                    }}
+                    className={styles.button}
                     type="button"
                   >
                     Editar
@@ -447,25 +393,7 @@ export function CellEditList({
                   <button
                     disabled={isAnyActionRunning}
                     onClick={() => void handleStatusChange(cell)}
-                    style={{
-                      background: "transparent",
-                      border:
-                        cell.status === "ACTIVE"
-                          ? "1px solid rgba(251, 191, 36, 0.48)"
-                          : "1px solid rgba(74, 222, 128, 0.48)",
-                      borderRadius: "999px",
-                      color:
-                        cell.status === "ACTIVE"
-                          ? "#fde68a"
-                          : "#bbf7d0",
-                      cursor: isAnyActionRunning
-                        ? "not-allowed"
-                        : "pointer",
-                      font: "inherit",
-                      fontSize: "12px",
-                      fontWeight: 900,
-                      padding: "7px 11px"
-                    }}
+                    className={styles.button}
                     type="button"
                   >
                     {isChangingStatus
@@ -479,20 +407,7 @@ export function CellEditList({
                     <button
                       disabled={isAnyActionRunning}
                       onClick={() => void handleDeleteCell(cell)}
-                      style={{
-                        background: "transparent",
-                        border:
-                          "1px solid rgba(248, 113, 113, 0.48)",
-                        borderRadius: "999px",
-                        color: "#fecaca",
-                        cursor: isAnyActionRunning
-                          ? "not-allowed"
-                          : "pointer",
-                        font: "inherit",
-                        fontSize: "12px",
-                        fontWeight: 900,
-                        padding: "7px 11px"
-                      }}
+                      className={styles.danger}
                       type="button"
                     >
                       {isDeleting ? "Excluindo..." : "Excluir"}
@@ -506,21 +421,15 @@ export function CellEditList({
       ) : null}
 
       <div
-        style={{
-          alignItems: "center",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "10px",
-          justifyContent: "space-between"
-        }}
+        className={styles.actions}
       >
-        <span style={{ color: "#94a3b8", fontSize: "13px" }}>
+        <span className={styles.muted}>
           {pagination.total === 0
             ? "0 células"
             : `Página ${pagination.page} de ${pagination.totalPages} • ${pagination.total} células`}
         </span>
 
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className={styles.actions}>
           <button
             disabled={pagination.page <= 1 || isLoading}
             onClick={() =>
@@ -529,16 +438,7 @@ export function CellEditList({
                 page: current.page - 1
               }))
             }
-            style={{
-              border: "1px solid rgba(148, 163, 184, 0.38)",
-              borderRadius: "10px",
-              cursor:
-                pagination.page <= 1 || isLoading
-                  ? "not-allowed"
-                  : "pointer",
-              font: "inherit",
-              padding: "8px 12px"
-            }}
+            className={styles.button}
             type="button"
           >
             Anterior
@@ -554,16 +454,7 @@ export function CellEditList({
                 page: current.page + 1
               }))
             }
-            style={{
-              border: "1px solid rgba(148, 163, 184, 0.38)",
-              borderRadius: "10px",
-              cursor:
-                pagination.page >= pagination.totalPages || isLoading
-                  ? "not-allowed"
-                  : "pointer",
-              font: "inherit",
-              padding: "8px 12px"
-            }}
+            className={styles.button}
             type="button"
           >
             Próxima

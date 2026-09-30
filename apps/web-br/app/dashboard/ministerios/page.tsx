@@ -1,6 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { Network, UsersRound } from "lucide-react";
+import { PageHeader, EmptyState } from "../ui";
+import ui from "../ui.module.css";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 import styles from "./ministries.module.css";
@@ -101,13 +103,10 @@ function Ministries() {
     });
   }
 
-  return <main className={styles.page}>
+  return <main className={`${ui.page} ${styles.page}`}>
     <div className={styles.container}>
-      <Link className={styles.back} href="/dashboard">← Voltar ao painel</Link>
-      <header className={styles.header}>
-        <div><h1>Ministérios</h1><p>Organize os responsáveis e as equipes da igreja.</p></div>
-        {canManage && <button disabled={saving || loading} onClick={() => edit()}>Novo ministério</button>}
-      </header>
+      <PageHeader title="Ministérios" description="Organize os responsáveis e as equipes da igreja." icon={Network}
+        action={canManage ? <button disabled={saving || loading} onClick={() => edit()}>Novo ministério</button> : undefined} />
       {error && <p role="alert" className={styles.error}>{error}</p>}
       {notice && <p role="status" className={styles.notice}>{notice}</p>}
       {loading ? <p role="status">Carregando ministérios…</p> : !canRead ? <p>Você não tem permissão para consultar ministérios.</p> : <>
@@ -135,7 +134,7 @@ function Ministries() {
         <div className={styles.grid}>
           <section className={styles.panel} aria-label="Lista de ministérios">
             <h2>Ministérios cadastrados ({ministries.length})</h2>
-            {!ministries.length && <p>Nenhum ministério cadastrado.</p>}
+            {!ministries.length && <EmptyState icon={Network} title="Nenhum ministério cadastrado" description="Os ministérios da igreja aparecerão aqui." />}
             <ul className={styles.list}>{ministries.map(ministry => <li key={ministry.id}>
               <button className={`${styles.item} ${selectedId === ministry.id ? styles.selected : ""}`} disabled={saving} aria-pressed={selectedId === ministry.id} onClick={() => { setSelectedId(ministry.id); setPersonId(""); setShowForm(false); }}>
                 <strong>{ministry.name}</strong><span>{ministry.status === "ACTIVE" ? "Ativo" : "Inativo"} · {ministry.members.length} pessoa(s)</span><span>Responsável: {ministry.leader.name}</span>
@@ -143,14 +142,14 @@ function Ministries() {
             </li>)}</ul>
           </section>
           <section className={styles.panel} aria-label="Detalhes do ministério">
-            {!selected ? <p>Selecione um ministério para consultar sua equipe.</p> : <>
+            {!selected ? <EmptyState icon={UsersRound} title="Conheça a equipe" description="Selecione um ministério ao lado para consultar os responsáveis e as pessoas vinculadas." /> : <>
               <h2>{selected.name}</h2>
               <p className={styles.description}>{selected.description || "Sem descrição."}</p>
               <p><strong>Status:</strong> {selected.status === "ACTIVE" ? "Ativo" : "Inativo"}</p>
               <p><strong>Responsável:</strong> {selected.leader.name}</p>
               {canManage && <div className={styles.actions}><button disabled={saving} className={styles.secondary} onClick={() => edit(selected)}>Editar</button><button disabled={saving} className={styles.danger} onClick={() => void remove(selected)}>Excluir ministério</button></div>}
               <h3>Equipe ({selected.members.length})</h3>
-              {!selected.members.length && <p>Nenhum membro ou voluntário vinculado.</p>}
+              {!selected.members.length && <EmptyState icon={UsersRound} title="Equipe ainda sem vínculos" description="Os membros e voluntários vinculados aparecerão aqui." />}
               <ul className={styles.list}>{selected.members.map(member => <li className={styles.member} key={member.personId}>
                 <span>{member.person.name}<small>{roleLabels[member.person.role] ?? member.person.role}</small></span>
                 {canManage && <button disabled={saving} className={styles.secondary} aria-label={`Desvincular ${member.person.name}`} onClick={() => void mutate(async () => {

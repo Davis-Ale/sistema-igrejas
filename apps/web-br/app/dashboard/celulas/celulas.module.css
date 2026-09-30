@@ -1,0 +1,27 @@
+.page { composes: page from "../ui.module.css"; }
+.container { composes: container from "../ui.module.css"; display: grid; gap: 24px; }
+.container > header { margin-bottom: 0; }
+.form, .manager { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 14px; padding: 25px; display: grid; gap: 23px; min-width: 0; }
+.sectionTitle { font-size: 17px; font-weight: 600; letter-spacing: -.02em; margin: 0; padding-bottom: 19px; border-bottom: 1px solid var(--ui-border); }
+.fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.field { composes: field from "../ui.module.css"; }
+.input { composes: input from "../ui.module.css"; }
+.primary { composes: button from "../ui.module.css"; justify-self: start; }
+.button { composes: secondary from "../ui.module.css"; }
+.danger { composes: danger from "../ui.module.css"; }
+.actions { composes: actions from "../ui.module.css"; justify-content: space-between; }
+.actions > .actions { justify-content: flex-end; }
+.stack { display: grid; gap: 13px; min-width: 0; }
+.muted { composes: muted from "../ui.module.css"; overflow-wrap: anywhere; }
+.strong { color: #edf4ff; font-size: 14px; overflow-wrap: anywhere; }
+.activeStatus, .archivedStatus { width: fit-content; padding: 5px 8px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
+.activeStatus { color: #b1efd2; background: #16332e; border: 1px solid #2f5c4d; }
+.archivedStatus { color: #f4d99e; background: #362d20; border: 1px solid #675536; }
+.error { composes: error from "../ui.module.css"; }
+.success { composes: success from "../ui.module.css"; }
+.cellRow { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(90px, 1fr) minmax(110px, 1fr) auto; align-items: center; gap: 18px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 11px; background: #0e192a; }
+.cellRow:hover { border-color: #435d7e; background: #15243a; }
+.cellRow > .actions { grid-column: 1 / -1; justify-content: flex-end; border-top: 1px solid #24364f; padding-top: 15px; }
+.manager > .fields { grid-template-columns: repeat(4, minmax(0, 1fr)); background: #0e192a; padding: 16px; border-radius: 10px; }
+@media (max-width: 1050px) { .fields, .manager > .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cellRow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 660px) { .form, .manager { padding: 19px 16px; } .fields, .manager > .fields { grid-template-columns: minmax(0, 1fr); } .cellRow { padding: 16px; } .actions { justify-content: flex-start; } .input { font-size: 16px; } }

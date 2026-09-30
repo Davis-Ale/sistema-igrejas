@@ -998,7 +998,6 @@ export function EventFinancialManagementClient({
         background:
           "radial-gradient(circle at top left, rgba(37, 99, 235, 0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 50%, #111827 100%)",
         color: "#f8fafc",
-        minHeight: "100vh",
         padding: "32px"
       }}
     >
@@ -1169,6 +1168,7 @@ export function EventFinancialManagementClient({
         }}
       >
         <EventModuleChrome
+          contentSized
           header={
             <header
               style={{

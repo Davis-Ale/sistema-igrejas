@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { Route, Plus, ListOrdered, Flag } from "lucide-react";
+import { PageHeader, EmptyState } from "../ui";
+import ui from "../ui.module.css";
+import styles from "./trilho.module.css";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 
@@ -192,260 +195,37 @@ export default function TrilhoPage() {
   }, []);
 
   return (
-    <DashboardAuthGuard>
-      <main
-        style={{
-          background:
-            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
-          color: "#f8fafc",
-          minHeight: "100vh",
-          padding: "40px"
-        }}
-      >
-        <section
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.74))",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "28px",
-            boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
-            display: "grid",
-            gap: "28px",
-            margin: "0 auto",
-            maxWidth: "1120px",
-            padding: "28px"
-          }}
-        >
-          <Link
-            href="/dashboard"
-            style={{
-              color: "#93c5fd",
-              display: "inline-flex",
-              fontSize: "14px",
-              fontWeight: 800,
-              textDecoration: "none"
-            }}
-          >
-            Voltar ao painel
-          </Link>
-
-          <form
-            onSubmit={handleCreateTrail}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Novo trilho
-            </h2>
-
-            <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-              Nome
-              <input
-                onChange={(event) => setTrailName(event.target.value)}
-                required
-                style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                type="text"
-                value={trailName}
-              />
-            </label>
-
-            <label style={{ alignItems: "center", color: "#cbd5e1", display: "flex", fontSize: "14px", fontWeight: 800, gap: "10px" }}>
-              <input
-                checked={isVolunteerGate}
-                onChange={(event) => setIsVolunteerGate(event.target.checked)}
-                type="checkbox"
-              />
-              Porta de voluntariado
-            </label>
-
-            <button
-              disabled={isSubmittingTrail}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isSubmittingTrail ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isSubmittingTrail ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isSubmittingTrail ? "Criando..." : "Criar trilho"}
-            </button>
+    <DashboardAuthGuard><main className={ui.page}><div className={ui.container}>
+      <PageHeader title="Trilhos" description="Organize os percursos e as etapas de desenvolvimento da igreja." icon={Route} />
+      {error && <p className={ui.error} role="alert">{error}</p>}
+      {successMessage && <p className={ui.success} role="status">{successMessage}</p>}
+      <div className={ui.twoColumns}>
+        <section className={ui.panel}>
+          <div className={ui.panelHeader}><div><h2>Novo trilho</h2><p>Defina o nome e o propósito do percurso.</p></div><Route size={20} aria-hidden="true" /></div>
+          <form onSubmit={handleCreateTrail} className={ui.form}>
+            <label className={ui.field}><span>Nome</span><input onChange={(event) => setTrailName(event.target.value)} required type="text" value={trailName} /></label>
+            <label className={ui.check}><input checked={isVolunteerGate} onChange={(event) => setIsVolunteerGate(event.target.checked)} type="checkbox" />Porta de voluntariado</label>
+            <div className={ui.actions}><button disabled={isSubmittingTrail} type="submit" className={ui.button}><Plus size={16} aria-hidden="true" />{isSubmittingTrail ? "Criando..." : "Criar trilho"}</button></div>
           </form>
-
-          <form
-            onSubmit={handleCreateStage}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Nova etapa
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))"
-              }}
-            >
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Trilho
-                <select
-                  onChange={(event) => setSelectedTrailId(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  value={selectedTrailId}
-                >
-                  <option value="">Selecione</option>
-                  {trails.map((trail) => (
-                    <option key={trail.id} value={trail.id}>
-                      {trail.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Etapa
-                <input
-                  onChange={(event) => setStageLabel(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="text"
-                  value={stageLabel}
-                />
-              </label>
-
-              <label style={{ color: "#cbd5e1", display: "grid", fontSize: "14px", fontWeight: 800, gap: "8px" }}>
-                Ordem
-                <input
-                  min="0"
-                  onChange={(event) => setStageOrder(event.target.value)}
-                  required
-                  style={{ border: "1px solid rgba(148, 163, 184, 0.38)", borderRadius: "14px", font: "inherit", padding: "13px 14px" }}
-                  type="number"
-                  value={stageOrder}
-                />
-              </label>
-            </div>
-
-            <button
-              disabled={isSubmittingStage}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isSubmittingStage ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isSubmittingStage ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isSubmittingStage ? "Criando..." : "Criar etapa"}
-            </button>
-          </form>
-
-          {error ? (
-            <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
-              {error}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p style={{ background: "rgba(34, 197, 94, 0.14)", border: "1px solid rgba(74, 222, 128, 0.26)", borderRadius: "14px", color: "#bbf7d0", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
-              {successMessage}
-            </p>
-          ) : null}
-
-          <section
-            style={{
-              background: "rgba(15, 23, 42, 0.58)",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "14px",
-              padding: "22px"
-            }}
-          >
-            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Trilhos
-            </h2>
-
-            {isLoading ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando trilhos...</p>
-            ) : null}
-
-            {!isLoading && trails.length === 0 ? (
-              <p style={{ color: "#cbd5e1", margin: 0 }}>
-                Nenhum trilho cadastrado ainda.
-              </p>
-            ) : null}
-
-            {!isLoading && trails.length > 0 ? (
-              <div style={{ display: "grid", gap: "10px" }}>
-                {trails.map((trail) => (
-                  <article
-                    key={trail.id}
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border: "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "18px",
-                      display: "grid",
-                      gap: "10px",
-                      padding: "14px"
-                    }}
-                  >
-                    <div>
-                      <h3 style={{ color: "#ffffff", fontSize: "16px", margin: "0 0 4px" }}>
-                        {trail.name}
-                      </h3>
-                      <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0 }}>
-                        {trail.isVolunteerGate ? "Porta de voluntariado" : "Trilho comum"}
-                      </p>
-                    </div>
-
-                    {trail.stages.length > 0 ? (
-                      <ol style={{ color: "#cbd5e1", margin: 0, paddingLeft: "20px" }}>
-                        {trail.stages.map((stage) => (
-                          <li key={stage.id}>
-                            {stage.label}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0 }}>
-                        Nenhuma etapa cadastrada.
-                      </p>
-                    )}
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
         </section>
-      </main>
-    </DashboardAuthGuard>
+        <section className={ui.panel}>
+          <div className={ui.panelHeader}><div><h2>Nova etapa</h2><p>Adicione uma etapa ao trilho selecionado.</p></div><ListOrdered size={20} aria-hidden="true" /></div>
+          <form onSubmit={handleCreateStage} className={ui.form}>
+            <label className={ui.field}><span>Trilho</span><select onChange={(event) => setSelectedTrailId(event.target.value)} required value={selectedTrailId}><option value="">Selecione</option>{trails.map(trail => <option key={trail.id} value={trail.id}>{trail.name}</option>)}</select></label>
+            <div className={ui.fields}><label className={ui.field}><span>Etapa</span><input onChange={(event) => setStageLabel(event.target.value)} required type="text" value={stageLabel} /></label><label className={ui.field}><span>Ordem</span><input min="0" onChange={(event) => setStageOrder(event.target.value)} required type="number" value={stageOrder} /></label></div>
+            <div className={ui.actions}><button disabled={isSubmittingStage} className={ui.button} type="submit"><Plus size={16} aria-hidden="true" />{isSubmittingStage ? "Criando..." : "Criar etapa"}</button></div>
+          </form>
+        </section>
+      </div>
+      <section className={styles.trailsSection} aria-labelledby="trails-title" aria-busy={isLoading}>
+        <div className={styles.sectionHeading}><div><h2 id="trails-title">Trilhos cadastrados</h2><p>Visualize as etapas de cada percurso.</p></div>{!isLoading && <span className={ui.badge}>{trails.length} trilhos</span>}</div>
+        {isLoading && <div className={ui.empty} role="status"><Route size={25} aria-hidden="true" /><p>Carregando trilhos...</p></div>}
+        {!isLoading && trails.length === 0 && <div className={ui.panel}><EmptyState title="Nenhum trilho cadastrado" description="Crie um trilho e organize suas etapas." icon={Route} /></div>}
+        {!isLoading && trails.length > 0 && <div className={styles.trailGrid}>{trails.map(trail => <article className={ui.panel} key={trail.id}>
+          <div className={styles.trailHeading}><span className={styles.trailIcon}><Flag size={20} aria-hidden="true" /></span><div><h3>{trail.name}</h3><p>{trail.isVolunteerGate ? "Porta de voluntariado" : "Trilho comum"}</p></div><span className={ui.badge}>{trail.stages.length} etapas</span></div>
+          {trail.stages.length > 0 ? <ol className={styles.timeline}>{trail.stages.map((stage, index) => <li key={stage.id}><span className={styles.step} aria-hidden="true">{index + 1}</span><span>{stage.label}</span></li>)}</ol> : <p className={styles.noStages}>Nenhuma etapa cadastrada.</p>}
+        </article>)}</div>}
+      </section>
+    </div></main></DashboardAuthGuard>
   );
 }

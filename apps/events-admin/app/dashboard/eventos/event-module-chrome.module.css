@@ -15,6 +15,17 @@
 
 .layout > :not(.nav) { min-width: 0; }
 
+/* Let this page's content determine the row height, independently of the rail. */
+.contentSized > .independentNav {
+  align-self: stretch;
+  contain: size;
+  min-width: 0;
+}
+
+.contentSized:has(> .independentNav > .nav:hover) {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
 .nav {
   background: rgba(15, 23, 42, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -113,6 +124,8 @@
 
 @media (hover: none) {
   .layout, .layout:has(> .nav:hover) { grid-template-columns: minmax(0, 1fr); }
+  .contentSized:has(> .independentNav > .nav:hover) { grid-template-columns: minmax(0, 1fr); }
+  .contentSized > .independentNav { contain: none; }
   .nav { position: static; }
   .nav .label, .nav .selector, .nav .emptyHint { opacity: 1; }
 }

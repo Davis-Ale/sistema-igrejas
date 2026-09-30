@@ -478,6 +478,7 @@ export function EventModuleChrome({
   onSelectSection,
   onCreateEvent,
   header,
+  contentSized = false,
   children
 }: {
   variant: EventModuleChromeVariant;
@@ -490,9 +491,24 @@ export function EventModuleChrome({
   onSelectSection?: ((section: EventWorkspaceSection) => void) | undefined;
   onCreateEvent?: (() => void) | undefined;
   header: ReactNode;
+  contentSized?: boolean;
   children: ReactNode;
 }) {
   const isProduct = variant === "product";
+
+  const navigation = (
+    <EventModuleNav
+      activeSection={activeSection}
+      events={events}
+      fallbackTitle={fallbackTitle}
+      onCreateEvent={onCreateEvent}
+      onSelectSection={onSelectSection}
+      onSelectedEventIdChange={onSelectedEventIdChange}
+      productActive={productActive}
+      selectedEventId={selectedEventId}
+      variant={variant}
+    />
+  );
 
   return (
     <>
@@ -502,18 +518,10 @@ export function EventModuleChrome({
         {isProduct ? "Voltar ao painel" : "Meus eventos"}
       </EventModuleBackLink>
       {header}
-      <div className={styles.layout}>
-        <EventModuleNav
-          activeSection={activeSection}
-          events={events}
-          fallbackTitle={fallbackTitle}
-          onCreateEvent={onCreateEvent}
-          onSelectSection={onSelectSection}
-          onSelectedEventIdChange={onSelectedEventIdChange}
-          productActive={productActive}
-          selectedEventId={selectedEventId}
-          variant={variant}
-        />
+      <div className={`${styles.layout}${contentSized ? ` ${styles.contentSized}` : ""}`}>
+        {contentSized ? (
+          <div className={styles.independentNav}>{navigation}</div>
+        ) : navigation}
         <div style={contentColumnStyle}>{children}</div>
       </div>
     </>

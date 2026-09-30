@@ -1,33 +1,39 @@
-.page { min-height: 100vh; padding: 32px 20px; background: #0f172a; color: #f8fafc; }
-.container { max-width: 1200px; margin: 0 auto; }
-.back { color: #93c5fd; text-decoration: none; }
-.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 24px 0; }
-.header h1 { margin: 0 0 8px; font-size: 32px; }
-.header p, .panel p { color: #cbd5e1; line-height: 1.6; }
-.page button { border: 1px solid transparent; border-radius: 9px; background: #2563eb; color: white; padding: 10px 15px; cursor: pointer; font: inherit; }
+.page { color: var(--ui-text); }
+.container { composes: container from "../ui.module.css"; }
+.page button { border: 1px solid #477eec; border-radius: 8px; background: #2866dc; color: white; padding: 11px 16px; min-height: 42px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; transition: background .15s, border-color .15s; }
+.page button:hover:not(:disabled) { background: #3579f2; }
 .page button:disabled { opacity: .5; cursor: not-allowed; }
-.page button:focus-visible, .page input:focus-visible, .page select:focus-visible, .page textarea:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
-.page button.secondary { background: #334155; }
-.page button.danger { color: #fecaca; background: #7f1d1d; }
-.grid { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 1.6fr); gap: 20px; }
-.panel { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; margin-bottom: 20px; min-width: 0; }
-.panel h2 { margin-top: 0; font-size: 21px; overflow-wrap: anywhere; }
-.panel h3 { margin-top: 28px; }
-.fields { display: grid; gap: 18px; padding: 0; border: 0; margin: 0; min-width: 0; }
-.fields label { display: grid; gap: 8px; color: #e2e8f0; min-width: 0; }
-.fields input, .fields select, .fields textarea { box-sizing: border-box; width: 100%; border: 1px solid #64748b; border-radius: 8px; padding: 11px; font: inherit; color: #f8fafc; background: #0f172a; }
+.page button:focus-visible, .page input:focus-visible, .page select:focus-visible, .page textarea:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+.page button.secondary { background: #1b2d45; border-color: #3d5778; color: #d9e7fb; }
+.page button.secondary:hover:not(:disabled) { background: #263f5f; border-color: #587ea8; }
+.page button.danger { color: #ffc3cf; background: #392435; border-color: #69374b; }
+.page button.danger:hover:not(:disabled) { background: #512e40; }
+.grid { display: grid; grid-template-columns: minmax(270px, .85fr) minmax(0, 1.65fr); gap: 24px; align-items: start; }
+.panel { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 14px; padding: 25px; margin-bottom: 24px; min-width: 0; }
+.panel h2 { margin: 0 0 23px; padding-bottom: 19px; border-bottom: 1px solid var(--ui-border); font-size: 17px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.panel h3 { margin: 30px 0 17px; font-size: 15px; font-weight: 600; padding-top: 22px; border-top: 1px solid var(--ui-border); }
+.panel p { color: var(--ui-muted); line-height: 1.75; font-size: 13px; margin: 13px 0; }
+.fields { display: grid; gap: 19px; padding: 0; border: 0; margin: 0; min-width: 0; }
+.fields label { display: grid; gap: 8px; color: #c9d6e9; font-size: 12px; font-weight: 500; min-width: 0; }
+.fields input, .fields select, .fields textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #354965; border-radius: 8px; padding: 12px; font: inherit; font-size: 13px; color: #e8effc; background: var(--ui-input); min-height: 43px; }
+.fields input:hover, .fields select:hover, .fields textarea:hover { border-color: #526e91; }
 .fields textarea { resize: vertical; }
+.fields > button { justify-self: start; }
 .formRow { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-.page button.item { display: grid; gap: 8px; width: 100%; text-align: left; background: #0f172a; border-color: #475569; overflow-wrap: anywhere; }
-.page button.selected { border-color: #60a5fa; background: #172554; }
-.item span { font-size: 14px; color: #cbd5e1; }
-.member { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #475569; overflow-wrap: anywhere; }
-.member small { display: block; color: #cbd5e1; margin-top: 4px; }
-.member:last-child { margin-bottom: 18px; }
+.page button.item { display: grid; gap: 10px; width: 100%; padding: 19px; text-align: left; background: #0e192a; border-color: #2c405a; overflow-wrap: anywhere; border-radius: 11px; }
+.page button.item:hover:not(:disabled) { background: #1b2b43; border-color: #4a668b; }
+.page button.selected, .page button.selected:hover:not(:disabled) { border-color: #669ce3; background: #203d66; box-shadow: inset 3px 0 0 #9cc8ff; }
+.item strong { font-size: 14px; font-weight: 600; }
+.item span { font-size: 12px; color: #afc2dd; font-weight: 400; line-height: 1.65; }
+.member { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 18px; border: 1px solid #2a3e59; border-radius: 10px; background: #0e192a; overflow-wrap: anywhere; font-size: 13px; }
+.member > span { min-width: 0; }
+.member small { display: block; color: var(--ui-muted); margin-top: 7px; font-size: 11px; }
+.panel > .list + form { padding: 21px; background: #17263c; border: 1px solid #304761; border-radius: 11px; margin-top: 24px; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }
-.error, .notice { border-radius: 10px; padding: 14px; }
-.error { color: #fecaca; background: #450a0a; }
-.notice { color: #bbf7d0; background: #052e16; }
-@media (max-width: 760px) { .grid, .formRow { grid-template-columns: 1fr; } .header { align-items: flex-start; flex-direction: column; } .panel { padding: 18px; } .member { flex-wrap: wrap; } }
+.error { composes: error from "../ui.module.css"; }
+.notice { composes: success from "../ui.module.css"; }
+@media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 660px) { .formRow { grid-template-columns: minmax(0, 1fr); } .panel { padding: 19px 16px; } .member { flex-wrap: wrap; } .fields input, .fields select, .fields textarea { font-size: 16px; } .panel > .list + form { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .page button { transition: none; } }

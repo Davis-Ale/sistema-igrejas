@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { Bot, MessageSquare, Send, UserRound } from "lucide-react";
+import { PageHeader, EmptyState } from "../ui";
+import ui from "../ui.module.css";
+import styles from "./assistente.module.css";
 import { FormEvent, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
 
@@ -48,6 +51,7 @@ function getSessionToken() {
 }
 
 export default function AssistentePage() {
+  const [lastQuestion, setLastQuestion] = useState("");
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,154 +103,38 @@ export default function AssistentePage() {
 
   return (
     <DashboardAuthGuard>
-      <main
-        style={{
-          background:
-            "radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 45%, #020617 100%)",
-          color: "#f8fafc",
-          minHeight: "100vh",
-          padding: "40px"
-        }}
-      >
-        <section
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.74))",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: "28px",
-            boxShadow: "0 28px 90px rgba(2, 6, 23, 0.36)",
-            display: "grid",
-            gap: "24px",
-            margin: "0 auto",
-            maxWidth: "1040px",
-            padding: "28px"
-          }}
-        >
-          <Link
-            href="/dashboard"
-            style={{
-              color: "#93c5fd",
-              display: "inline-flex",
-              fontSize: "14px",
-              fontWeight: 800,
-              textDecoration: "none"
-            }}
-          >
-            ← Voltar ao painel
-          </Link>
-
-          <h1
-            style={{
-              color: "#ffffff",
-              fontSize: "34px",
-              lineHeight: 1.1,
-              margin: 0
-            }}
-          >
-            Assistente IA
-          </h1>
-
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              background: "rgba(15, 23, 42, 0.72)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: "22px",
-              display: "grid",
-              gap: "16px",
-              padding: "22px"
-            }}
-          >
-            <label
-              style={{
-                color: "#cbd5e1",
-                display: "grid",
-                fontSize: "14px",
-                fontWeight: 800,
-                gap: "8px"
-              }}
-            >
-              Pergunta
-              <textarea
-                onChange={(event) => setMessage(event.target.value)}
-                required
-                rows={5}
-                style={{
-                  border: "1px solid rgba(148, 163, 184, 0.38)",
-                  borderRadius: "14px",
-                  font: "inherit",
-                  padding: "13px 14px",
-                  resize: "vertical"
-                }}
-                value={message}
-              />
-            </label>
-
-            <button
-              disabled={isSubmitting}
-              style={{
-                background: "#2563eb",
-                border: 0,
-                borderRadius: "14px",
-                color: "#ffffff",
-                cursor: isSubmitting ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontWeight: 900,
-                justifySelf: "start",
-                opacity: isSubmitting ? 0.72 : 1,
-                padding: "13px 18px"
-              }}
-              type="submit"
-            >
-              {isSubmitting ? "Consultando..." : "Consultar assistente"}
-            </button>
-          </form>
-
-          {error ? (
-            <p
-              style={{
-                background: "rgba(239, 68, 68, 0.14)",
-                border: "1px solid rgba(248, 113, 113, 0.26)",
-                borderRadius: "14px",
-                color: "#fecaca",
-                fontSize: "14px",
-                margin: 0,
-                padding: "12px 14px"
-              }}
-            >
-              {error}
-            </p>
-          ) : null}
-
-          {answer ? (
-            <section
-              style={{
-                background: "rgba(15, 23, 42, 0.72)",
-                border: "1px solid rgba(148, 163, 184, 0.2)",
-                borderRadius: "22px",
-                display: "grid",
-                gap: "14px",
-                padding: "22px"
-              }}
-            >
-              <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-                Resposta
-              </h2>
-
-              <p
-                style={{
-                  color: "#e2e8f0",
-                  fontSize: "15px",
-                  lineHeight: 1.7,
-                  margin: 0,
-                  whiteSpace: "pre-line"
-                }}
-              >
-                {answer}
-              </p>
-            </section>
-          ) : null}
-        </section>
+      <main className={ui.page}>
+        <div className={ui.container}>
+          <PageHeader title="Assistente IA" description="Consulte as informações disponíveis da sua igreja." icon={Bot} />
+          <section className={styles.chat} aria-label="Consulta ao assistente">
+            <header className={styles.chatHeader}>
+              <span className={styles.botIcon}><Bot size={22} aria-hidden="true" /></span>
+              <div><h2>Assistente da igreja</h2><p>Perguntas e respostas sobre seus dados</p></div>
+            </header>
+            <div className={styles.conversation} aria-live="polite" aria-busy={isSubmitting}>
+              {!lastQuestion && !answer && !isSubmitting && <EmptyState icon={MessageSquare} title="Como podemos ajudar?" description="Escreva sua pergunta abaixo para consultar as informações disponíveis no sistema." />}
+              {lastQuestion && <div className={styles.question}>
+                <span className={styles.userIcon}><UserRound size={18} aria-hidden="true" /></span>
+                <div className={styles.bubble}><h3>Você</h3><p>{lastQuestion}</p></div>
+              </div>}
+              {isSubmitting && <div className={styles.response} role="status"><span className={styles.botIcon}><Bot size={18} aria-hidden="true" /></span><p className={styles.pending}>Consultando informações…</p></div>}
+              {answer && <div className={styles.response}>
+                <span className={styles.botIcon}><Bot size={18} aria-hidden="true" /></span>
+                <div className={styles.bubble}><h3>Assistente</h3><p>{answer}</p></div>
+              </div>}
+              {error && <p role="alert" className={ui.error}>{error}</p>}
+            </div>
+            <form className={styles.composer} onSubmit={(event) => { setLastQuestion(message); void handleSubmit(event); }}>
+              <label className={ui.field}>Sua pergunta
+                <textarea onChange={(event) => setMessage(event.target.value)} required rows={3} value={message} placeholder="O que você gostaria de consultar?" />
+              </label>
+              <div className={styles.composerFooter}>
+                <p>A resposta à última consulta aparece acima.</p>
+                <button className={ui.button} disabled={isSubmitting} type="submit"><Send size={15} aria-hidden="true" />{isSubmitting ? "Consultando..." : "Consultar assistente"}</button>
+              </div>
+            </form>
+          </section>
+        </div>
       </main>
     </DashboardAuthGuard>
   );
