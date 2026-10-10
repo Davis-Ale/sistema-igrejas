@@ -177,8 +177,10 @@ export async function createAsaasChargeForExistingTransaction(
   churchId: string,
   input: CreateAsaasChargeForExistingTransactionInput
 ) {
+  const charge = await prisma.$transaction(async (transactionClient) => {
+  await transactionClient.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`event-charge:${churchId}:${input.transactionId}`}, 0))`;
   const transaction =
-    await prisma.transaction.findFirst({
+    await transactionClient.transaction.findFirst({
       where: {
         id: input.transactionId,
         churchId,
@@ -221,20 +223,10 @@ export async function createAsaasChargeForExistingTransaction(
       );
     }
 
-    const pixQrCode =
-      payment.billingType === "PIX" &&
-      payment.status !== "RECEIVED" &&
-      payment.status !== "CONFIRMED"
-        ? await getAsaasPixQrCode(
-            transaction.asaasId
-          )
-        : null;
-
     return {
       payment,
       paymentId:
         transaction.asaasId,
-      pixQrCode,
       invoiceUrl:
         payment.invoiceUrl ?? null,
       reused: true
@@ -290,7 +282,7 @@ export async function createAsaasChargeForExistingTransaction(
       paymentInput
     );
 
-  await prisma.transaction.update({
+  await transactionClient.transaction.update({
     where: { id: transaction.id, churchId, status: "ACTIVE", asaasId: null },
     data: {
       asaasId: payment.id,
@@ -301,21 +293,25 @@ export async function createAsaasChargeForExistingTransaction(
     }
   });
 
-  const pixQrCode =
-    payment.billingType === "PIX"
-      ? await getAsaasPixQrCode(
-          payment.id
-        )
-      : null;
-
   return {
     customer,
     payment,
     paymentId:
       payment.id,
-    pixQrCode,
     invoiceUrl:
       payment.invoiceUrl ?? null,
     reused: false
   };
+  }, { timeout: 30000 });
+
+  // Commit the provider reference before fetching the QR: a temporary QR
+  // failure must not roll back the reference and create another charge on retry.
+  const pixQrCode =
+    charge.payment.billingType === "PIX" &&
+    charge.payment.status !== "RECEIVED" &&
+    charge.payment.status !== "CONFIRMED"
+      ? await getAsaasPixQrCode(charge.paymentId)
+      : null;
+
+  return { ...charge, pixQrCode };
 }

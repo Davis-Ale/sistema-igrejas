@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
   Prisma,
   PrismaClient
@@ -88,6 +89,40 @@ const publicRegistrationSelect = {
     }
   }
 } satisfies Prisma.RegistrationSelect;
+
+// Separate checkout capability: it cannot be used as a credential/check-in token.
+export function getPublicCheckoutToken(registration: { id: string; checkInToken: string }) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) throw new Error("CHECKOUT_SECRET_REQUIRED");
+  return `${registration.id}.${createHmac("sha256", secret).update(`event-checkout:${registration.id}:${registration.checkInToken}`).digest("hex")}`;
+}
+
+export async function getPublicCheckoutStatus(
+  prisma: PrismaClient,
+  churchSlug: string,
+  eventSlug: string,
+  checkoutToken: string
+) {
+  const event = await getPublicEventBySlugs(prisma, churchSlug, eventSlug);
+  const id = checkoutToken.split(".")[0] ?? "";
+  const registration = await prisma.registration.findFirst({
+    where: { id, eventId: event.id, event: { church: { slug: churchSlug } } },
+    select: publicRegistrationSelect
+  });
+  const expected = registration ? getPublicCheckoutToken(registration) : "";
+  if (!registration || expected.length !== checkoutToken.length ||
+    !timingSafeEqual(Buffer.from(expected), Buffer.from(checkoutToken))) {
+    throw new Error("PUBLIC_REGISTRATION_NOT_FOUND");
+  }
+  return {
+    id: registration.id,
+    status: registration.status,
+    paymentStatus: registration.paymentStatus,
+    waitlistedAt: registration.waitlistedAt,
+    checkInToken: registration.checkInToken,
+    event: registration.event
+  };
+}
 
 function normalizePhone(value: string) {
   const digits = value.replace(/\D/g, "");

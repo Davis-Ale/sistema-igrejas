@@ -19,6 +19,14 @@ import {
 } from "./platform-fee.js";
 import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
 
+const publicRegistrationInclude = {
+  visitor: { select: { id: true, name: true, phone: true, email: true } },
+  event: { select: {
+    id: true, title: true, slug: true, publicSlug: true, date: true, price: true, isPaid: true,
+    church: { select: { slug: true } }
+  } }
+} satisfies Prisma.RegistrationInclude;
+
 async function ensureEventReferencesBelongToChurch(
   prisma: Pick<PrismaClient, "campus" | "trailStage">,
   churchId: string,
@@ -100,10 +108,10 @@ async function createEventRegistrationPayment(
     amount: Prisma.Decimal | number | string;
     discountId?: string | null;
     discountCode?: string | null;
-  }
+  },
+  transactionClient?: Prisma.TransactionClient
 ) {
-  return prisma.$transaction(
-    async (transaction) => {
+  const createPayment = async (transaction: Prisma.TransactionClient) => {
       const church =
         await transaction.church.findFirst({
           where: {
@@ -181,8 +189,8 @@ async function createEventRegistrationPayment(
       });
 
       return payment.id;
-    }
-  );
+  };
+  return transactionClient ? createPayment(transactionClient) : prisma.$transaction(createPayment);
 }
 
 export async function createEvent(
@@ -1537,14 +1545,14 @@ export async function createPublicRegistration(
         !registration.waitlistedAt
     );
 
-  const isWaitlisted =
+  let isWaitlisted =
     activeRegistrations.length >= event.capacity;
 
   if (isWaitlisted && !event.waitlistEnabled) {
     throw new Error("EVENT_CAPACITY_REACHED");
   }
 
-  const isPaid = Number(batch.price) > 0;
+  let isPaid = Number(batch.price) > 0;
 
   let chargeAmount: Prisma.Decimal | number | string =
     batch.price;
@@ -1566,9 +1574,27 @@ export async function createPublicRegistration(
     discountCode = appliedDiscount.code;
   }
 
+  isPaid = Number(chargeAmount) > 0;
+
   const registration =
     await prisma.$transaction(
       async (transaction) => {
+        // Serialize public registration for this event across requests/processes.
+        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`public-registration:${event.id}`}, 0))`;
+        const existing = await transaction.registration.findFirst({
+          where: {
+            churchId: event.churchId, eventId: event.id, registrationSource: "PUBLIC", status: { not: "CANCELLED" },
+            visitor: { is: { name: { equals: input.name.trim(), mode: "insensitive" },
+              OR: [{ phone: input.phone }, ...(input.email ? [{ email: { equals: input.email, mode: "insensitive" as const } }] : [])] } }
+          },
+          include: publicRegistrationInclude
+        });
+        if (existing) return existing;
+        const activeCount = await transaction.registration.count({
+          where: { churchId: event.churchId, eventId: event.id, status: { not: "CANCELLED" }, waitlistedAt: null }
+        });
+        isWaitlisted = activeCount >= event.capacity;
+        if (isWaitlisted && !event.waitlistEnabled) throw new Error("EVENT_CAPACITY_REACHED");
         const freshBatch =
           await transaction.ticketBatch.findFirst({
             where: {
@@ -1620,7 +1646,7 @@ export async function createPublicRegistration(
             }
           });
 
-        return transaction.registration.create({
+        const created = await transaction.registration.create({
           data: {
             churchId: event.churchId,
             eventId: event.id,
@@ -1688,27 +1714,20 @@ export async function createPublicRegistration(
             }
           }
         });
+        if (!isPaid || isWaitlisted) return created;
+        await createEventRegistrationPayment(prisma, {
+          churchId: event.churchId, campusId: event.campusId, eventId: event.id,
+          registrationId: created.id, personId: null, amount: chargeAmount, discountId, discountCode
+        }, transaction);
+        return transaction.registration.findUniqueOrThrow({
+          where: { id: created.id },
+          include: publicRegistrationInclude
+        });
       }
     );
 
-  if (!isPaid || isWaitlisted) {
-    return registration;
-  }
-
-  const paymentId =
-    await createEventRegistrationPayment(
-      prisma,
-      {
-        churchId: event.churchId,
-        campusId: event.campusId,
-        eventId: event.id,
-        registrationId: registration.id,
-        personId: null,
-        amount: chargeAmount,
-        discountId,
-        discountCode
-      }
-    );
+  if (!registration.paymentId || registration.paymentStatus !== "PENDING") return registration;
+  const paymentId = registration.paymentId;
 
   if (shouldAutoConfirmTestPayment()) {
     await applyRegistrationPaymentStatus(
@@ -1756,6 +1775,69 @@ export async function createPublicRegistration(
       }
     }
   });
+}
+
+async function sendPendingRegistrationConfirmationEmail(
+  prisma: PrismaClient,
+  churchId: string,
+  input: { registrationId: string; eventId: string }
+): Promise<boolean> {
+  return prisma.$transaction(async transaction => {
+    // Serialize delivery attempts across processes and re-read eligibility after
+    // acquiring the row lock. Payment/registration confirmation is already committed.
+    await transaction.$queryRaw`
+      SELECT "id" FROM "Registration"
+      WHERE "id" = ${input.registrationId}
+        AND "churchId" = ${churchId}
+        AND "eventId" = ${input.eventId}
+      FOR UPDATE
+    `;
+    const registration = await transaction.registration.findFirst({
+      where: { id: input.registrationId, churchId, eventId: input.eventId },
+      select: {
+        id: true, status: true, paymentStatus: true, waitlistedAt: true,
+        checkInToken: true, confirmationEmailSentAt: true,
+        person: { select: { name: true, email: true } },
+        visitor: { select: { name: true, email: true } },
+        event: { select: {
+          title: true, date: true, isPaid: true, slug: true, publicSlug: true,
+          church: { select: { slug: true } }
+        } }
+      }
+    });
+    if (!registration || registration.confirmationEmailSentAt ||
+        registration.status !== "CONFIRMED" || registration.paymentStatus !== "PAID" ||
+        registration.waitlistedAt) return false;
+    const participant = registration.person ?? registration.visitor;
+    if (!participant?.email) return false;
+
+    // Keep the adapter's stable provider idempotency key for ambiguous failures
+    // between provider acceptance and committing the delivery marker.
+    const sent = await sendRegistrationConfirmationEmail({
+      registrationId: registration.id,
+      recipientEmail: participant.email,
+      participantName: participant.name,
+      checkInToken: registration.checkInToken,
+      registrationStatus: registration.status,
+      paymentStatus: registration.paymentStatus,
+      waitlistedAt: registration.waitlistedAt,
+      event: {
+        title: registration.event.title,
+        date: registration.event.date,
+        isPaid: registration.event.isPaid,
+        slug: registration.event.slug,
+        publicSlug: registration.event.publicSlug,
+        churchSlug: registration.event.church.slug
+      }
+    });
+    if (sent) {
+      await transaction.registration.update({
+        where: { id: registration.id, churchId, eventId: input.eventId },
+        data: { confirmationEmailSentAt: new Date() }
+      });
+    }
+    return sent;
+  }, { timeout: 30000 });
 }
 
 export async function updateRegistrationStatus(
@@ -1826,8 +1908,8 @@ export async function updateRegistrationStatus(
     }
 
     if (
-      registration.event.isPaid &&
-      registration.paymentStatus !== "PAID"
+      registration.paymentStatus !== "PAID" &&
+      registration.paymentStatus !== "NOT_REQUIRED"
     ) {
       throw new Error("PAYMENT_NOT_CONFIRMED");
     }
@@ -1903,49 +1985,11 @@ export async function updateRegistrationStatus(
       }
     });
 
-  const participant =
-    updatedRegistration.person ??
-    updatedRegistration.visitor;
-
-  const shouldSendEmail =
-    input.status === "CONFIRMED" &&
-    updatedRegistration.event.isPaid &&
-    updatedRegistration.paymentStatus === "PAID" &&
-    Boolean(participant?.email);
-
-  const emailSent =
-    shouldSendEmail && participant?.email
-      ? await sendRegistrationConfirmationEmail({
-          registrationId:
-            updatedRegistration.id,
-          recipientEmail:
-            participant.email,
-          participantName:
-            participant.name,
-          checkInToken:
-            updatedRegistration.checkInToken,
-          registrationStatus:
-            updatedRegistration.status,
-          paymentStatus:
-            updatedRegistration.paymentStatus,
-          waitlistedAt:
-            updatedRegistration.waitlistedAt,
-          event: {
-            title:
-              updatedRegistration.event.title,
-            date:
-              updatedRegistration.event.date,
-            isPaid:
-              updatedRegistration.event.isPaid,
-            slug:
-              updatedRegistration.event.slug,
-            publicSlug:
-              updatedRegistration.event.publicSlug,
-            churchSlug:
-              updatedRegistration.event.church.slug
-          }
-        })
-      : false;
+  const emailSent = input.status === "CONFIRMED"
+    ? await sendPendingRegistrationConfirmationEmail(prisma, churchId, {
+        registrationId: updatedRegistration.id, eventId: input.eventId
+      })
+    : false;
 
   return {
     ...updatedRegistration,
@@ -2011,7 +2055,6 @@ export async function getEventRegistrationPaymentCheckout(
 
   if (
     !registration ||
-    !registration.event.isPaid ||
     registration.waitlistedAt ||
     registration.paymentStatus !== "PENDING" ||
     !registration.paymentId
@@ -2284,8 +2327,18 @@ export async function applyEventPaymentProviderStatus(
   if (
     payment.providerPaymentId ===
       input.providerPaymentId &&
-    payment.status === input.paymentStatus
+    payment.status === input.paymentStatus &&
+    (input.paymentStatus !== "PAID" || payment.order.registrations.every(
+      registration => registration.waitlistedAt || registration.status !== "PENDING"
+    ))
   ) {
+    if (input.paymentStatus === "PAID") {
+      for (const registration of payment.order.registrations) {
+        await sendPendingRegistrationConfirmationEmail(prisma, churchId, {
+          registrationId: registration.id, eventId: payment.eventId
+        });
+      }
+    }
     return true;
   }
 
@@ -2335,6 +2388,12 @@ export async function applyEventPaymentProviderStatus(
       const registration
       of payment.order.registrations
     ) {
+      if (registration.status === "CONFIRMED") {
+        await sendPendingRegistrationConfirmationEmail(prisma, churchId, {
+          registrationId: registration.id, eventId: payment.eventId
+        });
+        continue;
+      }
       if (
         registration.waitlistedAt ||
         registration.status === "CANCELLED" ||
@@ -2444,6 +2503,11 @@ export async function applyRegistrationPaymentStatus(
           input.paymentId
     )
   ) {
+    if (input.paymentStatus === "PAID") {
+      await sendPendingRegistrationConfirmationEmail(prisma, churchId, {
+        registrationId: registration.id, eventId: registration.event.id
+      });
+    }
     return true;
   }
 
@@ -2583,8 +2647,8 @@ export async function checkInRegistrationByToken(
   }
 
   if (
-    registration.event.isPaid &&
-    registration.paymentStatus !== "PAID"
+    registration.paymentStatus !== "PAID" &&
+    registration.paymentStatus !== "NOT_REQUIRED"
   ) {
     throw new Error("PAYMENT_NOT_CONFIRMED");
   }

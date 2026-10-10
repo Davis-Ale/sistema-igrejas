@@ -754,6 +754,7 @@ model Registration {
   checkInToken       String    @unique @default(cuid())
   checkedInAt        DateTime?
   confirmedAt        DateTime?
+  confirmationEmailSentAt DateTime?
   waitlistedAt       DateTime?
   registrationSource String    @default("ADMIN")
   createdAt          DateTime  @default(now())

@@ -26,11 +26,14 @@ import {
   attachPublicEventTracking
 } from "./integration.service.js";
 import {
+  getPublicCheckoutStatus,
+  getPublicCheckoutToken,
   createPublicRegistrationBySlugs,
   getPublicEventByPublicSlug,
   getPublicEventBySlugs,
   getPublicRegistrationByTokenBySlugs
 } from "./public.service.js";
+import { isParticipantAppEligible } from "./participant-app.service.js";
 
 const publicRegistrationAccessSchema = z.object({
   checkInToken: z.string().trim().min(10)
@@ -251,6 +254,9 @@ export type PublicRegistrationPaymentHandler = (
 
 function buildPublicRegistrationResponse<
   T extends {
+    id: string;
+    status: string;
+    waitlistedAt: Date | null;
     checkInToken: string;
     paymentStatus: string;
     event: {
@@ -262,12 +268,11 @@ function buildPublicRegistrationResponse<
   paymentCheckout:
     PublicRegistrationPaymentCheckout | null
 ) {
-  const canAccessParticipantArea =
-    !registration.event.isPaid ||
-    registration.paymentStatus === "PAID";
+  const canAccessParticipantArea = isParticipantAppEligible(registration);
 
   return {
     ...registration,
+    checkoutToken: getPublicCheckoutToken(registration),
     checkInToken:
       canAccessParticipantArea
         ? registration.checkInToken
@@ -283,6 +288,18 @@ export async function registerPublicEventRoutes(
   prisma: PrismaClient,
   onRegistrationPaymentPending?: PublicRegistrationPaymentHandler
 ): Promise<void> {
+  app.post("/public/churches/:churchSlug/events/:eventSlug/checkout/status", async (request, reply) => {
+    try {
+      const params = request.params as { churchSlug: string; eventSlug: string };
+      const input = z.object({ checkoutToken: z.string().max(200).regex(/^[^.]+\.[a-f0-9]{64}$/) }).parse(request.body);
+      reply.header("Cache-Control", "no-store");
+      return buildPublicRegistrationResponse(
+        await getPublicCheckoutStatus(prisma, params.churchSlug, params.eventSlug, input.checkoutToken), null
+      );
+    } catch (error) {
+      await sendPublicRouteError(error, reply);
+    }
+  });
   app.get(
     "/public/event-pages/:publicSlug",
     async (request, reply) => {
@@ -440,10 +457,7 @@ export async function registerPublicEventRoutes(
             input.checkInToken
           );
 
-        if (
-          registration.event.isPaid &&
-          registration.paymentStatus !== "PAID"
-        ) {
+        if (!isParticipantAppEligible(registration)) {
           await reply.code(403).send({
             error: "PAYMENT_REQUIRED",
             message:

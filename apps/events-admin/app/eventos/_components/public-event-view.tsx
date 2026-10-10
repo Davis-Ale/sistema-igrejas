@@ -6,6 +6,7 @@ import QRCode from "react-qr-code";
 import {
   FormEvent,
   useEffect,
+  useRef,
   useState
 } from "react";
 import { PublicEventTracking } from "./public-event-tracking";
@@ -85,6 +86,7 @@ type PublicEvent = {
 
 type PublicRegistration = {
   id: string;
+  checkoutToken: string;
   status:
     | "PENDING"
     | "CONFIRMED"
@@ -127,7 +129,7 @@ const API_BASE_URL =
 
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ??
-  "http://localhost:3001";
+  "http://localhost:3003";
 
 type PublicEventViewMode = "public" | "preview";
 
@@ -186,22 +188,21 @@ function getSuccessMessage(
     return "Sua inscrição entrou na lista de espera.";
   }
 
-  if (registration.event.isPaid) {
-    return registration.paymentStatus === "PAID"
-      ? "Sua inscrição foi confirmada."
-      : "Sua inscrição foi recebida e ficará pendente até a confirmação do pagamento.";
-  }
-
-  return "Sua inscrição foi confirmada.";
+  if (isPublicRegistrationConfirmed(registration)) return "Sua inscrição foi confirmada.";
+  if (registration.paymentStatus === "CANCELLED" || registration.status === "CANCELLED") return "Esta inscrição foi cancelada.";
+  if (registration.paymentStatus === "OVERDUE") return "O prazo do pagamento venceu. Sua inscrição ainda não foi confirmada.";
+  if (registration.paymentStatus === "REFUND_PENDING") return "O estorno está em processamento. A credencial está indisponível.";
+  return "Sua inscrição foi recebida e ficará pendente até a confirmação do pagamento.";
 }
 
 function getAppUrl(
-  event: PublicEvent
+  event: PublicEvent,
+  checkInToken: string | null = null
 ) {
   const publicSlug =
     event.publicSlug ?? event.slug;
 
-  return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(publicSlug)}#aplicativo`;
+  return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(publicSlug)}#aplicativo${checkInToken ? `?checkInToken=${encodeURIComponent(checkInToken)}` : ""}`;
 }
 
 function isPublicRegistrationConfirmed(
@@ -211,15 +212,10 @@ function isPublicRegistrationConfirmed(
     return false;
   }
 
-  if (registration.paymentStatus === "PENDING") {
-    return false;
-  }
-
   return (
-    registration.paymentStatus === "PAID" ||
-    registration.paymentStatus === "NOT_REQUIRED" ||
-    registration.status === "CONFIRMED" ||
-    registration.status === "CHECKED_IN"
+    !registration.waitlistedAt &&
+    (registration.paymentStatus === "PAID" || registration.paymentStatus === "NOT_REQUIRED") &&
+    (registration.status === "CONFIRMED" || registration.status === "CHECKED_IN")
   );
 }
 
@@ -232,6 +228,7 @@ export function PublicEventView({
 }) {
   const router = useRouter();
   const isPreview = mode === "preview";
+  const registrationInFlight = useRef(false);
 
   const [
     returnHref,
@@ -394,12 +391,15 @@ export function PublicEventView({
 
       setEvent(data);
 
-      const firstTicket =
-        data.ticketTypes[0] ?? null;
+      const now = Date.now();
+      const isAvailable = (batch: PublicTicketBatch) =>
+        new Date(batch.salesStart).getTime() <= now && new Date(batch.salesEnd).getTime() >= now &&
+        batch._count.registrations < batch.quantity;
+      const firstTicket = data.ticketTypes.find(ticket => ticket.batches.some(isAvailable)) ?? data.ticketTypes[0] ?? null;
 
       setTicketId(firstTicket?.id ?? "");
       setTicketBatchId(
-        firstTicket?.batches[0]?.id ?? ""
+        firstTicket?.batches.find(isAvailable)?.id ?? ""
       );
     } catch {
       setError(
@@ -414,6 +414,7 @@ export function PublicEventView({
     formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
+    if (registrationInFlight.current) return;
 
     if (isPreview) {
       setError(
@@ -449,7 +450,7 @@ export function PublicEventView({
       cpf.replace(/\D/g, "");
 
     if (
-      event.isPaid &&
+      requiresPayment &&
       normalizedCpf.length !== 11
     ) {
       setError(
@@ -459,6 +460,7 @@ export function PublicEventView({
       return;
     }
 
+    registrationInFlight.current = true;
     try {
       const response = await fetch(
         `${API_BASE_URL}/public/churches/${encodeURIComponent(event.church.slug)}/events/${encodeURIComponent(event.slug)}/register`,
@@ -468,11 +470,11 @@ export function PublicEventView({
             name,
             phone,
             cpf:
-              event.isPaid
+              requiresPayment
                 ? normalizedCpf
                 : undefined,
             paymentMethod:
-              event.isPaid
+              requiresPayment
                 ? paymentMethod
                 : undefined,
             ticketId,
@@ -510,6 +512,12 @@ export function PublicEventView({
         await response.json() as PublicRegistration;
 
       setRegistration(data);
+      try {
+        sessionStorage.setItem(`events.checkout.${eventId}`, JSON.stringify({
+          checkoutToken: data.checkoutToken,
+          paymentCheckout: data.paymentCheckout
+        }));
+      } catch { /* The current checkout still works when browser storage is unavailable. */ }
       setName("");
       setPhone("");
       setCpf("");
@@ -520,6 +528,7 @@ export function PublicEventView({
         "Não foi possível realizar a inscrição agora."
       );
     } finally {
+      registrationInFlight.current = false;
       setIsRegistering(false);
     }
   }
@@ -557,6 +566,45 @@ export function PublicEventView({
       : selectedBatch
         ? selectedBatch.price
         : event?.price ?? 0;
+
+  const requiresPayment = Number(checkoutTotal) > 0;
+
+  useEffect(() => {
+    if (isPreview || !event) return;
+    let stored: Pick<PublicRegistration, "checkoutToken" | "paymentCheckout"> | null = null;
+    try {
+      stored = JSON.parse(sessionStorage.getItem(`events.checkout.${eventId}`) ?? "null");
+    } catch { /* Storage is optional. */ }
+    const checkoutToken = registration?.checkoutToken ?? stored?.checkoutToken;
+    if (!checkoutToken) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    async function refresh() {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/public/churches/${encodeURIComponent(event!.church.slug)}/events/${encodeURIComponent(event!.slug)}/checkout/status`,
+          { method: "POST", cache: "no-store", signal: controller.signal,
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checkoutToken }) }
+        );
+        if (response.ok) {
+          const current = await response.json() as PublicRegistration;
+          if (stopped) return;
+          setRegistration(previous => {
+            const paymentCheckout = previous?.id === current.id ? previous.paymentCheckout : stored?.paymentCheckout;
+            return { ...current, ...(current.paymentStatus === "PENDING" && paymentCheckout ? { paymentCheckout } : {}) };
+          });
+          if (current.paymentStatus !== "PENDING" && current.paymentStatus !== "OVERDUE") return;
+        } else if (response.status === 404 || response.status === 400) {
+          try { sessionStorage.removeItem(`events.checkout.${eventId}`); } catch { /* Storage is optional. */ }
+          return;
+        }
+      } catch { /* A temporary network failure must not confirm or recreate a payment. */ }
+      if (!stopped) timer = setTimeout(refresh, 5000);
+    }
+    void refresh();
+    return () => { stopped = true; controller.abort(); clearTimeout(timer); };
+  }, [event, eventId, isPreview, registration?.checkoutToken]);
 
   useEffect(() => {
     setAppliedDiscount(null);
@@ -1234,7 +1282,7 @@ export function PublicEventView({
                           />
                         </label>
 
-                        {event.isPaid ? (
+                        {requiresPayment ? (
                           <label
                             style={{
                               color: "#cbd5e1",
@@ -1700,7 +1748,7 @@ export function PublicEventView({
                           </div>
                         </div>
 
-                        {event.isPaid ? (
+                        {requiresPayment ? (
                           <div
                             style={{
                               display: "grid",
@@ -1783,7 +1831,7 @@ export function PublicEventView({
                           </div>
                         ) : null}
 
-                        {event.isPaid ? (
+                        {requiresPayment ? (
                           <div
                             style={{
                               display: "grid",
@@ -1948,7 +1996,7 @@ export function PublicEventView({
                               ? "Pré-visualização"
                               : isRegistering
                                 ? "Processando..."
-                                : event.isPaid
+                                : requiresPayment
                                   ? "Ir para pagamento"
                                   : "Confirmar inscrição"}
                           </button>
@@ -2194,16 +2242,14 @@ export function PublicEventView({
                       margin: 0
                     }}
                   >
-                    {registration.paymentStatus === "PAID" ? "Pagamento confirmado. O QR Code e o acesso ao aplicativo estão liberados." : "O QR Code e o acesso ao aplicativo serão enviados para este e-mail após a confirmação do pagamento."}
+                    {isPublicRegistrationConfirmed(registration) ? "Sua inscrição está confirmada. O QR Code e o acesso ao aplicativo estão liberados." : getSuccessMessage(registration)}
                   </p>
 
                   {(
-                    !registration.event.isPaid ||
-                    registration.paymentStatus ===
-                      "PAID"
+                    isPublicRegistrationConfirmed(registration)
                   ) && (
                         <a
-                          href={getAppUrl(event)}
+                          href={getAppUrl(event, registration.checkInToken)}
                           style={{
                             background: "#2563eb",
                             borderRadius: "14px",
