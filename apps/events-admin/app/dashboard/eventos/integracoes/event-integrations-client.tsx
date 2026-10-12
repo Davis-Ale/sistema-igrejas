@@ -13,6 +13,7 @@ import {
 
 type LoginSession = {
   token: string;
+  user?: { role?: string };
 };
 
 type EventListItem = {
@@ -81,7 +82,7 @@ const PROVIDER_SLUG: Record<IntegrationProvider, string> = {
   RD_STATION: "rd-station"
 };
 
-function getSessionToken() {
+function getSession() {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
 
   if (!storedSession) {
@@ -91,11 +92,17 @@ function getSessionToken() {
   try {
     const parsedSession = JSON.parse(storedSession) as LoginSession;
 
-    return parsedSession.token;
+    return parsedSession;
   } catch {
     localStorage.removeItem("sistema-igrejas.session");
     return null;
   }
+}
+
+function canManageIntegrations(session: LoginSession | null) {
+  return (
+    session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "PASTOR"
+  );
 }
 
 function statusLabel(status: IntegrationStatus) {
@@ -136,6 +143,7 @@ function readErrorMessage(data: ApiErrorResponse, fallback: string) {
 }
 
 export function EventIntegrationsClient() {
+  const [canManage, setCanManage] = useState(false);
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [items, setItems] = useState<IntegrationItem[]>([]);
@@ -155,6 +163,7 @@ export function EventIntegrationsClient() {
   const [apiKey, setApiKey] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
+  const isEditing = connectingProvider?.status === "CONNECTED";
 
   async function loadEvents(token: string) {
     const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
@@ -208,13 +217,15 @@ export function EventIntegrationsClient() {
 
   useEffect(() => {
     async function load() {
-      const token = getSessionToken();
+      const session = getSession();
+      const token = session?.token;
 
       if (!token) {
         window.location.href = "/login";
         return;
       }
 
+      setCanManage(canManageIntegrations(session));
       setIsLoading(true);
       setError(null);
 
@@ -235,6 +246,13 @@ export function EventIntegrationsClient() {
   }, []);
 
   function openConnectModal(item: IntegrationItem) {
+    if (
+      !canManage || !canManageIntegrations(getSession()) ||
+      !item.connectable || isSaving
+    ) {
+      return;
+    }
+
     setConnectingProvider(item);
     setFormError(null);
     setMeasurementId(item.publicConfig?.measurementId ?? "");
@@ -294,10 +312,15 @@ export function EventIntegrationsClient() {
       return;
     }
 
-    const token = getSessionToken();
+    const session = getSession();
+    const token = session?.token;
 
     if (!token) {
       window.location.href = "/login";
+      return;
+    }
+
+    if (!canManageIntegrations(session) || !connectingProvider.connectable || isSaving) {
       return;
     }
 
@@ -357,10 +380,15 @@ export function EventIntegrationsClient() {
       return;
     }
 
-    const token = getSessionToken();
+    const session = getSession();
+    const token = session?.token;
 
     if (!token) {
       window.location.href = "/login";
+      return;
+    }
+
+    if (!canManageIntegrations(session) || !disconnectingProvider.connectable || isSaving) {
       return;
     }
 
@@ -519,8 +547,10 @@ export function EventIntegrationsClient() {
                   const colors = statusColors(item.status);
                   const summary = connectedSummary(item);
                   const canConnect =
-                    item.connectable && item.status !== "CONNECTED";
-                  const canDisconnect = item.status === "CONNECTED";
+                    canManage && item.connectable && item.status !== "CONNECTED";
+                  const canEdit =
+                    canManage && item.connectable && item.status === "CONNECTED";
+                  const canDisconnect = canEdit;
 
                   return (
                     <article
@@ -611,6 +641,7 @@ export function EventIntegrationsClient() {
                       >
                         {canConnect ? (
                           <button
+                            disabled={isSaving}
                             onClick={() => openConnectModal(item)}
                             className={settings.primary}
                             type="button"
@@ -618,9 +649,23 @@ export function EventIntegrationsClient() {
                             Conectar
                           </button>
                         ) : null}
+                        {canEdit ? (
+                          <button
+                            disabled={isSaving}
+                            onClick={() => openConnectModal(item)}
+                            className={settings.button}
+                            type="button"
+                          >
+                            Editar configuração
+                          </button>
+                        ) : null}
                         {canDisconnect ? (
                           <button
+                            disabled={isSaving}
                             onClick={() => {
+                              if (!canManageIntegrations(getSession()) || isSaving) {
+                                return;
+                              }
                               setFormError(null);
                               setDisconnectingProvider(item);
                             }}
@@ -660,7 +705,8 @@ export function EventIntegrationsClient() {
                 margin: 0
               }}
             >
-              Conectar {connectingProvider.name}
+              {isEditing ? "Editar configuração — " : "Conectar "}
+              {connectingProvider.name}
             </h2>
             <p
               style={{
@@ -671,6 +717,14 @@ export function EventIntegrationsClient() {
             >
               {connectingProvider.description}
             </p>
+            {isEditing &&
+              (connectingProvider.provider === "MAILCHIMP" ||
+                connectingProvider.provider === "WHATSAPP_BUSINESS_CLOUD") ? (
+              <p style={{ color: "#94a3b8", lineHeight: 1.5, margin: 0 }}>
+                Informe novamente a credencial para salvar as alterações. A credencial
+                salva não é exibida.
+              </p>
+            ) : null}
             {formError ? (
               <p
                 style={{
@@ -808,7 +862,9 @@ export function EventIntegrationsClient() {
                   className={settings.primary}
                   type="submit"
                 >
-                  {isSaving ? "Conectando..." : "Conectar"}
+                  {isSaving
+                    ? isEditing ? "Salvando…" : "Conectando..."
+                    : isEditing ? "Salvar alterações" : "Conectar"}
                 </button>
               </div>
             </form>
