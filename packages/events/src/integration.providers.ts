@@ -57,10 +57,12 @@ export async function verifyWhatsAppBusinessCloud(
     `https://graph.facebook.com/v21.0/${encodeURIComponent(phoneNumberId)}`
   );
   url.searchParams.set("fields", "display_phone_number,verified_name");
-  url.searchParams.set("access_token", accessToken);
 
   const response = await http(url.toString(), {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
 
@@ -69,16 +71,21 @@ export async function verifyWhatsAppBusinessCloud(
   }
 
   try {
-    const body = (await response.json()) as {
-      display_phone_number?: unknown;
-    };
+    const body: unknown = await response.json();
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return null;
+    }
+
+    const displayPhoneNumber = (body as { display_phone_number?: unknown })
+      .display_phone_number;
+
+    if (typeof displayPhoneNumber !== "string" || !displayPhoneNumber.trim()) {
+      return null;
+    }
 
     return {
-      displayPhoneNumber:
-        typeof body.display_phone_number === "string" &&
-        body.display_phone_number.trim()
-          ? body.display_phone_number.trim()
-          : null
+      displayPhoneNumber: displayPhoneNumber.trim()
     };
   } catch {
     return null;

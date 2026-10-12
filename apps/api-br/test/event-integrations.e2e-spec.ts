@@ -358,8 +358,8 @@ describe("Event integrations E2E", () => {
 
     expect(connected.status).toBe(200);
     expect(connected.body.status).toBe("CONNECTED");
-    expect(connected.body.publicConfig.datacenter).toBe("us14");
-    expect(connected.body.secretHint).toContain("us14");
+    expect(connected.body.publicConfig.datacenter).toBe("us1");
+    expect(connected.body.secretHint).toBe("••••-us1");
     assertNoSecretLeak(connected.body, [MAILCHIMP_API_KEY]);
 
     const list = await request(app.server)
