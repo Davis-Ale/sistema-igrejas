@@ -8,6 +8,7 @@ export type AsaasClientConfig = {
 export type AsaasRequestOptions = {
   body?: unknown;
   idempotencyKey?: string;
+  signal?: AbortSignal;
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   path: string;
 };
@@ -72,6 +73,7 @@ export function createAsaasClient(config: AsaasClientConfig = {}) {
     if (options.body) {
       requestInit.body = JSON.stringify(options.body);
     }
+    if (options.signal) requestInit.signal = options.signal;
 
     const response = await fetch(`${baseUrl}${normalizedPath}`, requestInit);
 

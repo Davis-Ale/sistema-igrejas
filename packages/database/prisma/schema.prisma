@@ -755,6 +755,7 @@ model Registration {
   checkedInAt        DateTime?
   confirmedAt        DateTime?
   confirmationEmailSentAt DateTime?
+  checkoutEmail      String?   @db.VarChar(254)
   waitlistedAt       DateTime?
   registrationSource String    @default("ADMIN")
   createdAt          DateTime  @default(now())
@@ -770,7 +771,10 @@ model Registration {
   order       EventOrder?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
   formAnswers EventFormAnswer[]
   appSessions EventAppSessionRegistration[]
+  checkoutAccesses EventCheckoutAccess[]
+  checkoutRecoveryAudits EventCheckoutRecoveryAudit[]
 
+  @@unique([churchId, eventId, id])
   @@unique([eventId, personId])
   @@unique([eventId, visitorId])
   @@index([churchId])
@@ -852,7 +856,9 @@ model EventPayment {
   transaction Transaction    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   discount    EventDiscount? @relation(fields: [discountId], references: [id], onDelete: Restrict)
   financialOperations EventsFinancialOperation[]
+  checkoutChargeAttempt EventCheckoutChargeAttempt?
 
+  @@unique([churchId, eventId, id, transactionId])
   @@unique([provider, providerPaymentId])
   @@index([churchId])
   @@index([churchId, eventId])
@@ -861,6 +867,96 @@ model EventPayment {
   @@index([churchId, provider])
   @@index([churchId, providerPaymentId])
   @@index([discountId])
+}
+
+// Additive checkout structures. No access is inferred for legacy registrations.
+enum EventCheckoutAccessSource {
+  PUBLIC_ATTEMPT
+  ADMIN_RECOVERY
+}
+
+enum EventCheckoutPaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+}
+
+enum EventCheckoutRecoveryAction {
+  RECOVER
+  REISSUE
+  REVOKE
+}
+
+enum EventCheckoutChargeAttemptState {
+  STARTED
+  SUCCEEDED
+  UNCERTAIN
+}
+
+model EventCheckoutAccess {
+  id                     String @id @default(cuid())
+  churchId               String
+  eventId                String
+  registrationId         String
+  credentialHash         String @unique @db.VarChar(64)
+  source                 EventCheckoutAccessSource
+  requestFingerprint     String? @db.VarChar(64)
+  requestedPaymentMethod EventCheckoutPaymentMethod?
+  createdAt              DateTime @default(now())
+  expiresAt              DateTime
+  revokedAt              DateTime?
+
+  registration Registration @relation(fields: [churchId, eventId, registrationId], references: [churchId, eventId, id], onDelete: Restrict)
+  recoveryAudits EventCheckoutRecoveryAudit[]
+
+  @@unique([churchId, eventId, registrationId, id])
+  @@index([churchId, eventId, registrationId])
+}
+
+model EventCheckoutRecoveryAudit {
+  id                       String @id @default(cuid())
+  churchId                 String
+  eventId                  String
+  registrationId           String
+  accessId                 String
+  operationId              String @db.Uuid
+  requestFingerprint       String @db.VarChar(64)
+  action                   EventCheckoutRecoveryAction
+  actorUserId              String
+  actorRole                Role
+  ownershipVerified        Boolean?
+  verificationMethod       String? @db.VarChar(120)
+  evidenceReference        String? @db.VarChar(160)
+  verifiedChannelReference String? @db.VarChar(160)
+  reason                   String? @db.VarChar(160)
+  // This row records a completed action, in the same transaction as its effect.
+  // No raw credential, provider response or identity document is stored here.
+  createdAt                DateTime @default(now())
+
+  registration Registration @relation(fields: [churchId, eventId, registrationId], references: [churchId, eventId, id], onDelete: Restrict, map: "checkout_recovery_registration_fkey")
+  access EventCheckoutAccess @relation(fields: [churchId, eventId, registrationId, accessId], references: [churchId, eventId, registrationId, id], onDelete: Restrict, map: "checkout_recovery_access_fkey")
+  actor UserAccount @relation(fields: [churchId, actorUserId], references: [churchId, id], onDelete: Restrict)
+
+  @@unique([churchId, operationId])
+  @@index([churchId, eventId, registrationId, createdAt])
+}
+
+model EventCheckoutChargeAttempt {
+  id                String @id @default(cuid())
+  churchId          String
+  eventId           String
+  eventPaymentId    String @unique
+  transactionId     String @unique
+  requestedMethod   EventCheckoutPaymentMethod
+  state             EventCheckoutChargeAttemptState @default(STARTED)
+  providerPaymentId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  payment EventPayment @relation(fields: [churchId, eventId, eventPaymentId, transactionId], references: [churchId, eventId, id, transactionId], onDelete: Restrict)
+
+  @@unique([churchId, eventId, eventPaymentId, transactionId], map: "checkout_charge_payment_scope_key")
+  @@index([churchId, eventId])
 }
 
 model Transaction {
@@ -1012,7 +1108,9 @@ model UserAccount {
 
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+  checkoutRecoveryAudits EventCheckoutRecoveryAudit[]
 
+  @@unique([churchId, id])
   @@index([churchId])
   @@index([churchId, role])
   @@index([churchId, status])

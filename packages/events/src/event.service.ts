@@ -17,7 +17,8 @@ import {
   computeEventPlatformFeeSnapshot,
   resolveCurrentPlatformFeePercent
 } from "./platform-fee.js";
-import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
+import { sendPendingRegistrationConfirmationEmail } from "./registration-confirmation-delivery.service.js";
+import type { CreateCheckoutRegistration } from "./checkout-access.service.js";
 
 const publicRegistrationInclude = {
   visitor: { select: { id: true, name: true, phone: true, email: true } },
@@ -108,6 +109,7 @@ async function createEventRegistrationPayment(
     amount: Prisma.Decimal | number | string;
     discountId?: string | null;
     discountCode?: string | null;
+    method?: "PIX" | "CARD";
   },
   transactionClient?: Prisma.TransactionClient
 ) {
@@ -153,7 +155,7 @@ async function createEventRegistrationPayment(
             type: "EVENT",
             direction: "IN",
             amount: gross,
-            method: "PIX",
+            method: input.method ?? "PIX",
             costCenter: "EVENTOS"
           }
         });
@@ -1337,14 +1339,31 @@ export async function createRegistration(
   });
 }
 
-export async function createPublicRegistration(
+export async function createPublicRegistration(prisma: PrismaClient, eventId: string, input: CreatePublicRegistrationInput) {
+  return createPublicRegistrationFlow(prisma, eventId, input);
+}
+
+// Dormant v2 factory: sale validation and financial graph share the access transaction.
+// Does not invoke legacy contact deduplication, test auto-confirmation or providers.
+export function createCheckoutRegistrationFactory(prisma: PrismaClient): CreateCheckoutRegistration {
+  return async (transaction, scope, input) => {
+    const registration = await createPublicRegistrationFlow(prisma, scope.eventId, input,
+      { transaction, churchId: scope.churchId });
+    return { id: registration.id };
+  };
+}
+
+async function createPublicRegistrationFlow(
   prisma: PrismaClient,
   eventId: string,
-  input: CreatePublicRegistrationInput
+  input: CreatePublicRegistrationInput,
+  checkout?: { transaction: Prisma.TransactionClient; churchId: string }
 ) {
-  const event = await prisma.event.findFirst({
+  const database = checkout?.transaction ?? prisma;
+  const event = await database.event.findFirst({
     where: {
       id: eventId,
+      ...(checkout ? { churchId: checkout.churchId } : {}),
       isPublic: true,
       publicRegistrationEnabled: true,
       deletedAt: null
@@ -1364,12 +1383,14 @@ export async function createPublicRegistration(
       ticketTypes: {
         where: {
           id: input.ticketId,
+          ...(checkout ? { churchId: checkout.churchId, eventId } : {}),
           isVisible: true
         },
         include: {
           batches: {
             where: {
               id: input.ticketBatchId,
+              ...(checkout ? { churchId: checkout.churchId, eventId } : {}),
               isVisible: true
             },
             include: {
@@ -1391,6 +1412,7 @@ export async function createPublicRegistration(
       formFields: {
         where: {
           isActive: true,
+          ...(checkout ? { churchId: checkout.churchId, eventId } : {}),
           OR: [
             {
               ticketScopes: {
@@ -1561,7 +1583,7 @@ export async function createPublicRegistration(
 
   if (input.discountCode) {
     const appliedDiscount =
-      await resolveApplicableEventDiscount(prisma, {
+      await resolveApplicableEventDiscount(database, {
         churchId: event.churchId,
         eventId: event.id,
         ticketId: ticket.id,
@@ -1576,12 +1598,10 @@ export async function createPublicRegistration(
 
   isPaid = Number(chargeAmount) > 0;
 
-  const registration =
-    await prisma.$transaction(
-      async (transaction) => {
+  const persist = async (transaction: Prisma.TransactionClient) => {
         // Serialize public registration for this event across requests/processes.
         await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`public-registration:${event.id}`}, 0))`;
-        const existing = await transaction.registration.findFirst({
+        const existing = checkout ? null : await transaction.registration.findFirst({
           where: {
             churchId: event.churchId, eventId: event.id, registrationSource: "PUBLIC", status: { not: "CANCELLED" },
             visitor: { is: { name: { equals: input.name.trim(), mode: "insensitive" },
@@ -1717,14 +1737,16 @@ export async function createPublicRegistration(
         if (!isPaid || isWaitlisted) return created;
         await createEventRegistrationPayment(prisma, {
           churchId: event.churchId, campusId: event.campusId, eventId: event.id,
-          registrationId: created.id, personId: null, amount: chargeAmount, discountId, discountCode
+          registrationId: created.id, personId: null, amount: chargeAmount, discountId, discountCode,
+          ...(checkout ? { method: input.paymentMethod === "PIX" ? "PIX" as const : "CARD" as const } : {})
         }, transaction);
         return transaction.registration.findUniqueOrThrow({
           where: { id: created.id },
           include: publicRegistrationInclude
         });
-      }
-    );
+      };
+  const registration = checkout ? await persist(checkout.transaction) : await prisma.$transaction(persist);
+  if (checkout) return registration;
 
   if (!registration.paymentId || registration.paymentStatus !== "PENDING") return registration;
   const paymentId = registration.paymentId;
@@ -1775,69 +1797,6 @@ export async function createPublicRegistration(
       }
     }
   });
-}
-
-async function sendPendingRegistrationConfirmationEmail(
-  prisma: PrismaClient,
-  churchId: string,
-  input: { registrationId: string; eventId: string }
-): Promise<boolean> {
-  return prisma.$transaction(async transaction => {
-    // Serialize delivery attempts across processes and re-read eligibility after
-    // acquiring the row lock. Payment/registration confirmation is already committed.
-    await transaction.$queryRaw`
-      SELECT "id" FROM "Registration"
-      WHERE "id" = ${input.registrationId}
-        AND "churchId" = ${churchId}
-        AND "eventId" = ${input.eventId}
-      FOR UPDATE
-    `;
-    const registration = await transaction.registration.findFirst({
-      where: { id: input.registrationId, churchId, eventId: input.eventId },
-      select: {
-        id: true, status: true, paymentStatus: true, waitlistedAt: true,
-        checkInToken: true, confirmationEmailSentAt: true,
-        person: { select: { name: true, email: true } },
-        visitor: { select: { name: true, email: true } },
-        event: { select: {
-          title: true, date: true, isPaid: true, slug: true, publicSlug: true,
-          church: { select: { slug: true } }
-        } }
-      }
-    });
-    if (!registration || registration.confirmationEmailSentAt ||
-        registration.status !== "CONFIRMED" || registration.paymentStatus !== "PAID" ||
-        registration.waitlistedAt) return false;
-    const participant = registration.person ?? registration.visitor;
-    if (!participant?.email) return false;
-
-    // Keep the adapter's stable provider idempotency key for ambiguous failures
-    // between provider acceptance and committing the delivery marker.
-    const sent = await sendRegistrationConfirmationEmail({
-      registrationId: registration.id,
-      recipientEmail: participant.email,
-      participantName: participant.name,
-      checkInToken: registration.checkInToken,
-      registrationStatus: registration.status,
-      paymentStatus: registration.paymentStatus,
-      waitlistedAt: registration.waitlistedAt,
-      event: {
-        title: registration.event.title,
-        date: registration.event.date,
-        isPaid: registration.event.isPaid,
-        slug: registration.event.slug,
-        publicSlug: registration.event.publicSlug,
-        churchSlug: registration.event.church.slug
-      }
-    });
-    if (sent) {
-      await transaction.registration.update({
-        where: { id: registration.id, churchId, eventId: input.eventId },
-        data: { confirmationEmailSentAt: new Date() }
-      });
-    }
-    return sent;
-  }, { timeout: 30000 });
 }
 
 export async function updateRegistrationStatus(

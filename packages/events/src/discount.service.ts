@@ -67,7 +67,7 @@ const discountListInclude = {
 } as const;
 
 export async function resolveApplicableEventDiscount(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "ticketBatch" | "eventDiscount">,
   input: {
     churchId: string;
     eventId: string;
