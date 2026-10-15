@@ -40,11 +40,16 @@ const denied = () => new Error("CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED");
 const reference = (graph: Graph) => `${graph.churchId}:${graph.eventPaymentId}:payment`;
 
 function isRetryable(error: unknown, uniqueness = false) {
-  const failure = error as { code?: string; meta?: { code?: string; message?: string } } | null;
+  const failure = error as { code?: string; meta?: { code?: string; message?: string;
+    driverAdapterError?: { cause?: { originalCode?: string; originalMessage?: string } } } } | null;
+  // Prisma's pg adapter wraps raw SQL errors; older clients expose code/message directly.
+  const cause = failure?.meta?.driverAdapterError?.cause;
+  const code = failure?.meta?.code ?? cause?.originalCode;
+  const message = failure?.meta?.message ?? cause?.originalMessage;
   return failure?.code === "P2034" || (failure?.code === "P2010" &&
-    (["40001", "40P01"].includes(failure.meta?.code ?? "") || (uniqueness && failure.meta?.code === "23505" &&
+    (["40001", "40P01"].includes(code ?? "") || (uniqueness && code === "23505" &&
       ["EventCheckoutChargeAttempt_eventPaymentId_key", "EventCheckoutChargeAttempt_transactionId_key", "checkout_charge_payment_scope_key"]
-        .some(name => failure.meta?.message?.includes(name)))));
+        .some(name => typeof message === "string" && (message === name || message.includes(`"${name}"`))))));
 }
 
 async function databaseOnly<T>(database: Database, operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
@@ -70,7 +75,7 @@ async function lockGraph(tx: Prisma.TransactionClient, scope: CheckoutScope): Pr
   if (!binding) throw denied();
   // Same official-transaction mutex as the existing financial adapter. Exclusive
   // coordinated v2 activation is still mandatory: legacy ignores the durable guard.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`event-charge:${scope.churchId}:${binding.transactionId}`}, 0))`;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`event-charge:${scope.churchId}:${binding.transactionId}`}, 0))::text`;
   const rows = await tx.$queryRaw<Graph[]>`
     SELECT r."churchId", r."eventId", r."id" AS "registrationId", p."id" AS "eventPaymentId", p."transactionId", p."orderId",
       p."amount"::text AS "amount", p."provider", p."providerPaymentId", t."asaasId", t."method",
@@ -252,8 +257,11 @@ export async function createFirstCheckoutCharge(database: Database, scope: Event
       break;
     } catch (error) {
       // The access service already bounded its serialization/deadlock retries.
+      // Exhaustion requires reconciliation; never restart that retry budget or POST.
+      if (isRetryable(error)) throw denied();
       // Only a charge-specific stale-snapshot uniqueness race retries here.
-      if (retry >= 2 || !isRetryable(error, true) || isRetryable(error)) throw error;
+      if (!isRetryable(error, true)) throw error;
+      if (retry >= 2) throw denied();
     }
   }
   if (!("plan" in claimed)) return claimed;

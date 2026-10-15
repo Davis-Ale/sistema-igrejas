@@ -78,12 +78,16 @@ async function transact<T>(database: Database, operation: (tx: Prisma.Transactio
       // stale key lookup. PostgreSQL may then report the credential's unique
       // constraint rather than a serialization error. Recovery also whitelists
       // its operation UUID/single-unrevoked constraints to re-read the winner.
-      const failure = error as { code?: string; meta?: { code?: string; message?: string } } | null;
+      const failure = error as { code?: string; meta?: { code?: string; message?: string;
+        driverAdapterError?: { cause?: { originalCode?: string; originalMessage?: string } } } } | null;
+      const cause = failure?.meta?.driverAdapterError?.cause;
+      const code = failure?.meta?.code ?? cause?.originalCode;
+      const message = failure?.meta?.message ?? cause?.originalMessage;
       const retryable = failure?.code === "P2034" || (failure?.code === "P2010" &&
-        (["40001", "40P01"].includes(failure.meta?.code ?? "") ||
-         (failure.meta?.code === "23505" &&
+        (["40001", "40P01"].includes(code ?? "") ||
+         (code === "23505" &&
           ["EventCheckoutAccess_credentialHash_key", ...additionalConflictConstraints]
-            .some(name => failure.meta?.message?.includes(name)))));
+            .some(name => typeof message === "string" && (message === name || message.includes(`"${name}"`))))));
       if (retry >= 2 || !retryable) throw error;
     }
   }

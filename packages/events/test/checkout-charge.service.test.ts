@@ -11,6 +11,11 @@ import { createFirstCheckoutCharge, reconcileFirstCheckoutCharge,
 const scope = { churchId: "church-a", eventId: "event-a", registrationId: "registration-a" };
 const cpf = "52998224725";
 const timeout = { timeoutMs: 1000 };
+const adapterConflict = (constraint: string, code = "23505") => ({ code: "P2010", meta: {
+  driverAdapterError: { cause: { originalCode: code,
+    originalMessage: `duplicate key value violates unique constraint "${constraint}"`,
+    kind: "UniqueConstraintViolation", constraint: { fields: ["eventPaymentId"] } } }
+} });
 function harness() {
   const key = generateCheckoutCredential(), createdAt = new Date(Date.now() - 1000);
   let state = {
@@ -202,6 +207,54 @@ test("serialization/known uniqueness retries are database-only and roll back bef
   const h = harness(); h.failClaim({ code: "P2028" });
   await assert.rejects(createFirstCheckoutCharge(h.database, scope, h.key, { cpf }, h.provider, timeout));
   assert.equal(h.commands.length, 0); assert.equal(h.state.attempts.length, 0);
+});
+
+test("pg adapter charge conflicts retry rolled-back claims only, preserving one POST and replay", async () => {
+  for (const constraint of ["EventCheckoutChargeAttempt_eventPaymentId_key", "EventCheckoutChargeAttempt_transactionId_key", "checkout_charge_payment_scope_key"]) {
+    const h = harness(); h.failClaim(adapterConflict(constraint));
+    const first = await createFirstCheckoutCharge(h.database, scope, h.key, { cpf }, h.provider, timeout);
+    assert.equal(h.commands.length, 1); assert.equal(h.state.attempts.length, 1);
+    assert.equal(h.trace.filter(t => t === "ROLLBACK").length, 1);
+    h.failClaim(adapterConflict(constraint));
+    const replay = await createFirstCheckoutCharge(h.database, scope, h.key, {}, h.provider, timeout);
+    assert.equal(replay.wasExisting, true); assert.equal(replay.providerPaymentId, first.providerPaymentId);
+    assert.equal(h.commands.length, 1); assert.equal(h.state.attempts.length, 1);
+  }
+});
+
+test("exhausted known charge conflicts return reconciliation after three claims without any POST", async () => {
+  for (const failure of [adapterConflict("EventCheckoutChargeAttempt_eventPaymentId_key"),
+    { code: "P2010", meta: { code: "23505", message: "EventCheckoutChargeAttempt_eventPaymentId_key" } }]) {
+    const h = harness(); h.failClaim(failure, true);
+    await assert.rejects(createFirstCheckoutCharge(h.database, scope, h.key, { cpf }, h.provider, timeout),
+      /CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED/);
+    assert.equal(h.transactions, 3); assert.equal(h.commands.length, 0); assert.equal(h.state.attempts.length, 0);
+  }
+});
+
+test("exhausted serialization/deadlock retries in access return reconciliation without restarting claims or POSTing", async () => {
+  for (const failure of [{ code: "P2034" }, ...["40001", "40P01"].map(originalCode => ({ code: "P2010",
+    meta: { driverAdapterError: { cause: { originalCode, originalMessage: "concurrent database conflict" } } } }))]) {
+    const h = harness(); h.failClaim(failure, true);
+    await assert.rejects(createFirstCheckoutCharge(h.database, scope, h.key, { cpf }, h.provider, timeout),
+      /CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED/);
+    assert.equal(h.transactions, 3); assert.equal(h.commands.length, 0); assert.equal(h.state.attempts.length, 0);
+  }
+});
+
+test("unrecognized adapter errors and constraint lookalikes propagate unchanged without retry or POST", async () => {
+  for (const failure of [adapterConflict("unrelated_constraint"),
+    adapterConflict("EventCheckoutChargeAttempt_eventPaymentId_key_suffix"),
+    adapterConflict("prefix_EventCheckoutChargeAttempt_eventPaymentId_key"),
+    adapterConflict("EventCheckoutChargeAttempt_eventPaymentId_key", "23503"),
+    { code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "23505",
+      kind: "UniqueConstraintViolation", constraint: { fields: ["eventPaymentId"] } } } } },
+    { code: "P2002", meta: { code: "23505", message: "EventCheckoutChargeAttempt_eventPaymentId_key" } },
+    new Error("unexpected database failure")]) {
+    const h = harness(); h.failClaim(failure, true);
+    await assert.rejects(createFirstCheckoutCharge(h.database, scope, h.key, { cpf }, h.provider, timeout), error => error === failure);
+    assert.equal(h.transactions, 1); assert.equal(h.commands.length, 0); assert.equal(h.state.attempts.length, 0);
+  }
 });
 
 test("ambiguous claim commit performs no POST and a possibly committed STARTED cannot be retried", async () => {

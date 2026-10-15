@@ -232,6 +232,31 @@ test("unrelated unique conflicts/timeouts are not retried and serialization retr
   assert.equal(h.transactions, 3); assert.equal(h.state.accesses.length, 0);
 });
 
+test("pg adapter serialization, deadlock and scoped unique failures retry only rolled-back access work", async () => {
+  for (const code of ["40001", "40P01", "23505"]) {
+    const h = harness(), key = generateCheckoutCredential();
+    h.failCommit({ code: "P2010", meta: { driverAdapterError: { cause: { originalCode: code,
+      originalMessage: 'duplicate key value violates unique constraint "EventCheckoutAccess_credentialHash_key"' } } } });
+    await createCheckoutAttempt(h.database, scope, key, body, h.factory, clock);
+    assert.equal(h.transactions, 2); assert.equal(h.factories, 2);
+    assert.equal(h.state.registrations.length, 1); assert.equal(h.state.financial.length, 1); assert.equal(h.state.accesses.length, 1);
+  }
+});
+
+test("unrecognized pg adapter failures preserve the original error and never retry access", async () => {
+  for (const cause of [
+    { originalCode: "23505", originalMessage: 'unique constraint "EventCheckoutAccess_credentialHash_key_suffix"' },
+    { originalCode: "23505", originalMessage: 'unique constraint "unrelated_constraint"' },
+    { originalCode: "23503", originalMessage: 'constraint "EventCheckoutAccess_credentialHash_key"' },
+    { originalCode: "23505" }
+  ]) {
+    const h = harness(), failure = { code: "P2010", meta: { driverAdapterError: { cause } } };
+    h.failCommit(failure);
+    await assert.rejects(createCheckoutAttempt(h.database, scope, generateCheckoutCredential(), body, h.factory, clock), error => error === failure);
+    assert.equal(h.transactions, 1); assert.equal(h.state.accesses.length, 0); assert.equal(h.state.financial.length, 0);
+  }
+});
+
 test("authorized operation receives only scoped identity under row lock, with immutable expiry", async () => {
   const h = harness(), key = generateCheckoutCredential();
   await createCheckoutAttempt(h.database, scope, key, body, h.factory, clock);
