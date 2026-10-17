@@ -99,10 +99,10 @@ const rejected = async (sql: string, values: any[], code: string, constraint?: s
   await assert.rejects(pool.query(sql, values), (error: any) => error.code === code && (!constraint || error.constraint === constraint));
 };
 
-test('all 30 migrations applied by Prisma deploy; SQL-only constraints and partial index exist', async () => {
+test('all 31 migrations applied by Prisma deploy; SQL-only constraints and partial index exist', async () => {
   const rows = (await pool.query('SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY migration_name')).rows;
-  assert.equal(rows.length, 30); assert.ok(rows.every(r => r.finished_at && !r.rolled_back_at));
-  assert.equal(rows.at(-1).migration_name, '20261013120000_event_checkout_access_structure');
+  assert.equal(rows.length, 31); assert.ok(rows.every(r => r.finished_at && !r.rolled_back_at));
+  assert.equal(rows.at(-1).migration_name, '20261017120000_checkout_recovery_delivery_events');
   const names = new Set((await pool.query("SELECT conname FROM pg_constraint WHERE conname LIKE 'checkout_%'")).rows.map(r => r.conname));
   for (const name of ['checkout_access_ttl_check', 'checkout_access_source_check', 'checkout_access_hash_check', 'checkout_charge_reference_check', 'checkout_recovery_evidence_check', 'checkout_recovery_actor_check', 'checkout_recovery_access_fkey']) assert.ok(names.has(name));
   const index = (await pool.query("SELECT indexdef FROM pg_indexes WHERE indexname='checkout_access_one_unrevoked_key'")).rows[0];

@@ -366,7 +366,8 @@ async function appendRecoveryAudit(
  */
 export async function recoverCheckoutAccess(
   database: Database, actorValue: unknown, scopeValue: CheckoutScope,
-  freshCredential: string, value: unknown, clock: Clock = () => new Date()
+  freshCredential: string, value: unknown, clock: Clock = () => new Date(),
+  prepareDelivery?: (tx: Prisma.TransactionClient, receipt: ReturnType<typeof recoveryReceipt>) => Promise<void>
 ) {
   const { actor, scope } = recoveryContext(actorValue, scopeValue);
   const parsedRequest = checkoutRecoveryRequestSchema.parse(value);
@@ -382,7 +383,9 @@ export async function recoverCheckoutAccess(
       const access = accesses.find(a => a.id === audit.accessId);
       if (!access || !equalDigest(access.credentialHash, hash)) throw new Error("CHECKOUT_RECOVERY_CONFLICT");
       // Return current revocation/expiry; a delayed retry never resurrects access.
-      return recoveryReceipt(checkoutAccessRecordSchema.parse(access), request.operationId, true);
+      const receipt = recoveryReceipt(checkoutAccessRecordSchema.parse(access), request.operationId, true);
+      if (prepareDelivery) await prepareDelivery(tx, receipt);
+      return receipt;
     }
     if (!checkoutRecoverablePaymentStatusSchema.safeParse(registration.paymentStatus).success) {
       throw new Error("CHECKOUT_RECOVERY_INELIGIBLE");
@@ -419,7 +422,9 @@ export async function recoverCheckoutAccess(
       VALUES (${access.id}, ${scope.churchId}, ${scope.eventId}, ${scope.registrationId}, ${hash},
         'ADMIN_RECOVERY', NULL, NULL, ${createdAt}, ${access.expiresAt}, NULL)`;
     await appendRecoveryAudit(tx, actor, scope, access.id, request, digest, createdAt);
-    return recoveryReceipt(access, request.operationId, false);
+    const receipt = recoveryReceipt(access, request.operationId, false);
+    if (prepareDelivery) await prepareDelivery(tx, receipt);
+    return receipt;
   }, ["EventCheckoutRecoveryAudit_churchId_operationId_key", "checkout_access_one_unrevoked_key"]);
 }
 

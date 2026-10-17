@@ -206,9 +206,10 @@ test("administrative descriptors require JWT/current SUPER_ADMIN and derive scop
     assert.equal((await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token}`, "x-event-checkout-key": generateCheckoutCredential() }, payload })).statusCode, 403);
     assert.equal(h.mutations.length, 0);
     h.account.role = "SUPER_ADMIN";
-    const result = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token}`, "x-event-checkout-key": generateCheckoutCredential() }, payload });
-    assert.equal(result.statusCode, 200);
-    assert.ok(h.mutations.some(m => m.sql.includes('INSERT INTO "EventCheckoutRecoveryAudit"') && m.values[1] === scope.churchId && m.values[8] === "admin-a"));
+    const result = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token}` }, payload });
+    assert.equal(result.statusCode, 503);
+    assert.equal(result.json().error, "CHECKOUT_RECOVERY_DELIVERY_NOT_CONFIGURED");
+    assert.equal(h.mutations.length, 0);
     const forged = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token}`, "x-event-checkout-key": generateCheckoutCredential() }, payload: { ...payload, churchId: "other", actorUserId: "other" } });
     assert.equal(forged.statusCode, 400);
   } finally { await app.close(); }

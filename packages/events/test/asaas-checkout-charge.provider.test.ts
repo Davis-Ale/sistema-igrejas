@@ -53,11 +53,15 @@ test("transport passes AbortSignal/idempotency headers using simulated fetch, wi
   assert.equal(mock.mock.callCount(), 1);
 });
 
-test("guard and adapter remain absent from both builders, prepared routes and package entrypoints", async () => {
+test("guard and adapter remain absent from active builders and package entrypoints", async () => {
   for (const relative of ["../../../apps/events-api/src/app.ts", "../../../apps/api-br/src/app.ts",
-    "../../../apps/events-api/src/checkout-v2.prepared.ts", "../../../apps/api-br/src/checkout-v2.prepared.ts",
-    "../src/checkout-v2.routes.ts", "../src/checkout-v2.integration.ts", "../src/index.ts", "../../financial/src/index.ts"]) {
+    "../../../apps/events-api/src/server.ts", "../../../apps/api-br/src/server.ts",
+    "../src/index.ts", "../../financial/src/index.ts"]) {
     const source = await readFile(new URL(relative, import.meta.url), "utf8");
     assert.equal(source.includes("checkout-charge.service"), false); assert.equal(source.includes("asaas-checkout-charge.provider"), false);
+  }
+  for (const server of ["events-api", "api-br"]) {
+    const source = await readFile(new URL(`../../../apps/${server}/src/checkout-v2.prepared.ts`, import.meta.url), "utf8");
+    assert.ok(source.includes("createAsaasCheckoutChargeProvider()"));
   }
 });

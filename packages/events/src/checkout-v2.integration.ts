@@ -5,13 +5,14 @@ import {
   type CheckoutScope
 } from "./checkout-access.schema.js";
 import { createCheckoutAttempt, withCheckoutAuthorization } from "./checkout-access.service.js";
+import { createFirstCheckoutCharge, reconcileFirstCheckoutCharge, type CheckoutFirstChargeProvider } from "./checkout-charge.service.js";
 import { createCheckoutRegistrationFactory } from "./event.service.js";
 import { isParticipantAppEligible } from "./participant-app.service.js";
 
 type EventScope = Pick<CheckoutScope, "churchId" | "eventId">;
 export type CheckoutEventLocator = { eventId: string } | { churchSlug: string; eventSlug: string };
 export type CheckoutPaymentProvider = {
-  // Read-only integration. No provider creation/deletion/reset callback is accepted.
+  // Known-charge reads. First creation uses the separate durable guard below.
   read(id: string): Promise<{ id: string; method: "PIX" | "CARD"; amount: number;
     status: string; redirectUrl: string | null }>;
   pix(id: string): Promise<{ encodedImage: string; payload: string; expirationDate: string }>;
@@ -90,7 +91,8 @@ async function existingPaymentBinding(tx: Prisma.TransactionClient, scope: Check
   return rows[0]!;
 }
 
-export function createCheckoutV2Integration(prisma: PrismaClient, provider: CheckoutPaymentProvider) {
+export function createCheckoutV2Integration(prisma: PrismaClient, provider: CheckoutPaymentProvider,
+  firstChargeProvider?: CheckoutFirstChargeProvider) {
   const factory = createCheckoutRegistrationFactory(prisma);
   async function status(scope: EventScope, key: string, value: unknown) {
     publicCheckoutStatusV2Schema.parse(value);
@@ -98,7 +100,17 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
   }
   async function resume(scope: EventScope, key: string, value: unknown) {
     publicCheckoutResumeV2Schema.parse(value); // CPF remains ephemeral; no contact/method/ID override.
-    const binding = await withCheckoutAuthorization(prisma, scope, key, existingPaymentBinding);
+    let binding = await withCheckoutAuthorization(prisma, scope, key, existingPaymentBinding);
+    if (binding?.provider === "ASAAS" && !binding.providerPaymentId && !binding.asaasId &&
+        binding.attemptState === null) {
+      if (!firstChargeProvider) throw new Error("CHECKOUT_CHARGE_CREATION_NOT_PREPARED");
+      // The guard reauthorizes/locks/re-reads and commits STARTED before its only
+      // POST. Never call the legacy callback or wrap this in a transaction/retry.
+      await createFirstCheckoutCharge(prisma, scope, key, value, firstChargeProvider);
+      // References can be persisted even if access expires/revokes during the
+      // POST. A new authorization is required before any checkout is disclosed.
+      binding = await withCheckoutAuthorization(prisma, scope, key, existingPaymentBinding);
+    }
     let paymentCheckout = null;
     if (binding && binding.provider !== "TEST") {
       if (binding.provider !== "ASAAS") throw new Error("EVENT_PAYMENT_PROVIDER_UNSUPPORTED");
@@ -106,9 +118,7 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
         throw new Error("CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED");
       }
       if (!binding.providerPaymentId && !binding.asaasId) {
-        // Proven activation blocker: the legacy creation callback does not use a
-        // durable STARTED guard. Do not adapt it by calling it optimistically.
-        throw new Error("CHECKOUT_CHARGE_CREATION_NOT_PREPARED");
+        throw new Error("CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED");
       }
       if (!binding.providerPaymentId || binding.providerPaymentId !== binding.asaasId) {
         throw new Error("CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED");
@@ -121,7 +131,9 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
       // Legacy CARD cannot tell credit from debit. Never invent a semantic method.
       if (!method.success || (binding.method === "PIX" ? method.data !== "PIX" :
           binding.method !== "CARD" || method.data === "PIX")) throw new Error("CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED");
-      const payment = await provider.read(binding.providerPaymentId);
+      const payment = await provider.read(binding.providerPaymentId).catch(() => {
+        throw new Error("PAYMENT_CHECKOUT_FAILED");
+      });
       if (payment.id !== binding.providerPaymentId || !Number.isFinite(Number(binding.amount)) ||
           Number(binding.amount) <= 0 || payment.amount !== Number(binding.amount) ||
           payment.method !== (method.data === "PIX" ? "PIX" : "CARD")) {
@@ -129,7 +141,9 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
       }
       if (payment.status === "PENDING" || payment.status === "OVERDUE") {
         if (method.data === "PIX") {
-          const pix = await provider.pix(payment.id);
+          const pix = await provider.pix(payment.id).catch(() => {
+            throw new Error("PAYMENT_CHECKOUT_FAILED");
+          });
           if (![pix.encodedImage, pix.payload, pix.expirationDate].every(value => typeof value === "string" && value.length > 0)) {
             throw new Error("PAYMENT_CHECKOUT_FAILED");
           }
@@ -138,7 +152,9 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
           } };
         }
         else {
-          if (!payment.redirectUrl || new URL(payment.redirectUrl).protocol !== "https:") throw new Error("PAYMENT_CHECKOUT_FAILED");
+          let secureUrl = false;
+          try { secureUrl = !!payment.redirectUrl && new URL(payment.redirectUrl).protocol === "https:"; } catch { /* Invalid provider URL. */ }
+          if (!payment.redirectUrl || !secureUrl) throw new Error("PAYMENT_CHECKOUT_FAILED");
           paymentCheckout = { method: method.data, redirectUrl: payment.redirectUrl };
         }
       }
@@ -162,6 +178,13 @@ export function createCheckoutV2Integration(prisma: PrismaClient, provider: Chec
   }
   return {
     status, resume,
+    // Internal explicit operation only: knownProviderId must come from trusted
+    // backend evidence, never status/resume bodies or a public reconciliation route.
+    async reconcile(scope: EventScope, key: string, knownProviderId: string) {
+      if (!firstChargeProvider) throw new Error("CHECKOUT_CHARGE_CREATION_NOT_PREPARED");
+      await reconcileFirstCheckoutCharge(prisma, scope, key, knownProviderId, firstChargeProvider);
+      return status(scope, key, {});
+    },
     async register(scope: EventScope, key: string, value: unknown) {
       const input = createPublicRegistrationV2Schema.parse(value);
       const attempt = await createCheckoutAttempt(prisma, scope, key, input, factory);

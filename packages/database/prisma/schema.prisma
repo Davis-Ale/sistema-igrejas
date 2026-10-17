@@ -937,6 +937,8 @@ model EventCheckoutRecoveryAudit {
   access EventCheckoutAccess @relation(fields: [churchId, eventId, registrationId, accessId], references: [churchId, eventId, registrationId, id], onDelete: Restrict, map: "checkout_recovery_access_fkey")
   actor UserAccount @relation(fields: [churchId, actorUserId], references: [churchId, id], onDelete: Restrict)
 
+  deliveryEvents EventCheckoutRecoveryDeliveryEvent[]
+
   @@unique([churchId, operationId])
   @@index([churchId, eventId, registrationId, createdAt])
 }
@@ -1109,6 +1111,7 @@ model UserAccount {
   church Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
   checkoutRecoveryAudits EventCheckoutRecoveryAudit[]
+  checkoutRecoveryDeliveryEvents EventCheckoutRecoveryDeliveryEvent[]
 
   @@unique([churchId, id])
   @@index([churchId])
@@ -1166,4 +1169,30 @@ model LocationNeighborhood {
 
   @@unique([cityId, normalizedName])
   @@index([cityId, name])
+}
+
+// Delivery SQL triggers enforce transitions and append-only history.
+enum EventCheckoutRecoveryDeliveryStage {
+  PREPARED
+  DELIVERY_INTENT
+  DELIVERY_ACCEPTED
+  DELIVERY_UNCERTAIN
+  DELIVERY_RECONCILED_ACCEPTED
+}
+
+model EventCheckoutRecoveryDeliveryEvent {
+  id String @id
+  sequence BigInt @unique @default(autoincrement())
+  churchId String
+  operationId String @db.Uuid
+  stage EventCheckoutRecoveryDeliveryStage
+  requestFingerprint String @db.VarChar(64)
+  actorUserId String
+  receiptReference String? @db.VarChar(120)
+  evidenceReference String? @db.VarChar(120)
+  createdAt DateTime @default(now())
+  recovery EventCheckoutRecoveryAudit @relation(fields: [churchId, operationId], references: [churchId, operationId], onDelete: Restrict, onUpdate: Restrict, map: "checkout_delivery_recovery_fkey")
+  actor UserAccount @relation(fields: [churchId, actorUserId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict, map: "checkout_delivery_actor_fkey")
+  @@unique([churchId, operationId, stage], map: "checkout_delivery_operation_stage_key")
+  @@index([churchId, operationId, sequence], map: "checkout_delivery_history_idx")
 }

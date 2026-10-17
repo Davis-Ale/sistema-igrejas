@@ -3,7 +3,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from
 import { createAuthPreHandler } from "@sistema-igrejas/auth";
 import { ZodError, z } from "zod";
 import { checkoutRecoveryParamsSchema } from "./checkout-access.schema.js";
-import { recoverCheckoutAccess, revokeCheckoutAccess } from "./checkout-access.service.js";
+import { revokeCheckoutAccess } from "./checkout-access.service.js";
+import type { AssistedCheckoutRecovery } from "./checkout-assisted-recovery.service.js";
+import type { CheckoutFirstChargeProvider } from "./checkout-charge.service.js";
 import {
   checkoutKeyFromHeaders, createCheckoutV2Integration, resolveCheckoutEvent,
   type CheckoutPaymentProvider, type CheckoutEventLocator
@@ -29,11 +31,15 @@ async function routeError(error: unknown, reply: FastifyReply) {
     CHECKOUT_RECOVERY_NOT_FOUND: 404, PUBLIC_EVENT_NOT_FOUND: 404,
     CHECKOUT_ATTEMPT_CONFLICT: 409, CHECKOUT_RECOVERY_CONFLICT: 409, CHECKOUT_ASSISTANCE_REQUIRED: 409,
     CHECKOUT_REISSUE_REQUIRED: 409, CHECKOUT_RECOVERY_INELIGIBLE: 409,
+    CHECKOUT_RECOVERY_DELIVERY_NOT_CONFIGURED: 503, CHECKOUT_RECOVERY_INPUT_INVALID: 400,
+    CHECKOUT_RECOVERY_KEY_UNAVAILABLE: 409, CHECKOUT_RECOVERY_DELIVERY_UNCERTAIN: 409,
+    CHECKOUT_RECOVERY_RETRY_REQUIRED: 503, CHECKOUT_RECOVERY_CREDENTIAL_NOT_ACCEPTED: 400,
     CHECKOUT_DESTINATION_REQUIRED: 400, CHECKOUT_DESTINATION_INVALID: 400, CHECKOUT_DESTINATION_CONFLICT: 409,
     CHECKOUT_PAYMENT_RECONCILIATION_REQUIRED: 409, CHECKOUT_CHARGE_CREATION_NOT_PREPARED: 503,
     EVENT_CAPACITY_REACHED: 409, TICKET_BATCH_SOLD_OUT: 409, TICKET_BATCH_NOT_AVAILABLE: 409,
     EVENT_TICKET_NOT_FOUND: 404, TICKET_BATCH_NOT_FOUND: 404,
     INVALID_FORM_ANSWER: 400, REQUIRED_FORM_ANSWER_MISSING: 400, DISCOUNT_NOT_APPLICABLE: 400,
+    PAYMENT_CUSTOMER_CPF_REQUIRED: 400, EVENT_PAYMENT_PROVIDER_UNSUPPORTED: 502,
     PAYMENT_CHECKOUT_FAILED: 502
   };
   const code = error instanceof ZodError ? "VALIDATION_ERROR" :
@@ -47,8 +53,9 @@ async function routeError(error: unknown, reply: FastifyReply) {
  * critical routes on BOTH servers after draining requests and applying the
  * authorized migration. Never register these beside the legacy route registrar.
  */
-export function prepareCheckoutV2Routes(prisma: PrismaClient, provider: CheckoutPaymentProvider): RouteOptions[] {
-  const integration = createCheckoutV2Integration(prisma, provider);
+export function prepareCheckoutV2Routes(prisma: PrismaClient, provider: CheckoutPaymentProvider,
+  firstChargeProvider?: CheckoutFirstChargeProvider, assistedRecovery?: AssistedCheckoutRecovery): RouteOptions[] {
+  const integration = createCheckoutV2Integration(prisma, provider, firstChargeProvider);
   const protect = (handler: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>) =>
     async (request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Cache-Control", "no-store");
@@ -81,8 +88,12 @@ export function prepareCheckoutV2Routes(prisma: PrismaClient, provider: Checkout
         }
         const scope = { ...checkoutRecoveryParamsSchema.parse(request.params), churchId: request.churchId };
         const actor = { userId: request.user.userId, churchId: request.churchId, role: request.user.role };
-        return action === "recovery" ? recoverCheckoutAccess(prisma, actor, scope, checkoutKeyFromHeaders(request.headers), request.body) :
-          revokeCheckoutAccess(prisma, actor, scope, request.body);
+        if (action === "revocation") return revokeCheckoutAccess(prisma, actor, scope, request.body);
+        // A browser/operator never supplies or receives the new private key.
+        // Without explicit verified-email delivery + durable audit, fail closed.
+        if (request.headers["x-event-checkout-key"] !== undefined) throw new Error("CHECKOUT_RECOVERY_CREDENTIAL_NOT_ACCEPTED");
+        if (!assistedRecovery) throw new Error("CHECKOUT_RECOVERY_DELIVERY_NOT_CONFIGURED");
+        return assistedRecovery.execute(actor, scope, request.body);
       }) });
   }
   return routes;
