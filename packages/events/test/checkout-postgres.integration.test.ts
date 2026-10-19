@@ -5,10 +5,19 @@ import { Client, Pool } from 'pg';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { createCheckoutAttempt, generateCheckoutCredential, withCheckoutAuthorization, recoverCheckoutAccess } from '../src/checkout-access.service.ts';
-import { createCheckoutRegistrationFactory } from '../src/event.service.ts';
+import { createCheckoutRegistrationFactory, applyEventPaymentProviderStatus, applyRegistrationPaymentStatus } from '../src/event.service.ts';
 import { createFirstCheckoutCharge, reconcileFirstCheckoutCharge, type CheckoutFirstChargeProvider } from '../src/checkout-charge.service.ts';
 import { createCheckoutV2Integration } from '../src/checkout-v2.integration.ts';
 import { sendPendingRegistrationConfirmationEmail } from '../src/registration-confirmation-delivery.service.ts';
+import Fastify from 'fastify';
+import jwt from '@fastify/jwt';
+import { registerAsaasWebhookRoutes } from '../../financial/src/asaas.routes.ts';
+import { prepareEventsApiCheckoutV2 } from '../../../apps/events-api/src/checkout-v2.prepared.ts';
+import { prepareApiBrCheckoutV2 } from '../../../apps/api-br/src/checkout-v2.prepared.ts';
+import { prepareEventsApiCheckoutSecurity } from '../../../apps/events-api/src/checkout-security.prepared.ts';
+import { prepareApiBrCheckoutSecurity } from '../../../apps/api-br/src/checkout-security.prepared.ts';
+import { createAssistedCheckoutRecovery } from '../src/checkout-assisted-recovery.service.ts';
+import { createPostgresRecoveryDeliveryStore } from '../src/checkout-recovery-delivery.store.ts';
 
 // No dotenv, buildApp, seed, real provider, or implicit Prisma datasource here.
 function guardedUrl(value: string | undefined) {
@@ -98,6 +107,250 @@ function simulator(f: Awaited<ReturnType<typeof sale>>) {
 const rejected = async (sql: string, values: any[], code: string, constraint?: string) => {
   await assert.rejects(pool.query(sql, values), (error: any) => error.code === code && (!constraint || error.constraint === constraint));
 };
+
+async function staleStatusRace(kind: 'payment' | 'registration') {
+  const f = await sale();
+  const sim = simulator(f);
+  const charge = await createFirstCheckoutCharge(prisma, f.scope, f.key, { cpf }, sim.provider);
+  const providerPaymentId = (await financial(f)).payment.providerPaymentId!;
+  let observed!: () => void, resume!: () => void;
+  const read = new Promise<void>(resolve => { observed = resolve; });
+  const release = new Promise<void>(resolve => { resume = resolve; });
+  let held = false;
+  const stale = new Proxy(prisma2, { get(target, prop) {
+    if (prop === 'eventPayment') return new Proxy(target.eventPayment, { get(delegate, name) {
+      if (name === 'findFirst') return async (...args: any[]) => {
+        const result = await (delegate.findFirst as any)(...args);
+        if (!held) { held = true; observed(); await release; }
+        return result;
+      };
+      const value = Reflect.get(delegate, name); return typeof value === 'function' ? value.bind(delegate) : value;
+    } });
+    const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
+  } });
+  // Keep email disabled for this ordering test; no provider is called.
+  const oldKey = process.env.RESEND_API_KEY; delete process.env.RESEND_API_KEY;
+  let late: Promise<boolean> | undefined;
+  try {
+    late = kind === 'payment'
+      ? applyEventPaymentProviderStatus(stale, f.scope.churchId, { eventPaymentId: f.payment.id, providerPaymentId, paymentStatus: 'OVERDUE' })
+      : applyRegistrationPaymentStatus(stale, f.scope.churchId, { registrationId: f.scope.registrationId, paymentId: providerPaymentId, paymentStatus: 'OVERDUE' });
+    await read;
+    assert.equal(await applyEventPaymentProviderStatus(prisma, f.scope.churchId, { eventPaymentId: f.payment.id, providerPaymentId, paymentStatus: 'PAID' }), true);
+    const paid = await financial(f); assert.equal(paid.registration.status, 'CONFIRMED');
+    resume(); await late;
+    const after = await financial(f);
+    assert.equal(after.payment.status, 'PAID'); assert.equal(after.order.status, 'PAID');
+    assert.equal(after.registration.paymentStatus, 'PAID');
+    assert.equal(after.registration.confirmedAt?.toISOString(), paid.registration.confirmedAt?.toISOString());
+    assert.equal(charge.providerPaymentId, providerPaymentId);
+    assert.equal(sim.posts, 1);
+  } finally { resume(); await late?.catch(() => {}); if (oldKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = oldKey; }
+}
+test('webhook stale OVERDUE read cannot regress a committed PAID confirmation across Prisma clients', () => staleStatusRace('payment'));
+test('registration webhook stale OVERDUE read cannot regress a committed PAID confirmation', () => staleStatusRace('registration'));
+
+test('concurrent PAID confirmation cannot rewrite confirmedAt after another callback confirmed the registration', async () => {
+  const f = await sale(), sim = simulator(f);
+  const charge = await createFirstCheckoutCharge(prisma, f.scope, f.key, { cpf }, sim.provider);
+  let observed!: () => void, resume!: () => void;
+  const read = new Promise<void>(resolve => { observed = resolve; });
+  const release = new Promise<void>(resolve => { resume = resolve; });
+  let held = false;
+  const paused = new Proxy(prisma2, { get(target, prop) {
+    if (prop === 'registration') return new Proxy(target.registration, { get(delegate, name) {
+      if (name === 'findFirst') return async (...args: any[]) => {
+        const result = await (delegate.findFirst as any)(...args);
+        if (!held) { held = true; observed(); await release; }
+        return result;
+      };
+      const value = Reflect.get(delegate, name); return typeof value === 'function' ? value.bind(delegate) : value;
+    } });
+    const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
+  } });
+  const oldKey = process.env.RESEND_API_KEY; delete process.env.RESEND_API_KEY;
+  const input = { eventPaymentId: f.payment.id, providerPaymentId: charge.providerPaymentId, paymentStatus: 'PAID' as const };
+  let ongoing: Promise<boolean> | undefined;
+  try {
+    ongoing = applyEventPaymentProviderStatus(paused, f.scope.churchId, input); await read;
+    await applyEventPaymentProviderStatus(prisma, f.scope.churchId, input);
+    const confirmed = await financial(f); resume(); await ongoing;
+    assert.equal((await financial(f)).registration.confirmedAt!.toISOString(), confirmed.registration.confirmedAt!.toISOString());
+  } finally { resume(); await ongoing?.catch(() => {}); if (oldKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = oldKey; }
+});
+
+test('confirmation email exception and marker rollback preserve financial commits and retry the same recipient/payload', async () => {
+  const f = await sale();
+  await prisma.$transaction([
+    prisma.eventPayment.update({ where: { id: f.payment.id }, data: { status: 'PAID' } }),
+    prisma.eventOrder.update({ where: { id: f.payment.orderId }, data: { status: 'PAID' } }),
+    prisma.registration.update({ where: { id: f.scope.registrationId }, data: { status: 'CONFIRMED', paymentStatus: 'PAID', confirmedAt: new Date() } })
+  ]);
+  const before = await financial(f), payloads: unknown[] = [];
+  const input = { registrationId: f.scope.registrationId, eventId: f.scope.eventId };
+  await assert.rejects(sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, input, async () => { throw new Error('SIMULATED_EMAIL_EXCEPTION'); }), /SIMULATED_EMAIL_EXCEPTION/);
+  assert.deepEqual(await financial(f), before);
+  const rollback = new Proxy(prisma, { get(target, prop) {
+    if (prop === '$transaction') return (action: (tx: any) => Promise<unknown>, options: any) => target.$transaction(async tx => {
+      await action(tx); throw new Error('SIMULATED_MARKER_ROLLBACK');
+    }, options);
+    const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
+  } });
+  const accepted = new Set<string>(); let attempts = 0;
+  const provider: NonNullable<Parameters<typeof sendPendingRegistrationConfirmationEmail>[3]> = async payload => {
+    attempts++; payloads.push(structuredClone(payload)); accepted.add(payload.registrationId);
+    assert.equal(payload.recipientEmail, f.body.email); return true;
+  };
+  await assert.rejects(sendPendingRegistrationConfirmationEmail(rollback, f.scope.churchId, input, provider), /SIMULATED_MARKER_ROLLBACK/);
+  assert.deepEqual(await financial(f), before);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, input, provider), true);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, input, provider), false);
+  assert.equal(attempts, 2); assert.equal(accepted.size, 1); assert.deepEqual(payloads[0], payloads[1]);
+  const after = await financial(f);
+  assert.ok(after.registration.confirmationEmailSentAt);
+  assert.deepEqual({ ...after.registration, confirmationEmailSentAt: before.registration.confirmationEmailSentAt, updatedAt: before.registration.updatedAt }, before.registration);
+  assert.deepEqual(after.payment, before.payment); assert.deepEqual(after.order, before.order); assert.deepEqual(after.transaction, before.transaction);
+});
+
+test('webhook compare-and-swap contention retries are bounded and do not mutate the financial graph', async () => {
+  const f = await sale(), before = await financial(f); let attempts = 0;
+  const contended = new Proxy(prisma, { get(target, prop) {
+    if (prop === '$transaction') return (action: (tx: any) => Promise<unknown>) => target.$transaction(tx => action(new Proxy(tx, { get(delegate, name) {
+      if (name === 'eventPayment') return { updateMany: async () => { attempts++; return { count: 0 }; } };
+      const value = Reflect.get(delegate, name); return typeof value === 'function' ? value.bind(delegate) : value;
+    } })));
+    const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
+  } });
+  await assert.rejects(applyEventPaymentProviderStatus(contended, f.scope.churchId, {
+    eventPaymentId: f.payment.id, providerPaymentId: 'synthetic-provider', paymentStatus: 'PAID'
+  }), /EVENT_PAYMENT_STATUS_CONFLICT/);
+  assert.equal(attempts, 3); assert.deepEqual(await financial(f), before);
+});
+
+test('both secured dormant APIs integrate register, concurrent charge, assisted recovery, webhook replay and failed confirmation email', async () => {
+  const envNames = ['ASAAS_API_KEY', 'ASAAS_ENVIRONMENT', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'EVENTS_EMAIL_FROM', 'EVENTS_APP_BASE_URL'] as const;
+  const saved = Object.fromEntries(envNames.map(name => [name, process.env[name]]));
+  Object.assign(process.env, { ASAAS_API_KEY: 'isolated-checkout-test-key', ASAAS_ENVIRONMENT: 'sandbox',
+    ASAAS_WEBHOOK_TOKEN: 'synthetic-webhook-token', RESEND_API_KEY: 're_synthetic_cut5',
+    EVENTS_EMAIL_FROM: 'Synthetic <test@example.invalid>', EVENTS_APP_BASE_URL: 'https://participant.example.invalid' });
+  const forbiddenFetch = globalThis.fetch;
+  try {
+    for (const method of ['PIX', 'CREDIT_CARD', 'DEBIT_CARD'] as const) {
+      const f = await eventFixture(method);
+      const event = await prisma.event.findUniqueOrThrow({ where: { id: f.scope.eventId }, include: { church: true } });
+      const byId = `/public/events/${event.id}`, bySlug = `/public/churches/${event.church.slug}/events/${event.slug}`;
+      let posts = 0, customers = 0, emailAttempts = 0, acceptedEmails = 0, recoverySends = 0, recoveredKey = '';
+      let paymentReceipt: any;
+      const deliveryErrors: unknown[] = [];
+      const idempotency: string[] = [];
+      globalThis.fetch = (async (input: any, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith('https://api-sandbox.asaas.com/v3/')) {
+          const payload = init?.body ? JSON.parse(String(init.body)) : {};
+          if (url.endsWith('/customers') && init?.method === 'POST') {
+            customers++; assert.equal(payload.email, f.body.email);
+            await new Promise(resolve => setTimeout(resolve, 25));
+            return new Response(JSON.stringify({ id: 'simulated-customer' }));
+          }
+          if (url.endsWith('/payments') && init?.method === 'POST') {
+            posts++; paymentReceipt = { id: `simulated-${f.scope.eventId}`, value: payload.value,
+              externalReference: payload.externalReference, billingType: method === 'PIX' ? 'PIX' : 'CREDIT_CARD',
+              status: 'PENDING', invoiceUrl: 'https://payments.example.invalid/invoice' };
+            return new Response(JSON.stringify(paymentReceipt));
+          }
+          if (url.endsWith('/pixQrCode')) return new Response(JSON.stringify({ encodedImage: 'synthetic-pix', payload: 'synthetic-copy', expirationDate: '2027-01-01' }));
+          assert.ok(url.endsWith(`/payments/${paymentReceipt.id}`)); return new Response(JSON.stringify(paymentReceipt));
+        }
+        assert.equal(url, 'https://api.resend.com/emails'); emailAttempts++;
+        const payload = JSON.parse(String(init?.body)); assert.deepEqual(payload.to, [f.body.email]);
+        idempotency.push(new Headers(init?.headers).get('idempotency-key')!);
+        if (emailAttempts === 1) return new Response(JSON.stringify({ name: 'synthetic_rejection', message: 'simulated rejection' }), { status: 503 });
+        acceptedEmails++; return new Response(JSON.stringify({ id: 'synthetic-email-receipt' }));
+      }) as typeof fetch;
+      const actorAccount = await prisma.userAccount.create({ data: { churchId: f.scope.churchId, email: `${randomUUID()}@example.invalid`, passwordHash: 'synthetic-not-a-login', role: 'SUPER_ADMIN', status: 'ACTIVE' } });
+      const store = { async consume() { return { closed: false, retryAfterMs: 0 }; }, async close() {} };
+      const apps: ReturnType<typeof Fastify>[] = [];
+      const recoveries: ReturnType<typeof createAssistedCheckoutRecovery>[] = [];
+      try {
+        for (const [client, prepareSecurity, prepareV2] of [[prisma, prepareEventsApiCheckoutSecurity, prepareEventsApiCheckoutV2], [prisma2, prepareApiBrCheckoutSecurity, prepareApiBrCheckoutV2]] as const) {
+          const security = prepareSecurity({ origins: ['https://checkout.example.invalid'], allowLocalHttp: false, httpsOnly: true,
+            bucketSecret: 'synthetic-cut5-secret-32-characters', ipLimit: 1000, credentialLimit: 1000, windowMs: 60_000,
+            bodyLimit: 32_768, requestTimeoutMs: 30_000, storeTimeoutMs: 100 }, store);
+          const app = Fastify({ ...security.fastifyOptions, logger: false });
+          await security.install(app); await app.register(jwt, { secret: 'synthetic-cut5-jwt-secret-32-characters' });
+          const durableStore = createPostgresRecoveryDeliveryStore(client);
+          const recovery = createAssistedCheckoutRecovery(client, { retentionMs: 60_000, deliveryTimeoutMs: 2000,
+            deliveryStore: { ...durableStore, async append(...args) {
+              try { return await durableStore.append(...args); }
+              catch (error: any) { deliveryErrors.push({ code: error.code, sqlstate: error.meta?.code ?? error.meta?.driverAdapterError?.cause?.originalCode,
+                constraint: String(error.meta?.message ?? error.meta?.driverAdapterError?.cause?.originalMessage ?? '').match(/checkout_[a-z_]+/)?.[0] }); throw error; }
+            } },
+            async sendEmail(input) { recoverySends++; recoveredKey = input.credential; return { receiptReference: 'synthetic-assisted-receipt' }; } });
+          recoveries.push(recovery);
+          for (const route of prepareV2(client, recovery)) app.route(route);
+          await registerAsaasWebhookRoutes(app, client, async update => {
+            const applied = await applyEventPaymentProviderStatus(client, update.churchId, {
+              eventPaymentId: update.referenceId, providerPaymentId: update.paymentId, paymentStatus: update.status });
+            assert.equal(applied, true);
+          });
+          apps.push(app);
+        }
+        const [a, b] = apps as [ReturnType<typeof Fastify>, ReturnType<typeof Fastify>];
+        const headers = { 'x-event-checkout-key': f.key, origin: 'https://checkout.example.invalid' };
+        const registered = await a.inject({ method: 'POST', url: `${byId}/register`, headers, payload: f.body });
+        assert.equal(registered.statusCode, 201, registered.body);
+        const registrationId = registered.json().id;
+        const replay = await b.inject({ method: 'POST', url: `${bySlug}/register`, headers, payload: f.body });
+        assert.equal(replay.statusCode, 200); assert.equal(replay.json().id, registrationId);
+        const chargeResults = await Promise.all([a.inject({ method: 'POST', url: `${byId}/checkout/resume`, headers, payload: { cpf } }),
+          b.inject({ method: 'POST', url: `${bySlug}/checkout/resume`, headers, payload: { cpf } })]);
+        assert.ok(chargeResults.some(result => result.statusCode === 200));
+        for (const result of chargeResults) assert.ok([200, 409].includes(result.statusCode), result.body);
+        assert.equal(customers, 1); assert.equal(posts, 1);
+        const resume = await b.inject({ method: 'POST', url: `${bySlug}/checkout/resume`, headers, payload: {} });
+        assert.equal(resume.statusCode, 200, resume.body); assert.equal(resume.json().paymentCheckout.method, method);
+        assert.equal(resume.json().checkInToken, null);
+        const payment = await prisma.eventPayment.findFirstOrThrow({ where: { order: { registrations: { some: { id: registrationId } } } } });
+        const transactionBefore = await prisma.transaction.findUniqueOrThrow({ where: { id: payment.transactionId } });
+        const recoveryRequest = { operationId: randomUUID(), action: 'REISSUE', verifiedEmail: f.body.email,
+          verification: { ownershipVerified: true, emailPossessionVerified: true, registrationUnambiguous: true,
+            evidenceReference: 'synthetic-cut5-case', verifiedChannelReference: 'synthetic-cut5-channel' } };
+        const recoveryUrl = `/api/events/${event.id}/registrations/${registrationId}/checkout/recovery`;
+        const authorization = `Bearer ${a.jwt.sign({ userId: actorAccount.id, churchId: f.scope.churchId, role: 'SUPER_ADMIN' })}`;
+        const recovered = await a.inject({ method: 'POST', url: recoveryUrl, headers: { authorization }, payload: recoveryRequest });
+        assert.equal(recovered.statusCode, 200, `${recovered.body} ${JSON.stringify({ method, recoverySends, deliveryErrors })}`); assert.equal(recoverySends, 1); assert.ok(recoveredKey.startsWith('ec2_'));
+        assert.equal(recovered.body.includes(recoveredKey), false);
+        assert.equal((await b.inject({ method: 'POST', url: recoveryUrl, headers: { authorization }, payload: recoveryRequest })).statusCode, 200);
+        assert.equal(recoverySends, 1);
+        assert.equal((await a.inject({ method: 'POST', url: `${byId}/checkout/status`, headers, payload: {} })).statusCode, 403);
+        const newHeaders = { ...headers, 'x-event-checkout-key': recoveredKey };
+        assert.equal((await b.inject({ method: 'POST', url: `${bySlug}/checkout/status`, headers: newHeaders, payload: {} })).json().checkInToken, null);
+        const payload = { event: 'PAYMENT_CONFIRMED', payment: { ...paymentReceipt, status: 'CONFIRMED' } };
+        assert.equal((await a.inject({ method: 'POST', url: '/webhooks/asaas', payload })).statusCode, 401);
+        const webhookHeaders = { 'asaas-access-token': 'synthetic-webhook-token' };
+        assert.equal((await a.inject({ method: 'POST', url: '/webhooks/asaas', headers: webhookHeaders, payload })).statusCode, 200);
+        const afterFailure = await prisma.registration.findUniqueOrThrow({ where: { id: registrationId } });
+        assert.equal(afterFailure.paymentStatus, 'PAID'); assert.equal(afterFailure.status, 'CONFIRMED'); assert.equal(afterFailure.confirmationEmailSentAt, null);
+        const confirmedAt = afterFailure.confirmedAt!.toISOString();
+        const duplicate = await Promise.all([a.inject({ method: 'POST', url: '/webhooks/asaas', headers: webhookHeaders, payload }),
+          b.inject({ method: 'POST', url: '/webhooks/asaas', headers: webhookHeaders, payload })]);
+        assert.ok(duplicate.every(result => result.statusCode === 200));
+        assert.equal(emailAttempts, 2); assert.equal(acceptedEmails, 1); assert.equal(new Set(idempotency).size, 1);
+        const final = await prisma.registration.findUniqueOrThrow({ where: { id: registrationId } });
+        assert.ok(final.confirmationEmailSentAt); assert.equal(final.confirmedAt!.toISOString(), confirmedAt);
+        const status = await b.inject({ method: 'POST', url: `${bySlug}/checkout/status`, headers: newHeaders, payload: {} });
+        assert.equal(status.statusCode, 200); assert.equal(status.json().checkInToken, final.checkInToken);
+        assert.equal(status.headers['cache-control'], 'no-store'); assert.equal(status.headers['x-content-type-options'], 'nosniff');
+        assert.deepEqual(await prisma.transaction.findUniqueOrThrow({ where: { id: payment.transactionId } }), transactionBefore);
+        assert.equal(await prisma.registration.count({ where: { eventId: event.id } }), 1);
+        assert.equal(await prisma.eventPayment.count({ where: { eventId: event.id } }), 1); assert.equal(posts, 1);
+      } finally { for (const recovery of recoveries) recovery.dispose(); await Promise.all(apps.map(app => app.close())); }
+    }
+  } finally {
+    globalThis.fetch = forbiddenFetch;
+    for (const name of envNames) { if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name]; }
+  }
+});
 
 test('all 31 migrations applied by Prisma deploy; SQL-only constraints and partial index exist', async () => {
   const rows = (await pool.query('SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY migration_name')).rows;

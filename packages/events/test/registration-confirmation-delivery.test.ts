@@ -170,7 +170,8 @@ test("missing participant or any recipient never marks confirmation", async () =
 test("all existing confirmation consumers reuse delivery and provider key remains unchanged", async () => {
   const source = await readFile(new URL("../src/event.service.ts", import.meta.url), "utf8");
   assert.match(source, /import { sendPendingRegistrationConfirmationEmail } from/);
-  assert.equal(source.split("await sendPendingRegistrationConfirmationEmail(").length - 1, 4);
+  // The guarded webhook confirmation helper is an additional shared consumer.
+  assert.equal(source.split("await sendPendingRegistrationConfirmationEmail(").length - 1, 5);
   const adapter = await readFile(new URL("../src/registration-confirmation-email.service.ts", import.meta.url), "utf8");
   assert.ok(adapter.includes("event-registration/")); assert.ok(adapter.includes("input.registrationId"));
 });

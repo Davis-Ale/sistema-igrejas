@@ -1,5 +1,14 @@
 # Checkout v2 — isolated PostgreSQL integration validation (2026-10-14; consolidated 2026-10-15)
 
+## Corte 5 — integração isolada, 2026-10-19
+
+Base `69481eb`: seis casos novos, três corridas de webhook reproduzidas/corrigidas,
+**39/39** PostgreSQL reais e **173/173** isolados aprovados. As mesmas 31 migrations
+foram aplicadas/replay somente nos descartáveis; sem banco principal ou ativação.
+Protocolos, composição das duas APIs, falhas de e-mail e sinal intermitente de
+recuperação em `checkout-v2-integrated-validation.md`. Os números históricos abaixo
+continuam datados e não substituem essa evidência de integração.
+
 ## Consolidação atual dos cortes 1 e 2 — 2026-10-17, HEAD cc31472
 
 - Isolados: **137/137** em dez arquivos de checkout, com credencial Asaas sintética

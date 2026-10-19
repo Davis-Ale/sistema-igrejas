@@ -2235,15 +2235,73 @@ function shouldIgnorePaymentStatusRegression(
   return false;
 }
 
+type ProviderPaymentStatusInput = {
+  eventPaymentId: string;
+  providerPaymentId: string;
+  paymentStatus: RegistrationPaymentStatus;
+};
+
+// Compare-and-swap the persisted status/reference before changing its graph.
+// A webhook that read an older state must re-read, never overwrite a newer one.
+async function compareAndApplyPaymentStatus(
+  prisma: PrismaClient,
+  churchId: string,
+  payment: { id: string; orderId: string; status: string; providerPaymentId: string | null },
+  status: RegistrationPaymentStatus,
+  providerPaymentId: string | null,
+  registrationId?: string
+): Promise<boolean> {
+  return prisma.$transaction(async tx => {
+    const changed = await tx.eventPayment.updateMany({
+      where: { id: payment.id, churchId, status: payment.status, providerPaymentId: payment.providerPaymentId },
+      data: { status, providerPaymentId }
+    });
+    if (changed.count !== 1) return false;
+    await tx.eventOrder.update({ where: { id: payment.orderId, churchId }, data: { status } });
+    await tx.registration.updateMany({
+      where: { churchId, orderId: payment.orderId, ...(registrationId ? { id: registrationId } : {}) },
+      data: { paymentId: payment.id, paymentStatus: status }
+    });
+    return true;
+  });
+}
+
+async function confirmWebhookRegistration(
+  prisma: PrismaClient,
+  churchId: string,
+  input: { registrationId: string; eventId: string; paymentId: string }
+) {
+  const registration = await prisma.registration.findFirst({
+    where: { id: input.registrationId, churchId, eventId: input.eventId }, select: { id: true }
+  });
+  if (!registration) throw new Error("REGISTRATION_NOT_FOUND");
+  // Confirmation is conditional at the write: stale reads cannot reset a
+  // cancellation/check-in or rewrite the first committed confirmation date.
+  await prisma.registration.updateMany({
+    where: { id: registration.id, churchId, eventId: input.eventId, status: "PENDING", paymentStatus: "PAID", waitlistedAt: null },
+    data: { status: "CONFIRMED", confirmedAt: new Date(), paymentId: input.paymentId }
+  });
+  // Delivery has its own row lock and eligibility recheck, outside the payment tx.
+  await sendPendingRegistrationConfirmationEmail(prisma, churchId, input);
+}
+
 export async function applyEventPaymentProviderStatus(
   prisma: PrismaClient,
   churchId: string,
-  input: {
-    eventPaymentId: string;
-    providerPaymentId: string;
-    paymentStatus: RegistrationPaymentStatus;
-  }
+  input: ProviderPaymentStatusInput
 ): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await applyEventPaymentProviderStatusOnce(prisma, churchId, input);
+    if (result !== null) return result;
+  }
+  throw new Error("EVENT_PAYMENT_STATUS_CONFLICT");
+}
+
+async function applyEventPaymentProviderStatusOnce(
+  prisma: PrismaClient,
+  churchId: string,
+  input: ProviderPaymentStatusInput
+): Promise<boolean | null> {
   const payment =
     await prisma.eventPayment.findFirst({
       where: {
@@ -2310,37 +2368,7 @@ export async function applyEventPaymentProviderStatus(
     return true;
   }
 
-  await prisma.$transaction([
-    prisma.eventPayment.update({
-      where: {
-        id: payment.id
-      },
-      data: {
-        providerPaymentId:
-          input.providerPaymentId,
-        status: input.paymentStatus
-      }
-    }),
-    prisma.eventOrder.update({
-      where: {
-        id: payment.orderId
-      },
-      data: {
-        status: input.paymentStatus
-      }
-    }),
-    prisma.registration.updateMany({
-      where: {
-        churchId,
-        orderId: payment.orderId
-      },
-      data: {
-        paymentId: payment.id,
-        paymentStatus:
-          input.paymentStatus
-      }
-    })
-  ]);
+  if (!await compareAndApplyPaymentStatus(prisma, churchId, payment, input.paymentStatus, input.providerPaymentId)) return null;
 
   if (input.paymentStatus === "PAID") {
     for (
@@ -2361,14 +2389,13 @@ export async function applyEventPaymentProviderStatus(
         continue;
       }
 
-      await updateRegistrationStatus(
+      await confirmWebhookRegistration(
         prisma,
         churchId,
         {
           registrationId:
             registration.id,
           eventId: registration.eventId,
-          status: "CONFIRMED",
           paymentId: payment.id
         }
       );
@@ -2396,6 +2423,18 @@ export async function applyRegistrationPaymentStatus(
   churchId: string,
   input: ApplyRegistrationPaymentStatusInput
 ): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await applyRegistrationPaymentStatusOnce(prisma, churchId, input);
+    if (result !== null) return result;
+  }
+  throw new Error("EVENT_PAYMENT_STATUS_CONFLICT");
+}
+
+async function applyRegistrationPaymentStatusOnce(
+  prisma: PrismaClient,
+  churchId: string,
+  input: ApplyRegistrationPaymentStatusInput
+): Promise<boolean | null> {
   const registration =
     await prisma.registration.findFirst({
       where: {
@@ -2481,43 +2520,8 @@ export async function applyRegistrationPaymentStatus(
   }
 
   if (eventPayment) {
-    const providerPaymentData =
-      eventPayment.id === input.paymentId
-        ? {}
-        : {
-            providerPaymentId:
-              input.paymentId
-          };
-
-    await prisma.$transaction([
-      prisma.eventPayment.update({
-        where: {
-          id: eventPayment.id
-        },
-        data: {
-          status: input.paymentStatus,
-          ...providerPaymentData
-        }
-      }),
-      prisma.eventOrder.update({
-        where: {
-          id: eventPayment.orderId
-        },
-        data: {
-          status: input.paymentStatus
-        }
-      }),
-      prisma.registration.update({
-        where: {
-          id: registration.id
-        },
-        data: {
-          paymentId: eventPayment.id,
-          paymentStatus:
-            input.paymentStatus
-        }
-      })
-    ]);
+    const providerPaymentId = eventPayment.id === input.paymentId ? eventPayment.providerPaymentId : input.paymentId;
+    if (!await compareAndApplyPaymentStatus(prisma, churchId, eventPayment, input.paymentStatus, providerPaymentId, registration.id)) return null;
   } else {
     /*
       Compatibilidade temporária com inscrições
@@ -2541,14 +2545,13 @@ export async function applyRegistrationPaymentStatus(
     registration.status !== "CANCELLED" &&
     registration.status !== "CHECKED_IN"
   ) {
-    await updateRegistrationStatus(
+    await confirmWebhookRegistration(
       prisma,
       churchId,
       {
         registrationId:
           registration.id,
         eventId: registration.event.id,
-        status: "CONFIRMED",
         paymentId:
           eventPayment?.id ??
           input.paymentId
