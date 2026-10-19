@@ -11,7 +11,12 @@ const concurrencyOnly = process.argv.includes('--concurrency-only');
 const affectedOnly = process.argv.includes('--affected-only');
 const recoveryDeliveryOnly = process.argv.includes('--recovery-delivery-only');
 const integratedOnly = process.argv.includes('--integrated-only');
-assert.ok([concurrencyOnly, affectedOnly, recoveryDeliveryOnly, integratedOnly].filter(Boolean).length <= 1, 'Choose one focused test scope');
+const operationalStress = process.argv.includes('--operational-stress');
+const stressCases = Number(process.argv.find(value => value.startsWith('--stress-cases='))?.split('=')[1] ?? 24);
+const stressConcurrency = Number(process.argv.find(value => value.startsWith('--stress-concurrency='))?.split('=')[1] ?? 4);
+assert.ok(Number.isInteger(stressCases) && stressCases > 0 && stressCases <= 64);
+assert.ok([1, 2, 4, 8].includes(stressConcurrency) && stressCases % stressConcurrency === 0);
+assert.ok([concurrencyOnly, affectedOnly, recoveryDeliveryOnly, integratedOnly, operationalStress].filter(Boolean).length <= 1, 'Choose one focused test scope');
 const nonce = cleanupMode ? process.argv[4] : randomUUID().replaceAll('-', '');
 assert.match(nonce, /^[a-f0-9]{32}$/);
 const name = 'checkout-v2-test-' + nonce;
@@ -87,16 +92,18 @@ try {
   await admin.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO checkout_runtime');
   await admin.end(); admin = undefined;
   const runtimeUrl = 'postgresql://checkout_runtime:' + runtimePassword + '@127.0.0.1:' + port + '/' + database;
-  console.log(integratedOnly ? 'TEST_SCOPE integrated-cut-5' : recoveryDeliveryOnly ? 'TEST_SCOPE recovery-delivery' : affectedOnly ? 'TEST_SCOPE affected-4' : concurrencyOnly ? 'TEST_SCOPE concurrent-first-charge' : 'TEST_SCOPE full-checkout-and-recovery-delivery');
+  console.log(operationalStress ? `TEST_SCOPE operational-recovery-stress-${stressCases}-concurrency-${stressConcurrency}` : integratedOnly ? 'TEST_SCOPE integrated-cut-5' : recoveryDeliveryOnly ? 'TEST_SCOPE recovery-delivery' : affectedOnly ? 'TEST_SCOPE affected-4' : concurrencyOnly ? 'TEST_SCOPE concurrent-first-charge' : 'TEST_SCOPE full-checkout-and-recovery-delivery');
   const result = await run(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), '--tsconfig', path.join(root, 'tsconfig.base.json'), '--test',
     ...(concurrencyOnly ? ['--test-name-pattern', '^concurrent first-charge calls have one durable owner/one simulated POST$'] : []),
     ...(affectedOnly ? ['--test-name-pattern', '^(concurrent independent Prisma clients|concurrent first-charge calls|timeout is durable UNCERTAIN|SUPER_ADMIN recovery persists)'] : []),
     ...(integratedOnly ? ['--test-name-pattern', '^(webhook stale OVERDUE|registration webhook stale OVERDUE|concurrent PAID confirmation|confirmation email exception|webhook compare-and-swap|both secured dormant APIs)'] : []),
-    ...(recoveryDeliveryOnly ? [path.join(root, 'packages/events/test/checkout-recovery-delivery.postgres.test.ts')] : [
+    ...(operationalStress ? ['--test-name-pattern', '^operational assisted recovery stress'] : []),
+    ...(recoveryDeliveryOnly || operationalStress ? [path.join(root, 'packages/events/test/checkout-recovery-delivery.postgres.test.ts')] : [
       path.join(root, 'packages/events/test/checkout-postgres.integration.test.ts'),
       ...(integratedOnly ? [] : [path.join(root, 'packages/events/test/checkout-recovery-delivery.postgres.test.ts')])])], {
     CHECKOUT_TEST_DATABASE_URL: runtimeUrl, CHECKOUT_TEST_DATABASE: database,
-    CHECKOUT_TEST_MARKER: marker, CHECKOUT_TEST_PORT: port
+    CHECKOUT_TEST_MARKER: marker, CHECKOUT_TEST_PORT: port,
+    ...(operationalStress ? { CHECKOUT_TEST_OPERATIONAL_STRESS: '1', CHECKOUT_TEST_STRESS_CASES: String(stressCases), CHECKOUT_TEST_STRESS_CONCURRENCY: String(stressConcurrency) } : {})
   });
   console.log(redact(result.stdout)); console.log(redact(result.stderr));
   const final = await run('docker', ['ps', '-a', '--format', '{{.ID}} {{.Names}} {{.Status}}']);

@@ -32,9 +32,10 @@ export function createPostgresRecoveryDeliveryStore(database: Database): Checkou
         const e = error as { code?: string; meta?: { code?: string; message?: string; driverAdapterError?: { cause?: { originalCode?: string; originalMessage?: string } } } };
         const code = e.meta?.code ?? e.meta?.driverAdapterError?.cause?.originalCode;
         const message = e.meta?.message ?? e.meta?.driverAdapterError?.cause?.originalMessage ?? "";
-        const retryable = e.code === "P2034" || (e.code === "P2010" && (["40001", "40P01"].includes(code ?? "") ||
-          (code === "23505" && message.includes("checkout_delivery_operation_stage_key"))));
-        if (attempt >= 2 || !retryable) throw error;
+        const retryable = e.code === "P2034" || (["40001", "40P01"].includes(code ?? "") ||
+          (code === "23505" && message.includes("checkout_delivery_operation_stage_key")));
+        if (attempt >= 5 || !retryable) throw error;
+        await new Promise(resolve => setTimeout(resolve, 20 * (attempt + 1)));
       }
     }
   }

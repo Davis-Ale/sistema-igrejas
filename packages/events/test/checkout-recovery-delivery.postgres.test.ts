@@ -97,6 +97,80 @@ async function history(f: Awaited<ReturnType<typeof assistedFixture>>) {
     [f.actor.churchId, f.request.operationId])).rows;
 }
 
+if (process.env.CHECKOUT_TEST_OPERATIONAL_STRESS === '1') test('operational assisted recovery stress observes real transaction failures without secrets or resends', { timeout: 180_000 }, async () => {
+  const summary = { cases: Number(process.env.CHECKOUT_TEST_STRESS_CASES ?? 24), concurrency: Number(process.env.CHECKOUT_TEST_STRESS_CONCURRENCY ?? 4), accepted: 0, uncertain: 0, retryRequired: 0,
+    unknown: 0, simulatedSends: 0, transactionFailures: [] as { case: number; phase: string; name: string; classification: string; code?: string | undefined; sqlstate?: string | undefined; constraint?: string | undefined; safeError?: string | undefined }[],
+    uncertainCases: [] as { case: number; sends: number; lastFailure: unknown }[] };
+  assert.ok(Number.isInteger(summary.cases) && summary.cases > 0 && summary.cases <= 64);
+  assert.ok([1, 2, 4, 8].includes(summary.concurrency) && summary.cases % summary.concurrency === 0);
+  for (let start = 0; start < summary.cases; start += summary.concurrency) {
+    await Promise.all(Array.from({ length: summary.concurrency }, async (_, offset) => {
+      const t = await assistedFixture(), before = await financial(t.f);
+      const client = (start + offset) % 2 ? prisma : prisma2;
+      let phase = 'PRECHECK', sends = 0;
+      const traced = new Proxy(client, { get(target, prop) {
+        if (prop === '$transaction') return async (...args: any[]) => {
+          try { return await (target.$transaction as any)(...args); }
+          catch (error: any) {
+            const cause = error.meta?.driverAdapterError?.cause;
+            const message = String(error.message ?? '') + ' ' + String(cause?.originalMessage ?? '');
+            const name = ['PrismaClientKnownRequestError', 'PrismaClientUnknownRequestError', 'DriverAdapterError', 'Error', 'TypeError', 'ZodError'].includes(error.name) ? error.name : 'OTHER';
+            summary.transactionFailures.push({ case: start + offset, phase, name,
+              classification: /could not serialize|serialization failure|40001/i.test(message) ? 'SERIALIZATION_CONFLICT' : /deadlock|40P01/i.test(message) ? 'DEADLOCK' : 'OTHER',
+              code: /^P\d{4}$/.test(error.code ?? '') ? error.code : undefined,
+              sqlstate: error.meta?.code ?? cause?.originalCode ?? error.cause?.originalCode ?? error.cause?.code,
+              constraint: String(error.meta?.message ?? cause?.originalMessage ?? '').match(/checkout_[a-z_]+/)?.[0],
+              safeError: /^CHECKOUT_[A-Z_]+$/.test(error.message ?? '') ? error.message : undefined });
+            throw error;
+          }
+        };
+        const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
+      } });
+      const store = createPostgresRecoveryDeliveryStore(traced);
+      const deliveryStore = { ...store,
+        async prepare(...args: Parameters<typeof store.prepare>) { phase = 'PREPARED'; return store.prepare(...args); },
+        async append(...args: Parameters<typeof store.append>) { phase = args[1]; return store.append(...args); },
+        async read(...args: Parameters<typeof store.read>) { phase = 'READ'; return store.read(...args); }
+      };
+      const options = { ...t.options, deliveryStore, async sendEmail() {
+        phase = 'HANDOFF'; sends++; summary.simulatedSends++; return { receiptReference: `resend_${randomUUID()}` };
+      } };
+      const coordinator = createAssistedCheckoutRecovery(traced, options);
+      const fresh = createAssistedCheckoutRecovery(client === prisma ? prisma2 : prisma, options);
+      try {
+        try {
+          const result = await coordinator.execute(t.actor, t.f.scope, t.request);
+          assert.equal(result.delivery, 'ACCEPTED'); summary.accepted++;
+          assert.equal((await fresh.execute(t.actor, t.f.scope, t.request)).delivery, 'ACCEPTED');
+        } catch (error) {
+          const code = error instanceof Error ? error.message : 'UNKNOWN';
+          if (code === 'CHECKOUT_RECOVERY_DELIVERY_UNCERTAIN') {
+            summary.uncertain++;
+            summary.uncertainCases.push({ case: start + offset, sends, lastFailure: summary.transactionFailures.filter(failure => failure.case === start + offset).at(-1) ?? null });
+            const sentBefore = sends;
+            await coordinator.execute(t.actor, t.f.scope, t.request).catch(() => undefined);
+            await fresh.execute(t.actor, t.f.scope, t.request).catch(() => undefined);
+            assert.equal(sends, sentBefore);
+            const stages = (await history(t)).map(row => row.stage);
+            assert.ok(stages.includes('DELIVERY_INTENT'));
+          } else if (code === 'CHECKOUT_RECOVERY_RETRY_REQUIRED') summary.retryRequired++;
+          else { summary.unknown++; throw new Error('OPERATIONAL_STRESS_UNEXPECTED_RESULT'); }
+        }
+        assert.ok(sends <= 1);
+        assert.deepEqual(await financial(t.f), before);
+      } finally { coordinator.dispose(); fresh.dispose(); }
+    }));
+  }
+  const grouped = new Map<string, number>();
+  for (const { case: _case, ...failure } of summary.transactionFailures) {
+    const key = JSON.stringify(failure); grouped.set(key, (grouped.get(key) ?? 0) + 1);
+  }
+  console.log('OPERATIONAL_RECOVERY_SUMMARY ' + JSON.stringify({ ...summary,
+    transactionFailures: [...grouped].map(([failure, count]) => ({ ...JSON.parse(failure), count })) }));
+  assert.equal(summary.unknown, 0);
+  assert.equal(summary.accepted + summary.uncertain + summary.retryRequired, summary.cases);
+});
+
 test('assisted delivery persists intent before send and replays acceptance after a fresh client without financial mutation', async () => {
   const t = await assistedFixture(), before = await financial(t.f); let sends = 0, raw = '';
   const options = { ...t.options, async sendEmail(input: any, signal: AbortSignal) { sends++; raw = input.credential; return t.options.sendEmail(input); } };
