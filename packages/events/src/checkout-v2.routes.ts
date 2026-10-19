@@ -6,6 +6,7 @@ import { checkoutRecoveryParamsSchema } from "./checkout-access.schema.js";
 import { revokeCheckoutAccess } from "./checkout-access.service.js";
 import type { AssistedCheckoutRecovery } from "./checkout-assisted-recovery.service.js";
 import type { CheckoutFirstChargeProvider } from "./checkout-charge.service.js";
+import { CHECKOUT_PUBLIC_BASES, CHECKOUT_SECURITY_ALLOWED_HEADERS, CHECKOUT_SECURITY_REDACTIONS } from "./checkout-security.prepared.js";
 import {
   checkoutKeyFromHeaders, createCheckoutV2Integration, resolveCheckoutEvent,
   type CheckoutPaymentProvider, type CheckoutEventLocator
@@ -13,9 +14,9 @@ import {
 
 const byId = z.object({ eventId: z.string().trim().min(1) }).strict();
 const bySlugs = z.object({ churchSlug: z.string().trim().min(1), eventSlug: z.string().trim().min(1) }).strict();
-const publicBases = ["/public/events/:eventId", "/public/churches/:churchSlug/events/:eventSlug"] as const;
-export const CHECKOUT_V2_LOG_REDACTIONS = ["req.headers.authorization", 'req.headers["x-api-key"]', 'req.headers["x-event-checkout-key"]'] as const;
-export const CHECKOUT_V2_ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Api-Key", "X-Event-Checkout-Key"] as const;
+const publicBases = CHECKOUT_PUBLIC_BASES;
+export const CHECKOUT_V2_LOG_REDACTIONS = CHECKOUT_SECURITY_REDACTIONS;
+export const CHECKOUT_V2_ALLOWED_HEADERS = CHECKOUT_SECURITY_ALLOWED_HEADERS;
 
 // Read-only gate for the future composition replacement. No switch, flag,
 // registration or interception is installed into either running buildApp.

@@ -286,9 +286,12 @@ function buildPublicRegistrationResponse<
 export async function registerPublicEventRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
-  onRegistrationPaymentPending?: PublicRegistrationPaymentHandler
+  onRegistrationPaymentPending?: PublicRegistrationPaymentHandler,
+  checkout: "legacy" | "omit" = "legacy"
 ): Promise<void> {
-  app.post("/public/churches/:churchSlug/events/:eventSlug/checkout/status", async (request, reply) => {
+  if (checkout !== "legacy" && checkout !== "omit") throw new Error("PUBLIC_CHECKOUT_COMPOSITION_INVALID");
+  // The prepared containment composition omits these handlers entirely.
+  if (checkout === "legacy") app.post("/public/churches/:churchSlug/events/:eventSlug/checkout/status", async (request, reply) => {
     try {
       const params = request.params as { churchSlug: string; eventSlug: string };
       const input = z.object({ checkoutToken: z.string().max(200).regex(/^[^.]+\.[a-f0-9]{64}$/) }).parse(request.body);
@@ -370,7 +373,7 @@ export async function registerPublicEventRoutes(
     }
   );
 
-  app.post(
+  if (checkout === "legacy") app.post(
     "/public/churches/:churchSlug/events/:eventSlug/register",
     async (request, reply) => {
       try {
@@ -494,7 +497,7 @@ export async function registerPublicEventRoutes(
     }
   );
 
-  app.post(
+  if (checkout === "legacy") app.post(
     "/public/events/:eventId/register",
     async (request, reply) => {
       try {

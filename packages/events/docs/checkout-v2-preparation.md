@@ -1,5 +1,14 @@
 # Checkout v2 integration preparation — inactive
 
+## Corte 4 — segurança/contenção preparadas, 2026-10-19
+
+Há agora uma política de segurança comum e wrappers preparados nas duas APIs,
+com CORS restritivo, headers, redaction e admissão compartilhada; uma composição
+fechada omite os handlers legados e responde 503 nas seis entradas críticas.
+Nada foi ligado aos builders ativos. Protocolo de fechamento/drenagem e blockers
+operacionais em `checkout-v2-security-preparation.md`. Não há ativação por flag,
+novo serviço provisionado ou alteração de banco/migration neste corte.
+
 ## Estado preparado atual — 2026-10-17, HEAD cc31472
 
 O guard da primeira cobrança está ligado à integração v2 preparada. Os dois
