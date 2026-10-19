@@ -1,5 +1,28 @@
 # First-charge durable guard — inactive cut
 
+## Estado preparado atual — 2026-10-17, HEAD cc31472
+
+O guard permanece fora de buildApp/rotas ativas, mas já é consumido pela integração
+checkout-v2.integration.ts preparada e pelos dois módulos checkout-v2.prepared.ts.
+Isso resolve a antiga pendência de ligação do guard, sem ativar o checkout v2.
+A criação continua com STARTED commitado, single owner, adapter fora da transação,
+revalidação e preservação do histórico financeiro. Reconciliação de cobrança é
+interna e por referência conhecida; não há rota pública de reconciliação.
+
+Os cortes 1 e 2 foram validados com 137/137 isolados e 33/33 PostgreSQL 17 descartável
+(mais repetição focada 9/9), com 31 migrations apenas nesse ambiente. Resultados,
+limites de reinício e gates operacionais estão em checkout-recovery-delivery-persistence.md.
+O consumidor checkoutEmail também já está implementado. Homologação externa,
+semântica CARD legada e ativação coordenada permanecem gates.
+
+A descrição abaixo de integração desconectada e os 56/80 testes são evidências do
+corte original, preservadas como histórico; não são bloqueios nem totais atuais.
+O corte 3 de frontend não altera o guard e tem evidência própria em
+checkout-v2-frontend-preparation.md.
+
+## Evidência histórica original — preservada
+
+
 `checkout-charge.service.ts` adds an isolated guard over the prepared
 EventCheckoutChargeAttempt structure. It is not exported by the package entrypoint
 and is not called by routes, buildApp, the prepared integration or a worker.

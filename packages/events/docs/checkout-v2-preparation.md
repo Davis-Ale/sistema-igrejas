@@ -1,5 +1,29 @@
 # Checkout v2 integration preparation — inactive
 
+## Estado preparado atual — 2026-10-17, HEAD cc31472
+
+O guard da primeira cobrança está ligado à integração v2 preparada. Os dois
+módulos checkout-v2.prepared.ts fornecem createAsaasCheckoutChargeProvider, e resume
+usa createFirstCheckoutCharge quando o grafo elegível ainda não possui referências
+ou tentativa. STARTED/UNCERTAIN continuam bloqueados para reconciliação explícita;
+nenhuma criação ocorre dentro de transação/retry. A recuperação exige o coordenador
+assistido com entrega durável; sem configuração retorna 503 e rejeita chave do
+operador. Nenhum buildApp/page ativo conecta esses módulos.
+
+Os cortes 1 e 2 registraram 137/137 testes isolados, 33/33 PostgreSQL 17 descartável,
+9/9 na repetição focada e 31 migrations/replay apenas no descartável. Consulte
+checkout-recovery-delivery-persistence.md. Esses números não incluem o corte 3 de
+frontend, documentado separadamente em checkout-v2-frontend-preparation.md.
+
+As afirmações abaixo sobre guard desconectado, recusa de primeira cobrança e
+56 testes pertencem ao recorte histórico inicial. Não descrevem o estado preparado
+atual. A ativação continua pendente de corte coordenado, exclusividade das rotas,
+CORS/redaction/hardening, evidência humana, semântica CARD legada e homologação real.
+A adaptação do consumidor checkoutEmail já existe; não representa envio homologado.
+
+## Evidência histórica original — preservada
+
+
 Subsequent isolated cut: the first-charge guard is now implemented in
 `checkout-charge.service.ts` with a separate dormant Asaas adapter. See
 `checkout-charge-guard.md` for its protocol and 80 isolated tests. This prepared

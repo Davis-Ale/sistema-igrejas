@@ -1,5 +1,29 @@
 # Checkout v2 — isolated PostgreSQL integration validation (2026-10-14; consolidated 2026-10-15)
 
+## Consolidação atual dos cortes 1 e 2 — 2026-10-17, HEAD cc31472
+
+- Isolados: **137/137** em dez arquivos de checkout, com credencial Asaas sintética
+  exigida pelo mock, sem DATABASE_URL/DIRECT_URL da aplicação.
+- PostgreSQL 17 descartável: **33/33** completos e repetição focada final **9/9**.
+- **31 migrations** aplicadas exclusivamente no banco descartável; replay sem
+  pendências, containers removidos e demais containers preservados.
+- Prisma validate, TypeScript dos serviços/testes e ambos servidores, runner syntax
+  e diff check aprovados. Sem acesso ao banco principal/5433, generate ou envio real.
+
+O runner padrão agora inclui os 24 testes anteriores e os 9 de entrega assistida.
+--recovery-delivery-only seleciona os 9 de entrega; --affected-only e
+--concurrency-only preservam os recortes anteriores. Os modos são exclusivos.
+Reinício foi simulado por descarte do coordenador e outro cliente Prisma; não se
+alega teste de kill do processo nem homologação de provider externo.
+
+Detalhe: checkout-recovery-delivery-persistence.md. O corte 3 do frontend tem prova
+separada em checkout-v2-frontend-preparation.md e não aplica migrations ou executa
+banco. Os 24/24, 101/101 e 30 migrations abaixo continuam válidos como evidência
+datada de 2026-10-15, sem substituir os totais acima.
+
+## Relatório histórico de 2026-10-14/15 — preservado
+
+
 Initial authorized cut (historical): create a disposable PostgreSQL 17 environment, apply existing migrations only there, execute integration tests with synthetic data and a simulated Asaas provider. No production-service correction, schema/migration edit, route activation, existing database/volume access, seed, generate, commit or push.
 
 ## Current consolidated result (2026-10-15)

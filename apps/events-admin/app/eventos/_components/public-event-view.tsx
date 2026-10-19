@@ -10,6 +10,8 @@ import {
   useState
 } from "react";
 import { PublicEventTracking } from "./public-event-tracking";
+import type { PublicCheckoutV2Factory } from "./public-checkout-v2.client";
+import { usePreparedCheckoutV2 } from "./use-prepared-checkout-v2";
 
 type ApiErrorResponse = {
   message?: string;
@@ -86,7 +88,7 @@ type PublicEvent = {
 
 type PublicRegistration = {
   id: string;
-  checkoutToken: string;
+  checkoutToken?: string;
   status:
     | "PENDING"
     | "CONFIRMED"
@@ -221,10 +223,12 @@ function isPublicRegistrationConfirmed(
 
 export function PublicEventView({
   eventId,
-  mode
+  mode,
+  prepareCheckoutV2
 }: {
   eventId: string;
   mode: PublicEventViewMode;
+  prepareCheckoutV2?: PublicCheckoutV2Factory;
 }) {
   const router = useRouter();
   const isPreview = mode === "preview";
@@ -241,9 +245,13 @@ export function PublicEventView({
   ] = useState<PublicEvent | null>(null);
 
   const [
-    registration,
+    legacyRegistration,
     setRegistration
   ] = useState<PublicRegistration | null>(null);
+
+  const prepared = usePreparedCheckoutV2(prepareCheckoutV2, event?.id === eventId ? { eventId, churchSlug: event.church.slug, eventSlug: event.slug } : null, isPreview);
+  const registration: PublicRegistration | null = prepareCheckoutV2 ? (prepared.snapshot?.registration?.event.id === eventId ? prepared.snapshot.registration : null) : legacyRegistration;
+  const preparedBlocked = !!prepareCheckoutV2 && (!prepared.snapshot || prepared.snapshot.busy || ["EXPIRED", "ACCESS_DENIED", "STORAGE_UNAVAILABLE", "RECONCILIATION_REQUIRED"].includes(prepared.snapshot.phase));
 
   const [
     name,
@@ -460,6 +468,24 @@ export function PublicEventView({
       return;
     }
 
+    if (prepareCheckoutV2) {
+      const client = prepared.client.current;
+      if (!client || preparedBlocked) { setIsRegistering(false); return; }
+      registrationInFlight.current = true;
+      try {
+        const current = await client.register({ name, phone, email, ticketId, ticketBatchId,
+          ...(requiresPayment ? { cpf: normalizedCpf, paymentMethod } : {}),
+          ...(appliedDiscount ? { discountCode: appliedDiscount.code } : {}),
+          answers: Object.entries(answers).map(([fieldId, value]) => ({ fieldId, value })) });
+        if (requiresPayment && current.status !== "CANCELLED" && !current.waitlistedAt && current.paymentStatus === "PENDING") {
+          await client.resume({ cpf: normalizedCpf });
+        }
+        setName(""); setPhone(""); setAnswers({}); setCheckoutStep(1);
+      } catch { /* The prepared client exposes safe states, never provider errors. */ }
+      finally { setCpf(""); registrationInFlight.current = false; setIsRegistering(false); }
+      return;
+    }
+
     registrationInFlight.current = true;
     try {
       const response = await fetch(
@@ -570,12 +596,12 @@ export function PublicEventView({
   const requiresPayment = Number(checkoutTotal) > 0;
 
   useEffect(() => {
-    if (isPreview || !event) return;
+    if (prepareCheckoutV2 || isPreview || !event) return;
     let stored: Pick<PublicRegistration, "checkoutToken" | "paymentCheckout"> | null = null;
     try {
       stored = JSON.parse(sessionStorage.getItem(`events.checkout.${eventId}`) ?? "null");
     } catch { /* Storage is optional. */ }
-    const checkoutToken = registration?.checkoutToken ?? stored?.checkoutToken;
+    const checkoutToken = legacyRegistration?.checkoutToken ?? stored?.checkoutToken;
     if (!checkoutToken) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -604,7 +630,7 @@ export function PublicEventView({
     }
     void refresh();
     return () => { stopped = true; controller.abort(); clearTimeout(timer); };
-  }, [event, eventId, isPreview, registration?.checkoutToken]);
+  }, [event, eventId, isPreview, legacyRegistration?.checkoutToken, prepareCheckoutV2]);
 
   useEffect(() => {
     setAppliedDiscount(null);
@@ -742,7 +768,7 @@ export function PublicEventView({
               : "Voltar para o início"}
         </Link>
 
-        {!isPreview && event ? (
+        {!prepareCheckoutV2 && !isPreview && event ? (
           <PublicEventTracking
             registrationConfirmed={isPublicRegistrationConfirmed(
               registration
@@ -1963,7 +1989,7 @@ export function PublicEventView({
                           <button
                             disabled={
                               isRegistering ||
-                              isPreview
+                              isPreview || preparedBlocked
                             }
                             style={{
                               background:
@@ -2266,7 +2292,28 @@ export function PublicEventView({
                 </section>
               )}
 
-              {error ? (
+              {prepareCheckoutV2 && prepared.snapshot?.hasSession ? (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {prepared.snapshot.needsCpf ? (
+                    <label style={{ display: "grid", gap: "8px" }}>
+                      CPF do participante
+                      <input aria-label="CPF para retomar pagamento" inputMode="numeric" autoComplete="off" value={cpf}
+                        onChange={item => setCpf(item.target.value)} style={{ borderRadius: "14px", padding: "13px 14px", font: "inherit" }} />
+                    </label>
+                  ) : null}
+                  <button type="button" disabled={prepared.snapshot.busy}
+                    onClick={() => { void prepared.client.current?.status().catch(() => undefined); }}>
+                    Verificar status
+                  </button>
+                  {registration?.paymentStatus === "PENDING" && !registration.waitlistedAt && registration.status !== "CANCELLED" && !preparedBlocked ? (
+                    <button type="button" disabled={prepared.snapshot.busy}
+                      onClick={() => { void prepared.client.current?.resume(cpf ? { cpf } : {}).catch(() => undefined).finally(() => setCpf("")); }}>
+                      Retomar pagamento
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {(prepareCheckoutV2 ? prepared.snapshot?.message ?? error : error) ? (
                 <p
                   style={{
                     background:
@@ -2278,7 +2325,7 @@ export function PublicEventView({
                     padding: "12px 14px"
                   }}
                 >
-                  {error}
+                  {prepareCheckoutV2 ? prepared.snapshot?.message ?? error : error}
                 </p>
               ) : null}
             </aside>
