@@ -6,10 +6,13 @@ test('operational report exposes only booleans/classifications, never env values
   const result = summarizeConfig({ ASAAS_API_KEY: 'private-asaas', ASAAS_WEBHOOK_TOKEN: 'private-webhook',
     RESEND_API_KEY: 'private-resend', DATABASE_URL: 'private-database', JWT_SECRET: 'private-jwt',
     REDIS_URL: 'rediss://user:private-redis@private.host/0', EVENTS_APP_BASE_URL: 'https://user:private-url@host.invalid/?key=secret',
-    EVENTS_EMAIL_FROM: 'Private Name <private-person@example.invalid>', ASAAS_ENVIRONMENT: 'sandbox' });
+    EVENTS_EMAIL_FROM: 'Private Name <private-person@example.invalid>', ASAAS_ENVIRONMENT: 'sandbox',
+    CHECKOUT_SECURITY_BUCKET_SECRET: 'private-operational-secret-32-characters',
+    CHECKOUT_SECURITY_ORIGINS: 'https://private-origin.invalid', CHECKOUT_REDIS_ADMIN_URL: 'redis://default:private-admin@private.host/0' });
   assert.equal(result.participantUrl, 'UNSAFE_URL'); assert.equal(result.resend.assistedSenderAcceptsSameFrom, false);
+  assert.equal(result.checkoutSecurity.bucketSecretPresent, true); assert.equal(result.checkoutSecurity.originsPresent, true);
   const serialized = JSON.stringify(result);
-  for (const marker of ['private-', 'private.host', 'Private Name', 'example.invalid', '?key=secret']) assert.equal(serialized.includes(marker), false);
+  for (const marker of ['private-', 'private.host', 'Private Name', 'example.invalid', '?key=secret', 'private-origin']) assert.equal(serialized.includes(marker), false);
 });
 
 test('read-only provider transport rejects every mutation URL and never sends a body or follows redirects', async () => {

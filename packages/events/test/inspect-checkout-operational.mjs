@@ -28,7 +28,15 @@ export function summarizeConfig(values) {
     participantUrl: classifyUrl(values.EVENTS_APP_BASE_URL), databaseUrlPresent: present(values.DATABASE_URL),
     redisUrlPresent: present(values.REDIS_URL), redisTls: present(values.REDIS_URL) ? values.REDIS_URL.startsWith('rediss://') : null,
     jwtSecretPresent: present(values.JWT_SECRET), paymentTestModeConfigured: present(values.EVENTS_TEST_PAYMENT_MODE),
-    paymentProviderMode: ['auto', 'pending'].includes(values.EVENTS_TEST_PAYMENT_MODE?.trim().toLowerCase()) && values.NODE_ENV !== 'production' ? 'TEST' : 'EXTERNAL_OR_DEFAULT'
+    paymentProviderMode: ['auto', 'pending'].includes(values.EVENTS_TEST_PAYMENT_MODE?.trim().toLowerCase()) && values.NODE_ENV !== 'production' ? 'TEST' : 'EXTERNAL_OR_DEFAULT',
+    checkoutSecurity: {
+      originsPresent: present(values.CHECKOUT_SECURITY_ORIGINS), bucketSecretPresent: present(values.CHECKOUT_SECURITY_BUCKET_SECRET),
+      windowMsPresent: present(values.CHECKOUT_SECURITY_WINDOW_MS), ipLimitPresent: present(values.CHECKOUT_SECURITY_IP_LIMIT),
+      credentialLimitPresent: present(values.CHECKOUT_SECURITY_CREDENTIAL_LIMIT), bodyLimitPresent: present(values.CHECKOUT_SECURITY_BODY_LIMIT),
+      storeTimeoutMsPresent: present(values.CHECKOUT_SECURITY_STORE_TIMEOUT_MS), requestTimeoutMsPresent: present(values.CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS),
+      allowLocalHttpPresent: present(values.CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP), httpsOnlyPresent: present(values.CHECKOUT_SECURITY_HTTPS_ONLY),
+      redisAdminUrlPresent: present(values.CHECKOUT_REDIS_ADMIN_URL)
+    }
   };
 }
 
@@ -74,7 +82,10 @@ export async function inspectOperational({ external = false } = {}) {
     report.frontend.push({ file, publicApiBaseUrl: classifyUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? values.NEXT_PUBLIC_API_BASE_URL) });
   }
   const [a, b] = inputs.slice(1).map(input => input.values);
-  for (const key of ['ASAAS_API_KEY', 'ASAAS_ENVIRONMENT', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'EVENTS_EMAIL_FROM', 'EVENTS_APP_BASE_URL', 'REDIS_URL']) {
+  for (const key of ['ASAAS_API_KEY', 'ASAAS_ENVIRONMENT', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'EVENTS_EMAIL_FROM', 'EVENTS_APP_BASE_URL', 'REDIS_URL',
+    'CHECKOUT_REDIS_ADMIN_URL', 'CHECKOUT_SECURITY_ORIGINS', 'CHECKOUT_SECURITY_BUCKET_SECRET', 'CHECKOUT_SECURITY_WINDOW_MS', 'CHECKOUT_SECURITY_IP_LIMIT',
+    'CHECKOUT_SECURITY_CREDENTIAL_LIMIT', 'CHECKOUT_SECURITY_BODY_LIMIT', 'CHECKOUT_SECURITY_STORE_TIMEOUT_MS', 'CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS',
+    'CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP', 'CHECKOUT_SECURITY_HTTPS_ONLY']) {
     report.consistency[key] = !present(a[key]) || !present(b[key]) ? 'MISSING_IN_ONE_OR_BOTH' : a[key] === b[key] ? 'MATCH' : 'DIFFERENT';
   }
   const dedup = new Map();

@@ -1,0 +1,31 @@
+# Local/homolog checkout security Redis only. Not started by the default compose.
+# Not production, not a backup policy, not a v2 activation switch.
+# docker compose -f docker-compose.checkout-redis.yml up -d
+# Requires CHECKOUT_REDIS_PASSWORD and CHECKOUT_REDIS_RUNTIME_PASSWORD. No defaults.
+services:
+  checkout-redis:
+    image: redis:7-alpine
+    container_name: sistema_igrejas_checkout_redis
+    restart: "no"
+    ports:
+      - "127.0.0.1:55439:6379"
+    mem_limit: 192m
+    cpus: 1.0
+    volumes:
+      - checkout_redis_data:/data
+    environment:
+      CHECKOUT_REDIS_PASSWORD: ${CHECKOUT_REDIS_PASSWORD:?CHECKOUT_REDIS_PASSWORD is required}
+      CHECKOUT_REDIS_RUNTIME_PASSWORD: ${CHECKOUT_REDIS_RUNTIME_PASSWORD:?CHECKOUT_REDIS_RUNTIME_PASSWORD is required}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        umask 077
+        test -n "$$CHECKOUT_REDIS_PASSWORD"
+        test -n "$$CHECKOUT_REDIS_RUNTIME_PASSWORD"
+        printf 'user default on >%s ~* &* +@all\nuser checkout_runtime on >%s ~events:checkout-security:{checkout}:* +ping +get +incr +pexpire +pttl +eval\n' \
+          "$$CHECKOUT_REDIS_PASSWORD" "$$CHECKOUT_REDIS_RUNTIME_PASSWORD" > /data/users.acl
+        exec redis-server --bind 0.0.0.0 --protected-mode yes --requirepass "$$CHECKOUT_REDIS_PASSWORD" \
+          --aclfile /data/users.acl --dir /data --appendonly yes --appendfsync always --save ""
+
+volumes:
+  checkout_redis_data:

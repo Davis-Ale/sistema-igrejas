@@ -145,3 +145,6 @@ proxy; contenção/drenagem de todas as instâncias; auditoria dos logs/ingress;
 hardening da origem Next/scripts; migrations autorizadas, evidência humana,
 semântica CARD legada e homologação externa. Nenhum desses gates foi declarado
 resolvido apenas por compilar ou pelos doubles.
+
+Continuação operacional inativa (Redis compartilhado local, parser comum, init
+explícito do gate, sem builders): `checkout-v2-security-operational.md`.

@@ -53,12 +53,14 @@ try {
   await admin.acl('SAVE');
   admin.disconnect(); admin = undefined;
   console.log('ISOLATED_REDIS_READY host=127.0.0.1 port=55438 auth=ACL aof=always storage=tmpfs');
-  const result = await run(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), '--tsconfig',
-    path.join(root, 'tsconfig.base.json'), '--test', path.join(root, 'packages/events/test/checkout-security.redis.test.ts')], {
-    CHECKOUT_REDIS_TEST_URL: runtimeUrl, CHECKOUT_REDIS_TEST_ADMIN_URL: adminUrl, CHECKOUT_REDIS_TEST_MARKER: marker,
-    CHECKOUT_REDIS_TEST_CONTAINER: containerId, NODE_ENV: 'test'
-  });
-  console.log(redact(result.stdout)); console.log(redact(result.stderr));
+  for (const file of ['checkout-security.redis.test.ts', 'checkout-security.operational.redis.test.ts']) {
+    const result = await run(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), '--tsconfig',
+      path.join(root, 'tsconfig.base.json'), '--test', path.join(root, 'packages/events/test', file)], {
+      CHECKOUT_REDIS_TEST_URL: runtimeUrl, CHECKOUT_REDIS_TEST_ADMIN_URL: adminUrl, CHECKOUT_REDIS_TEST_MARKER: marker,
+      CHECKOUT_REDIS_TEST_CONTAINER: containerId, NODE_ENV: 'test'
+    });
+    console.log(redact(result.stdout)); console.log(redact(result.stderr));
+  }
 } catch (error) {
   console.error(redact(error.stdout || '')); console.error(redact(error.stderr || error.message)); process.exitCode = 1;
 } finally {

@@ -336,7 +336,7 @@ test("Redis adapter sends one atomic shared-slot gate/quota operation with expir
 test("production builders, server entrypoints, package entrypoint and page do not activate preparation", async () => {
   for (const server of ["api-br", "events-api"]) for (const file of ["app.ts", "server.ts"]) {
     const source = await readFile(new URL(`../../../apps/${server}/src/${file}`, import.meta.url), "utf8");
-    for (const marker of ["checkout-security.prepared", "checkout-closure.prepared", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED"]) assert.equal(source.includes(marker), false);
+    for (const marker of ["checkout-security.prepared", "checkout-security.operational", "checkout-closure.prepared", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED"]) assert.equal(source.includes(marker), false);
   }
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.equal(entry.includes("checkout-security.prepared"), false); assert.equal(entry.includes("checkout-closure.prepared"), false);
