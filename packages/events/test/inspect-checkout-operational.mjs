@@ -1,3 +1,4 @@
+// CLI: node --import tsx packages/events/test/inspect-checkout-operational.mjs [--provider-readonly]
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -136,6 +137,8 @@ export async function inspectOperational({ external = false } = {}) {
     report.external.push({ provider: 'resend', unauthenticatedConnectivityOnly: true, domainsHttp: probe.status,
       authenticatedAccountVerified: false, error: probe.error ?? null });
   }
+  const { evaluateCheckoutProviderHomologation } = await import('../src/checkout-provider-homologation.ts');
+  report.homologation = evaluateCheckoutProviderHomologation(report);
   return report;
 }
 
