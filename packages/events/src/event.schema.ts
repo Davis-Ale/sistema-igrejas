@@ -99,7 +99,7 @@ export const createRegistrationSchema = z
 export const createPublicRegistrationSchema = z.object({
   name: z.string().trim().min(2, "Nome é obrigatório."),
   phone: z.string().trim().min(8, "Telefone é obrigatório."),
-  email: z.string().trim().email("E-mail inválido.").optional(),
+  email: z.string().trim().email("E-mail inválido."),
   cpf: z
     .string()
     .trim()

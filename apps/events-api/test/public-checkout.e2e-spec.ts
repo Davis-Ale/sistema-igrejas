@@ -153,7 +153,7 @@ describe("Public checkout journey", () => {
 
   it("confirms a free ticket in a paid event without charging or requiring CPF", async () => {
     const response = await app.inject({ method: "POST", url: `${base}/register`, payload: {
-      name: "Participante Gratuito", phone: "41999990002", ticketId: freeTicketId, ticketBatchId: freeBatchId, answers: []
+      name: "Participante Gratuito", phone: "41999990002", email: `${runId}-free@example.invalid`, ticketId: freeTicketId, ticketBatchId: freeBatchId, answers: []
     } });
     expect(response.statusCode).toBe(201);
     expect(response.json().paymentStatus).toBe("NOT_REQUIRED");
@@ -166,7 +166,7 @@ describe("Public checkout journey", () => {
   it("never exposes a credential for a waitlisted free registration", async () => {
     await prisma.event.update({ where: { id: eventId }, data: { capacity: 1, waitlistEnabled: true } });
     const response = await app.inject({ method: "POST", url: `${base}/register`, payload: {
-      name: "Lista de Espera", phone: "41999990003", ticketId: freeTicketId, ticketBatchId: freeBatchId, answers: []
+      name: "Lista de Espera", phone: "41999990003", email: `${runId}-waitlist@example.invalid`, ticketId: freeTicketId, ticketBatchId: freeBatchId, answers: []
     } });
     expect(response.statusCode).toBe(201);
     expect(response.json().waitlistedAt).not.toBeNull();
@@ -177,6 +177,7 @@ describe("Public checkout journey", () => {
     providerStatus = "PENDING";
     await prisma.event.update({ where: { id: eventId }, data: { capacity: 100, waitlistEnabled: false } });
     const payload = { name: `Cartão ${method}`, phone: method === "CREDIT_CARD" ? "41999990004" : "41999990005",
+      email: `${runId}-${method.toLowerCase()}@example.invalid`,
       cpf: "52998224725", paymentMethod: method, ticketId, ticketBatchId: batchId, answers: [] };
     const response = await app.inject({ method: "POST", url: `${base}/register`, payload });
     expect(response.statusCode).toBe(201);
@@ -193,7 +194,7 @@ describe("Public checkout journey", () => {
     providerStatus = "PENDING";
     await prisma.event.update({ where: { id: eventId }, data: { capacity: 100, waitlistEnabled: false } });
     const initialChargeCount = chargeCount;
-    const payload = { name: "Retry PIX", phone: "41999990006", cpf: "52998224725",
+    const payload = { name: "Retry PIX", phone: "41999990006", email: `${runId}-retry-pix@example.invalid`, cpf: "52998224725",
       paymentMethod: "PIX", ticketId, ticketBatchId: batchId, answers: [] };
     failNextPixRequest = true;
     const failed = await app.inject({ method: "POST", url: `${base}/register`, payload });

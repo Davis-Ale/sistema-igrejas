@@ -289,7 +289,7 @@ export async function createPublicRegistrationBySlugs(
   }
 
   const normalizedEmail =
-    normalizeEmail(input.email);
+    input.email.trim().toLowerCase();
 
   const normalizedInput: CreatePublicRegistrationInput = {
     name: input.name.trim(),
@@ -301,9 +301,7 @@ export async function createPublicRegistrationBySlugs(
     ...(input.cpf
       ? { cpf: input.cpf }
       : {}),
-    ...(normalizedEmail !== undefined
-      ? { email: normalizedEmail }
-      : {}),
+    email: normalizedEmail,
     ...(input.discountCode
       ? { discountCode: input.discountCode }
       : {})
