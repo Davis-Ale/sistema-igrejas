@@ -3,7 +3,7 @@ import {
   type CheckoutSecurityConfig, type CheckoutSecurityStore
 } from "./checkout-security.prepared.js";
 
-// Operational preparation only. Not imported by app.ts/server.ts. No v2 activation.
+// Operational policy for both builders. Installed over legacy routes; no v2 or closed registrar.
 export const CHECKOUT_SECURITY_OPERATIONAL_KEYS = [
   "REDIS_URL", "CHECKOUT_SECURITY_ORIGINS", "CHECKOUT_SECURITY_BUCKET_SECRET",
   "CHECKOUT_SECURITY_WINDOW_MS", "CHECKOUT_SECURITY_IP_LIMIT", "CHECKOUT_SECURITY_CREDENTIAL_LIMIT",

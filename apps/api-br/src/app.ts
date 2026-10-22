@@ -1,5 +1,4 @@
 import "dotenv/config";
-import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
@@ -57,23 +56,19 @@ import Fastify, {
   type FastifyInstance
 } from "fastify";
 import { registerAssistantRoutes } from "./assistant/assistant.routes.js";
+import { prepareApiBrCheckoutSecurityOperational } from "./checkout-security.operational.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const jwtSecret = getJwtSecret();
-  const app = Fastify({
-    logger: {
-      redact: [
-        "req.headers.authorization",
-        'req.headers["x-api-key"]'
-      ]
-    }
-  });
-
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required.");
   }
+
+  const security = prepareApiBrCheckoutSecurityOperational();
+  const app = Fastify(security.fastifyOptions);
+  await security.install(app);
 
   const adapter = new PrismaPg({
     connectionString: databaseUrl
@@ -83,29 +78,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     adapter
   });
 
-  await app.register(cors, {
-    origin: true,
-    methods: [
-      "GET",
-      "POST",
-      "PATCH",
-      "PUT",
-      "DELETE",
-      "OPTIONS"
-    ],
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-      "X-Api-Key"
-    ]
-  });
-
   await app.register(jwt, {
     secret: jwtSecret
   });
 
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
+    security.redis.disconnect();
   });
 
   app.get("/health", async () => {

@@ -83,17 +83,36 @@ test("legacy gate init is idempotent for the same fingerprint and never overwrit
   await assert.rejects(initializeCheckoutSecurityLegacyGate(redis, "not-a-fingerprint"), /CHECKOUT_SECURITY_CONFIGURATION_INVALID/);
 });
 
-test("builders, entrypoints, package entry and public page do not import operational security", async () => {
-  for (const server of ["api-br", "events-api"]) for (const file of ["app.ts", "server.ts"]) {
-    const source = await readFile(new URL(`../../../apps/${server}/src/${file}`, import.meta.url), "utf8");
-    for (const marker of ["checkout-security.operational", "checkout-security.prepared", "checkout-v2.prepared", "CHECKOUT_V2_ENABLED"]) {
-      assert.equal(source.includes(marker), false);
+test("builders import operational security; entrypoints, package entry and page stay without v2 or closure", async () => {
+  for (const server of ["api-br", "events-api"]) {
+    const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
+    assert.equal(app.includes("checkout-security.operational"), true);
+    for (const marker of ["checkout-v2.prepared", "CHECKOUT_V2_ENABLED", "checkout-closure.prepared", "registerClosedPublicCheckout"]) {
+      assert.equal(app.includes(marker), false);
+    }
+    const serverSource = await readFile(new URL(`../../../apps/${server}/src/server.ts`, import.meta.url), "utf8");
+    for (const marker of ["checkout-security.operational", "checkout-v2.prepared", "CHECKOUT_V2_ENABLED"]) {
+      assert.equal(serverSource.includes(marker), false);
     }
   }
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.equal(entry.includes("checkout-security.operational"), false);
   const page = await readFile(new URL("../../../apps/events-admin/app/eventos/[eventId]/page.tsx", import.meta.url), "utf8");
   assert.equal(page.includes("PreparedPublicEventV2"), false);
+});
+
+test("coordinated close script requires an explicit flag, stays loopback-admin and is not imported by builders", async () => {
+  const source = await readFile(new URL("./close-checkout-security-gate.mjs", import.meta.url), "utf8");
+  assert.equal(source.includes("--close-checkout-gate"), true);
+  assert.equal(source.includes("EXPLICIT_CLOSE_FLAG_REQUIRED"), true);
+  assert.equal(source.includes(".close()"), true);
+  assert.equal(source.includes("reopened: false"), true);
+  assert.equal(source.includes("CHECKOUT_SECURITY_OPERATIONAL_LOOPBACK_ONLY"), true);
+  assert.equal(source.includes("initializeCheckoutSecurityLegacyGate"), false);
+  for (const server of ["api-br", "events-api"]) {
+    const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
+    assert.equal(app.includes("close-checkout-security-gate"), false);
+  }
 });
 
 test("default compose stays PostgreSQL-only and the checkout Redis overlay stays loopback", async () => {

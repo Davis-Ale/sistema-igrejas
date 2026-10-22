@@ -222,6 +222,23 @@ test("closure composition replaces every critical alias, rejects coexistence and
   }
 });
 
+test("installed policy keeps legacy checkout routes until close() contains them without swapping registrars", async () => {
+  for (const factory of factories) {
+    const h = await harness(factory);
+    await registerPublicEventRoutes(h.app, {} as PrismaClient);
+    try {
+      assert.equal(h.app.hasRoute({ method: "POST", url: "/public/events/:eventId/register" }), true);
+      const admitted = await h.app.inject({ method: "POST", url: path, payload: {} });
+      assert.equal(admitted.statusCode, 400);
+      assert.notEqual(admitted.json().error, "CHECKOUT_CLOSED");
+      await h.security.close();
+      const closed = await h.app.inject({ method: "POST", url: path, payload: {} });
+      assert.equal(closed.statusCode, 503);
+      assert.equal(closed.json().error, "CHECKOUT_CLOSED");
+    } finally { await h.app.close(); }
+  }
+});
+
 test("legacy default stays unchanged; ordinary JWT, health, webhook and participant routes keep their own policy", async () => {
   const legacy = Fastify();
   await registerPublicEventRoutes(legacy, {} as PrismaClient);
@@ -333,10 +350,21 @@ test("Redis adapter sends one atomic shared-slot gate/quota operation with expir
   reply = null; await assert.rejects(adapter.close());
 });
 
-test("production builders, server entrypoints, package entrypoint and page do not activate preparation", async () => {
-  for (const server of ["api-br", "events-api"]) for (const file of ["app.ts", "server.ts"]) {
-    const source = await readFile(new URL(`../../../apps/${server}/src/${file}`, import.meta.url), "utf8");
-    for (const marker of ["checkout-security.prepared", "checkout-security.operational", "checkout-closure.prepared", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED"]) assert.equal(source.includes(marker), false);
+test("builders install operational security over legacy routes and do not swap or activate v2", async () => {
+  for (const server of ["api-br", "events-api"]) {
+    const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
+    assert.equal(app.includes("checkout-security.operational"), true);
+    assert.equal(app.includes("security.fastifyOptions"), true);
+    assert.equal(app.includes("security.install(app)"), true);
+    assert.equal((app.match(/await registerPublicEventRoutes\(/g) ?? []).length, 1);
+    assert.equal(app.includes("resetPendingEventPaymentProviderReference("), true);
+    for (const marker of ["checkout-closure.prepared", "registerClosedPublicCheckout", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED", "origin: true"]) {
+      assert.equal(app.includes(marker), false);
+    }
+    const serverSource = await readFile(new URL(`../../../apps/${server}/src/server.ts`, import.meta.url), "utf8");
+    for (const marker of ["checkout-security.operational", "checkout-closure.prepared", "checkout-v2.prepared", "CHECKOUT_V2_ENABLED"]) {
+      assert.equal(serverSource.includes(marker), false);
+    }
   }
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.equal(entry.includes("checkout-security.prepared"), false); assert.equal(entry.includes("checkout-closure.prepared"), false);

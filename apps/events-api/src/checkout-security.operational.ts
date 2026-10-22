@@ -3,7 +3,7 @@ import { loadCheckoutSecurityOperational } from "../../../packages/events/src/ch
 import { createRedisCheckoutSecurityStore } from "../../../packages/events/src/checkout-security.prepared.js";
 import { prepareEventsApiCheckoutSecurity } from "./checkout-security.prepared.js";
 
-// Not imported by app.ts/server.ts. Creates a client only when this function is called.
+// Imported by buildApp to install the shared policy. Does not register v2 or closed checkout.
 export function prepareEventsApiCheckoutSecurityOperational(values: Record<string, string | undefined> = process.env) {
   const loaded = loadCheckoutSecurityOperational(values);
   const redis = new Redis(loaded.runtimeUrl, {

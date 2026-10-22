@@ -55,3 +55,6 @@ snapshot antigo com `LEGACY:` não vale como fechamento durável.
 Não liga builders, não fecha o checkout legado, não aplica migration, não
 homologa Asaas/Resend, não escolhe origens/limites/secret de produção, não
 endurece Next/scripts e não autoriza contenção/ativação do v2.
+
+Conexão posterior da política nos builders, com legado preservado:
+`checkout-v2-security-builder-connection.md`.
