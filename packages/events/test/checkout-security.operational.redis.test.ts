@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { after, before, test } from "node:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Redis from "ioredis";
 import { prepareApiBrCheckoutSecurityOperational } from "../../../apps/api-br/src/checkout-security.operational.ts";
 import { prepareEventsApiCheckoutSecurityOperational } from "../../../apps/events-api/src/checkout-security.operational.ts";
 import { initializeCheckoutSecurityLegacyGate, loadCheckoutSecurityOperational } from "../src/checkout-security.operational.ts";
 import { CHECKOUT_SECURITY_GATE_KEY } from "../src/checkout-security.prepared.ts";
+import { waitCheckoutPendingDrain } from "../src/checkout-security.containment.ts";
 
 function guardedUrl(value: string | undefined, user: string) {
   assert.ok(value, "Explicit isolated Redis URL required");
@@ -81,4 +85,63 @@ test("operational init refuses CLOSED and runtime ACL still cannot write keys ou
   );
   assert.equal(await admin.get(CHECKOUT_SECURITY_GATE_KEY), "CLOSED");
   await assert.rejects(a.redis.get("outside-checkout-namespace"), /NOPERM/);
+});
+
+function runCloseScript() {
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const safeEnv = Object.fromEntries(["PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE"]
+    .filter(key => process.env[key]).map(key => [key, process.env[key]]));
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    execFile(process.execPath, ["--import", "tsx", path.join(root, "packages/events/test/close-checkout-security-gate.mjs"),
+      "--close-checkout-gate"], {
+      cwd: root,
+      env: { ...safeEnv, ...env, REDIS_URL: runtimeUrl, CHECKOUT_REDIS_ADMIN_URL: adminUrl },
+      encoding: "utf8"
+    }, (error, stdout, stderr) => {
+      if (error) reject(Object.assign(new Error(stderr || error.message), { stdout, stderr }));
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+test("admin close script persists CLOSED for both APIs, drain finishes in-flight work, and rollback cannot reopen", async () => {
+  const loaded = loadCheckoutSecurityOperational(env);
+  await admin.del(CHECKOUT_SECURITY_GATE_KEY);
+  await initializeCheckoutSecurityLegacyGate(admin, loaded.policyFingerprint);
+  const a = prepareEventsApiCheckoutSecurityOperational(env);
+  const b = prepareApiBrCheckoutSecurityOperational(env);
+  clients.push(a, b);
+  await a.redis.connect(); await b.redis.connect();
+  const route = "/public/events/:eventId/register";
+  const install = async (security: typeof a) => {
+    const Fastify = (await import("fastify")).default;
+    const app = Fastify({ ...security.fastifyOptions, logger: false });
+    await security.install(app);
+    let finish!: () => void;
+    const blocked = new Promise<void>(resolve => { finish = resolve; });
+    let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    app.post(route, async () => { started(); await blocked; return { ok: true }; });
+    return { app, security, finish: () => finish(), entered };
+  };
+  const left = await install(a), right = await install(b);
+  try {
+    const ongoing = left.app.inject({ method: "POST", url: "/public/events/containment-a/register", payload: {} });
+    void ongoing.then(() => undefined); await left.entered;
+    const closed = await runCloseScript();
+    assert.match(closed.stdout, /"result":"CLOSED"/);
+    assert.match(closed.stdout, /"reopened":false/);
+    assert.match(closed.stdout, /"persisted":true/);
+    assert.equal(await admin.get(CHECKOUT_SECURITY_GATE_KEY), "CLOSED");
+    assert.equal(left.security.pendingRequests(), 1);
+    assert.equal((await right.app.inject({ method: "POST", url: "/public/events/containment-b/register", payload: {} })).statusCode, 503);
+    await assert.rejects(initializeCheckoutSecurityLegacyGate(admin, loaded.policyFingerprint), /CHECKOUT_SECURITY_GATE_CLOSED/);
+    left.finish();
+    assert.equal((await ongoing).statusCode, 200);
+    await waitCheckoutPendingDrain(left.security.pendingRequests, 1000);
+    assert.equal(left.security.pendingRequests(), 0);
+    await admin.del(CHECKOUT_SECURITY_GATE_KEY);
+    assert.equal((await left.app.inject({ method: "POST", url: "/public/events/containment-c/register", payload: {} })).statusCode, 503);
+    assert.equal(await admin.get(CHECKOUT_SECURITY_GATE_KEY), null);
+  } finally { left.finish(); await left.app.close(); await right.app.close(); }
 });

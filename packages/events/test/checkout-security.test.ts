@@ -12,6 +12,7 @@ import { registerClosedPublicCheckout } from "../src/checkout-closure.prepared.t
 import { registerPublicEventRoutes } from "../src/public.routes.ts";
 import { CHECKOUT_PUBLIC_PATHS, CHECKOUT_SECURITY_CONSUME_SCRIPT, CHECKOUT_SECURITY_GATE_KEY,
   createRedisCheckoutSecurityStore, type CheckoutSecurityConfig, type CheckoutSecurityStore } from "../src/checkout-security.prepared.ts";
+import { waitCheckoutPendingDrain } from "../src/checkout-security.containment.ts";
 
 globalThis.fetch = async () => { throw new Error("EXTERNAL_NETWORK_FORBIDDEN"); };
 const config = (): CheckoutSecurityConfig => ({ origins: ["https://checkout.example.invalid"], allowLocalHttp: false,
@@ -192,6 +193,7 @@ test("shared close blocks both APIs immediately and drain waits for already admi
     for (const h of [a, b]) assert.equal((await h.app.inject({ method: "POST", url: path, payload: {} })).statusCode, 503);
     assert.equal(a.security.pendingRequests(), 1);
     finish(); assert.equal((await ongoing).statusCode, 200);
+    await waitCheckoutPendingDrain(a.security.pendingRequests, config().requestTimeoutMs);
     assert.equal(a.security.pendingRequests(), 0); assert.equal(b.security.pendingRequests(), 0);
   } finally { finish(); await a.app.close(); await b.app.close(); }
 });
@@ -356,6 +358,7 @@ test("builders install operational security over legacy routes and do not swap o
     assert.equal(app.includes("checkout-security.operational"), true);
     assert.equal(app.includes("security.fastifyOptions"), true);
     assert.equal(app.includes("security.install(app)"), true);
+    assert.equal(app.includes("waitCheckoutPendingDrain"), true);
     assert.equal((app.match(/await registerPublicEventRoutes\(/g) ?? []).length, 1);
     assert.equal(app.includes("resetPendingEventPaymentProviderReference("), true);
     for (const marker of ["checkout-closure.prepared", "registerClosedPublicCheckout", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED", "origin: true"]) {

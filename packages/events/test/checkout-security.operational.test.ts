@@ -107,6 +107,8 @@ test("coordinated close script requires an explicit flag, stays loopback-admin a
   assert.equal(source.includes("EXPLICIT_CLOSE_FLAG_REQUIRED"), true);
   assert.equal(source.includes(".close()"), true);
   assert.equal(source.includes("reopened: false"), true);
+  assert.equal(source.includes("persisted: true"), true);
+  assert.equal(source.includes("CHECKOUT_SECURITY_GATE_KEY"), true);
   assert.equal(source.includes("CHECKOUT_SECURITY_OPERATIONAL_LOOPBACK_ONLY"), true);
   assert.equal(source.includes("initializeCheckoutSecurityLegacyGate"), false);
   for (const server of ["api-br", "events-api"]) {

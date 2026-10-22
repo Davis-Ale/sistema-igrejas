@@ -42,7 +42,7 @@ import {
 import Fastify, {
   type FastifyInstance
 } from "fastify";
-import { prepareEventsApiCheckoutSecurityOperational } from "./checkout-security.operational.js";
+import { prepareEventsApiCheckoutSecurityOperational, waitCheckoutPendingDrain } from "./checkout-security.operational.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const jwtSecret = getJwtSecret();
@@ -69,6 +69,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.addHook("onClose", async () => {
+    const timeoutMs = security.fastifyOptions.requestTimeout;
+    if (typeof timeoutMs !== "number") {
+      throw new Error("CHECKOUT_SECURITY_CONFIGURATION_INVALID");
+    }
+    await waitCheckoutPendingDrain(security.pendingRequests, timeoutMs);
     await prisma.$disconnect();
     security.redis.disconnect();
   });

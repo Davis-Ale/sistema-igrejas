@@ -13,15 +13,19 @@ permanecem. Nenhum builder importa `checkout-v2.prepared` nem
   builders.
 - Redis runtime é desconectado no `onClose`.
 
-## Contenção preparada, não executada
+## Contenção coordenada — preparada, não executada no gate de homologação
 
-Script administrativo, só loopback, flag explícita:
+A coordenação é o gate Redis compartilhado que os dois builders já consomem.
+Não há proxy/ingress extra: um `CLOSED` persistente 503 nas duas APIs. Apagar
+a chave não reabre (fail-closed). `LEGACY` recusa sobrescrever `CLOSED`.
+
+Script administrativo, só loopback, flag explícita, cliente admin (`+set`):
 
 `node --import tsx packages/events/test/close-checkout-security-gate.mjs --close-checkout-gate`
 
-Usa o cliente admin (`+set`) porque o ACL `checkout_runtime` não tem `+set`.
-Este corte **não** executa o script, **não** troca as rotas pela composição
-fechada e **não** ativa v2.
+Drenagem: `waitCheckoutPendingDrain` no `onClose` dos dois builders. Este corte
+valida o script e a drenagem em Redis descartável (55438). **Não** executa o
+fechamento em 55439, **não** troca rotas e **não** ativa v2.
 
 ## O que este corte não faz
 

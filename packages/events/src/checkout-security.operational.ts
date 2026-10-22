@@ -127,3 +127,4 @@ export async function initializeCheckoutSecurityLegacyGate(
 }
 
 export { createRedisCheckoutSecurityStore };
+export { waitCheckoutPendingDrain } from "./checkout-security.containment.js";

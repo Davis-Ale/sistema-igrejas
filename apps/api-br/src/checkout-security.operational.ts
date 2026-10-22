@@ -1,5 +1,6 @@
 import Redis from "ioredis";
 import { loadCheckoutSecurityOperational } from "../../../packages/events/src/checkout-security.operational.js";
+export { waitCheckoutPendingDrain } from "../../../packages/events/src/checkout-security.containment.js";
 import { createRedisCheckoutSecurityStore } from "../../../packages/events/src/checkout-security.prepared.js";
 import { prepareApiBrCheckoutSecurity } from "./checkout-security.prepared.js";
 

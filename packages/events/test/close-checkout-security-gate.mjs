@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 import { loadCheckoutSecurityOperational } from "../src/checkout-security.operational.ts";
-import { createRedisCheckoutSecurityStore } from "../src/checkout-security.prepared.ts";
+import { CHECKOUT_SECURITY_GATE_KEY, createRedisCheckoutSecurityStore } from "../src/checkout-security.prepared.ts";
 
 const present = value => typeof value === "string" && value.trim().length > 0;
 const loopback = hostname => ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
@@ -33,7 +33,8 @@ redis.on("error", () => {});
 try {
   await redis.connect();
   await createRedisCheckoutSecurityStore(redis).close();
-  console.log(JSON.stringify({ result: "CLOSED", reopened: false }));
+  if (await redis.get(CHECKOUT_SECURITY_GATE_KEY) !== "CLOSED") throw new Error("CHECKOUT_SECURITY_UNAVAILABLE");
+  console.log(JSON.stringify({ result: "CLOSED", reopened: false, persisted: true }));
 } catch {
   console.error(JSON.stringify({ error: "CHECKOUT_SECURITY_UNAVAILABLE" }));
   process.exitCode = 1;
