@@ -27,7 +27,17 @@ Drenagem: `waitCheckoutPendingDrain` no `onClose` dos dois builders. Este corte
 valida o script e a drenagem em Redis descartável (55438). **Não** executa o
 fechamento em 55439, **não** troca rotas e **não** ativa v2.
 
+## Composição exclusiva v2 — preparada, não ligada
+
+`registerExclusiveCheckoutV2` omite os handlers legados e instala o bundle v2
+já validado das duas APIs. O inventário público das duas identidades é o mesmo.
+Página pública e preview continuam no `PublicEventView` legado; o wrapper
+`PreparedPublicEventV2` permanece sem consumidor.
+
+Nenhum `buildApp`, `server.ts` ou página importa esse compositor. Sem flag,
+sem `close()` do gate de homologação, sem migration no principal.
+
 ## O que este corte não faz
 
 Migrations no principal, deploy, `close()` do gate, `registerClosedPublicCheckout`,
-frontend v2, flag de ativação.
+troca das páginas, flag de ativação.
