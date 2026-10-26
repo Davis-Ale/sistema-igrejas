@@ -4,7 +4,7 @@ import { prepareCheckoutV2Routes } from "../../../packages/events/src/checkout-v
 import { createAsaasCheckoutChargeProvider } from "../../../packages/financial/src/asaas-checkout-charge.provider.js";
 import type { AssistedCheckoutRecovery } from "../../../packages/events/src/checkout-assisted-recovery.service.js";
 
-// Deliberately not imported/called by app.ts or server.ts. No environment switch.
+// Exclusive registrar used by buildApp through registerExclusiveCheckoutV2. No environment switch.
 export function prepareEventsApiCheckoutV2(prisma: PrismaClient, assistedRecovery?: AssistedCheckoutRecovery) {
   return prepareCheckoutV2Routes(prisma, {
     async read(id) {

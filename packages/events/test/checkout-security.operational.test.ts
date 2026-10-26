@@ -83,11 +83,13 @@ test("legacy gate init is idempotent for the same fingerprint and never overwrit
   await assert.rejects(initializeCheckoutSecurityLegacyGate(redis, "not-a-fingerprint"), /CHECKOUT_SECURITY_CONFIGURATION_INVALID/);
 });
 
-test("builders import operational security; entrypoints, package entry and page stay without v2 or closure", async () => {
+test("builders import exclusive v2 with operational security; entrypoints stay without flags or closure registrar", async () => {
   for (const server of ["api-br", "events-api"]) {
     const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
     assert.equal(app.includes("checkout-security.operational"), true);
-    for (const marker of ["checkout-v2.prepared", "CHECKOUT_V2_ENABLED", "checkout-closure.prepared", "registerClosedPublicCheckout"]) {
+    assert.equal(app.includes("checkout-v2.prepared"), true);
+    assert.equal(app.includes("registerExclusiveCheckoutV2"), true);
+    for (const marker of ["CHECKOUT_V2_ENABLED", "checkout-closure.prepared", "registerClosedPublicCheckout"]) {
       assert.equal(app.includes(marker), false);
     }
     const serverSource = await readFile(new URL(`../../../apps/${server}/src/server.ts`, import.meta.url), "utf8");
@@ -98,7 +100,7 @@ test("builders import operational security; entrypoints, package entry and page 
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.equal(entry.includes("checkout-security.operational"), false);
   const page = await readFile(new URL("../../../apps/events-admin/app/eventos/[eventId]/page.tsx", import.meta.url), "utf8");
-  assert.equal(page.includes("PreparedPublicEventV2"), false);
+  assert.equal(page.includes("PreparedPublicEventV2"), true);
 });
 
 test("coordinated close script requires an explicit flag, stays loopback-admin and is not imported by builders", async () => {

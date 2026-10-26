@@ -9,6 +9,7 @@ import { prepareApiBrCheckoutSecurity } from "../../../apps/api-br/src/checkout-
 import { prepareEventsApiCheckoutV2 } from "../../../apps/events-api/src/checkout-v2.prepared.ts";
 import { prepareApiBrCheckoutV2 } from "../../../apps/api-br/src/checkout-v2.prepared.ts";
 import { registerClosedPublicCheckout } from "../src/checkout-closure.prepared.ts";
+import { registerExclusiveCheckoutV2 } from "../src/checkout-v2.cutover.prepared.ts";
 import { registerPublicEventRoutes } from "../src/public.routes.ts";
 import { CHECKOUT_PUBLIC_PATHS, CHECKOUT_SECURITY_CONSUME_SCRIPT, CHECKOUT_SECURITY_GATE_KEY,
   createRedisCheckoutSecurityStore, type CheckoutSecurityConfig, type CheckoutSecurityStore } from "../src/checkout-security.prepared.ts";
@@ -352,16 +353,44 @@ test("Redis adapter sends one atomic shared-slot gate/quota operation with expir
   reply = null; await assert.rejects(adapter.close());
 });
 
-test("builders install operational security over legacy routes and do not swap or activate v2", async () => {
+test("exclusive v2 on both policies closes only to CLOSED, drains and never restores the legacy callback", async () => {
+  const shared = storeDouble();
+  const a = await harness(factories[0], config(), shared);
+  const b = await harness(factories[1], config(), shared);
+  const prisma = new Proxy({}, { get() { throw new Error("DATABASE_FORBIDDEN"); } }) as PrismaClient;
+  await registerExclusiveCheckoutV2(a.app, prisma, prepareEventsApiCheckoutV2(prisma));
+  await registerExclusiveCheckoutV2(b.app, prisma, prepareApiBrCheckoutV2(prisma));
+  try {
+    const first = await a.app.inject({ method: "POST", url: path, payload: {} });
+    assert.equal(first.statusCode, 403);
+    assert.equal(first.json().error, "CHECKOUT_ACCESS_DENIED");
+    await shared.store.close();
+    for (const h of [a, b]) {
+      const closed = await h.app.inject({ method: "POST", url: path, headers: { "x-event-checkout-key": key }, payload: {} });
+      assert.equal(closed.statusCode, 503);
+      assert.equal(closed.json().error, "CHECKOUT_CLOSED");
+    }
+    await assert.rejects(registerClosedPublicCheckout(a.app, prisma), /EXCLUSIVE_REPLACEMENT/);
+    await waitCheckoutPendingDrain(a.security.pendingRequests, config().requestTimeoutMs);
+    await waitCheckoutPendingDrain(b.security.pendingRequests, config().requestTimeoutMs);
+  } finally {
+    await a.app.close();
+    await b.app.close();
+  }
+});
+
+test("builders install exclusive v2 with operational security and no activation flag", async () => {
   for (const server of ["api-br", "events-api"]) {
     const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
     assert.equal(app.includes("checkout-security.operational"), true);
     assert.equal(app.includes("security.fastifyOptions"), true);
     assert.equal(app.includes("security.install(app)"), true);
     assert.equal(app.includes("waitCheckoutPendingDrain"), true);
-    assert.equal((app.match(/await registerPublicEventRoutes\(/g) ?? []).length, 1);
-    assert.equal(app.includes("resetPendingEventPaymentProviderReference("), true);
-    for (const marker of ["checkout-closure.prepared", "registerClosedPublicCheckout", "checkout-v2.prepared", '"omit"', "CHECKOUT_V2_ENABLED", "origin: true"]) {
+    assert.equal(app.includes("registerExclusiveCheckoutV2"), true);
+    assert.equal(app.includes("checkout-v2.prepared"), true);
+    assert.equal(app.includes("registerPublicEventRoutes("), false);
+    assert.equal(app.includes("deleteAsaasPayment("), true);
+    for (const marker of ["checkout-closure.prepared", "registerClosedPublicCheckout", "CHECKOUT_V2_ENABLED", "origin: true"]) {
       assert.equal(app.includes(marker), false);
     }
     const serverSource = await readFile(new URL(`../../../apps/${server}/src/server.ts`, import.meta.url), "utf8");
@@ -372,5 +401,5 @@ test("builders install operational security over legacy routes and do not swap o
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   assert.equal(entry.includes("checkout-security.prepared"), false); assert.equal(entry.includes("checkout-closure.prepared"), false);
   const page = await readFile(new URL("../../../apps/events-admin/app/eventos/[eventId]/page.tsx", import.meta.url), "utf8");
-  assert.equal(page.includes("PreparedPublicEventV2"), false);
+  assert.equal(page.includes("PreparedPublicEventV2"), true);
 });

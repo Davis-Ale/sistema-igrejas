@@ -266,12 +266,14 @@ test("legacy wrapper keeps its existing contact deduplication and creates no new
   assert.ok(h.findCalls.some(c => c.where.visitor));
 });
 
-test("both production builders remain unchanged and do not import/enable the prepared bundle", async () => {
+test("both production builders import the exclusive v2 bundle without a flag or legacy public callback", async () => {
   for (const server of ["events-api", "api-br"]) {
     const text = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
-    assert.equal(text.includes("checkout-v2"), false); assert.equal(text.includes("prepareCheckoutV2"), false);
-    assert.equal((text.match(/await registerPublicEventRoutes\(/g) ?? []).length, 1);
-    assert.equal(text.includes("resetPendingEventPaymentProviderReference("), true);
+    assert.equal(text.includes("registerExclusiveCheckoutV2"), true);
+    assert.equal(text.includes("prepareCheckoutV2") || text.includes("checkout-v2.prepared"), true);
+    assert.equal(text.includes("registerPublicEventRoutes("), false);
+    assert.equal(text.includes("CHECKOUT_V2_ENABLED"), false);
+    assert.equal(text.includes("deleteAsaasPayment("), true);
     const staged = await readFile(new URL(`../../../apps/${server}/src/checkout-v2.prepared.ts`, import.meta.url), "utf8");
     assert.equal(staged.includes("prepareCheckoutV2Routes(prisma"), true);
     assert.equal(staged.includes("createAsaasChargeForExistingTransaction"), false);

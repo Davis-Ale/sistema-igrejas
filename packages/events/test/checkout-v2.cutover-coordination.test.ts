@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import type { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
 import { CHECKOUT_PUBLIC_PATHS } from "../src/checkout-security.prepared.ts";
+import { registerClosedPublicCheckout } from "../src/checkout-closure.prepared.ts";
+import { waitCheckoutPendingDrain } from "../src/checkout-security.containment.ts";
 import { registerExclusiveCheckoutV2 } from "../src/checkout-v2.cutover.prepared.ts";
 import { prepareCheckoutV2Routes } from "../src/checkout-v2.routes.ts";
 import { registerPublicEventRoutes } from "../src/public.routes.ts";
@@ -59,20 +61,38 @@ test("exclusive cutover omits legacy handlers, installs v2 posts and keeps publi
   }
 });
 
-test("builders, public page and preview remain inactive and in the same pre-cutover state", async () => {
+test("exclusive v2 drain waits for in-flight work and rolls back only to CLOSED", async () => {
+  const app = Fastify();
+  let pending = 1;
+  await registerExclusiveCheckoutV2(app, prisma, routes);
+  try {
+    const draining = waitCheckoutPendingDrain(() => pending, 200);
+    pending = 0;
+    await draining;
+    await assert.rejects(waitCheckoutPendingDrain(() => 1, 30), /CHECKOUT_SECURITY_DRAIN_TIMEOUT/);
+    await assert.rejects(registerClosedPublicCheckout(app, prisma), /EXCLUSIVE_REPLACEMENT/);
+    await assert.rejects(registerPublicEventRoutes(app, prisma), /already been registered|Method 'POST' already declared|CHECKOUT_V2_REQUIRES_EXCLUSIVE_REPLACEMENT/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("both builders and the public page use the exclusive v2 cutover; preview and entrypoints stay without flags", async () => {
   for (const server of ["api-br", "events-api"]) {
     const app = await readFile(new URL(`../../../apps/${server}/src/app.ts`, import.meta.url), "utf8");
     const serverSource = await readFile(new URL(`../../../apps/${server}/src/server.ts`, import.meta.url), "utf8");
-    for (const source of [app, serverSource]) {
-      for (const marker of [
-        "checkout-v2.cutover.prepared",
-        "registerExclusiveCheckoutV2",
-        "checkout-v2.prepared",
-        "registerClosedPublicCheckout",
-        "CHECKOUT_V2_ENABLED"
-      ]) assert.equal(source.includes(marker), false);
+    assert.equal(app.includes("registerExclusiveCheckoutV2"), true);
+    assert.equal(app.includes("checkout-v2.prepared"), true);
+    assert.equal(app.includes("waitCheckoutPendingDrain"), true);
+    assert.equal(app.includes("registerPublicEventRoutes("), false);
+    assert.equal(app.includes("createAsaasChargeForExistingTransaction"), false);
+    assert.equal(app.includes("getEventRegistrationPaymentCheckout"), false);
+    for (const marker of ["registerClosedPublicCheckout", "CHECKOUT_V2_ENABLED", "origin: true"]) {
+      assert.equal(app.includes(marker), false);
     }
-    assert.equal((app.match(/await registerPublicEventRoutes\(/g) ?? []).length, 1);
+    for (const marker of ["checkout-v2.prepared", "registerExclusiveCheckoutV2", "CHECKOUT_V2_ENABLED"]) {
+      assert.equal(serverSource.includes(marker), false);
+    }
   }
   const page = await readFile(new URL("../../../apps/events-admin/app/eventos/[eventId]/page.tsx", import.meta.url), "utf8");
   const preview = await readFile(
@@ -84,7 +104,7 @@ test("builders, public page and preview remain inactive and in the same pre-cuto
     "utf8"
   );
   const entry = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  assert.equal(page.includes("PreparedPublicEventV2"), false);
+  assert.equal(page.includes("PreparedPublicEventV2"), true);
   assert.equal(preview.includes("PreparedPublicEventV2"), false);
   assert.equal(preview.includes("prepareCheckoutV2"), false);
   assert.equal(wrapper.includes("PreparedPublicEventV2"), true);

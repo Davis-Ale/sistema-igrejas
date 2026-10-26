@@ -1,9 +1,9 @@
 # Checkout v2 — conexão da política nos builders (2026-10-22)
 
-Os dois `buildApp` instalam a política operacional compartilhada sobre o
-checkout legado. `registerPublicEventRoutes` e o callback financeiro
-permanecem. Nenhum builder importa `checkout-v2.prepared` nem
-`registerClosedPublicCheckout`.
+Os dois `buildApp` instalam a política operacional compartilhada e a
+composição exclusiva v2. O callback financeiro legado saiu das rotas
+públicas. `registerClosedPublicCheckout` não é ligado: o rollback é
+`CLOSED` + drenagem. Sem flag de ambiente.
 
 ## O que foi ligado
 
@@ -25,19 +25,20 @@ Script administrativo, só loopback, flag explícita, cliente admin (`+set`):
 
 Drenagem: `waitCheckoutPendingDrain` no `onClose` dos dois builders. Este corte
 valida o script e a drenagem em Redis descartável (55438). **Não** executa o
-fechamento em 55439, **não** troca rotas e **não** ativa v2.
+fechamento em 55439.
 
-## Composição exclusiva v2 — preparada, não ligada
+## Composição exclusiva v2 — ligada nos builders e na página pública
 
 `registerExclusiveCheckoutV2` omite os handlers legados e instala o bundle v2
-já validado das duas APIs. O inventário público das duas identidades é o mesmo.
-Página pública e preview continuam no `PublicEventView` legado; o wrapper
-`PreparedPublicEventV2` permanece sem consumidor.
+já validado das duas APIs. A página pública usa `PreparedPublicEventV2`. Preview
+continua sem cliente de checkout. Rollback validado: `close()` 503, drenagem,
+`registerClosedPublicCheckout` recusa coexistir; o callback legado não volta.
 
-Nenhum `buildApp`, `server.ts` ou página importa esse compositor. Sem flag,
-sem `close()` do gate de homologação, sem migration no principal.
+`server.ts` e o index do pacote não importam o compositor. Sem flag, sem
+`close()` do gate de homologação, sem migration no principal.
 
 ## O que este corte não faz
 
-Migrations no principal, deploy, `close()` do gate, `registerClosedPublicCheckout`,
-troca das páginas, flag de ativação.
+Migrations no principal, deploy, `close()` do gate de homologação, flag de
+ativação. Sem a migration aditiva e sem `CLOSED` no gate, a admissão real
+permanece impedida.

@@ -12,9 +12,9 @@ function publicCheckoutPosts(routes: RouteOptions[]) {
   });
 }
 
-// Exclusive future composition for BOTH APIs and the public page together.
-// Not imported by app.ts, server.ts, pages or package index. No env flag.
-// Gate close, drain and the additive migration remain authorized later steps.
+// Exclusive composition for BOTH APIs. No env flag. Rollback is CLOSED + drain,
+// never the legacy payment callback. Gate close and the additive migration stay
+// authorized operational steps before admitting live checkout.
 export async function registerExclusiveCheckoutV2(
   app: FastifyInstance,
   prisma: PrismaClient,

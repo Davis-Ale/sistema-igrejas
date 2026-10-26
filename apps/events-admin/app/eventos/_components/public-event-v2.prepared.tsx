@@ -3,8 +3,7 @@
 import { PublicEventView } from "./public-event-view";
 import { createPublicCheckoutV2Client, type PublicCheckoutV2Factory } from "./public-checkout-v2.client";
 
-// Deliberately absent from every page/route. No env flag activates this wrapper.
-// Only a coordinated future cut may replace the legacy public page composition.
+// Public page composition only. Preview stays without this wrapper. No env flag.
 const prepareCheckoutV2: PublicCheckoutV2Factory = target => createPublicCheckoutV2Client({
   target, apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333",
   storage: window.sessionStorage, crypto: window.crypto

@@ -10,9 +10,6 @@ import { PrismaClient } from "@sistema-igrejas/database";
 import {
   applyEventPaymentProviderStatus,
   applyRegistrationPaymentStatus,
-  attachEventPaymentProviderId,
-  getEventRegistrationPaymentCheckout,
-  resetPendingEventPaymentProviderReference,
   registerDiscountRoutes,
   registerEventApiKeyRoutes,
   registerEventIntegrationRoutes,
@@ -20,7 +17,6 @@ import {
   registerEventParticipantAppRoutes,
   registerEventRoutes,
   registerPublicParticipantAppRoutes,
-  registerPublicEventRoutes,
   registerPublicEventsApiV1Routes,
   registerRegistrationFormRoutes,
   registerTicketRoutes,
@@ -29,7 +25,6 @@ import {
 import {
   AsaasClientError,
   authorizeFinancialRoute,
-  createAsaasChargeForExistingTransaction,
   deleteAsaasPayment,
   finalizeProviderTransactionCancellation,
   finalizeProviderTransactionReversal,
@@ -43,6 +38,8 @@ import Fastify, {
   type FastifyInstance
 } from "fastify";
 import { prepareEventsApiCheckoutSecurityOperational, waitCheckoutPendingDrain } from "./checkout-security.operational.js";
+import { prepareEventsApiCheckoutV2 } from "./checkout-v2.prepared.js";
+import { registerExclusiveCheckoutV2 } from "../../../packages/events/src/checkout-v2.cutover.prepared.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const jwtSecret = getJwtSecret();
@@ -89,263 +86,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app, prisma);
 
-  await registerPublicEventRoutes(
-    app,
-    prisma,
-    async (
-      registrationId,
-      paymentRequest
-    ) => {
-      const checkout =
-        await getEventRegistrationPaymentCheckout(
-          prisma,
-          registrationId
-        );
-
-      if (
-        !checkout ||
-        checkout.provider === "TEST"
-      ) {
-        return null;
-      }
-
-      if (checkout.provider !== "ASAAS") {
-        throw new Error(
-          "EVENT_PAYMENT_PROVIDER_UNSUPPORTED"
-        );
-      }
-
-      const cpf =
-        paymentRequest.cpf
-          ?.replace(/\D/g, "") ?? "";
-
-      if (cpf.length !== 11) {
-        throw new Error(
-          "PAYMENT_CUSTOMER_CPF_REQUIRED"
-        );
-      }
-
-      const paymentMethod =
-        paymentRequest.paymentMethod;
-
-      const billingType =
-        paymentMethod === "PIX"
-          ? "PIX" as const
-          : "CREDIT_CARD" as const;
-
-      try {
-        if (
-          checkout.providerPaymentId
-        ) {
-          const existingPayment =
-            await getAsaasPayment(
-              checkout.providerPaymentId
-            );
-
-          if (
-            existingPayment.billingType !==
-              billingType
-          ) {
-            if (
-              existingPayment.status ===
-                "RECEIVED" ||
-              existingPayment.status ===
-                "CONFIRMED"
-            ) {
-              const paymentApplied =
-                await applyEventPaymentProviderStatus(
-                  prisma,
-                  checkout.churchId,
-                  {
-                    eventPaymentId:
-                      checkout.paymentId,
-                    providerPaymentId:
-                      checkout.providerPaymentId,
-                    paymentStatus: "PAID"
-                  }
-                );
-
-              if (!paymentApplied) {
-                throw new Error(
-                  "EVENT_PAYMENT_PROVIDER_STATUS_NOT_APPLIED"
-                );
-              }
-
-              return null;
-            }
-
-            if (
-              existingPayment.status !==
-                "PENDING" &&
-              existingPayment.status !==
-                "OVERDUE"
-            ) {
-              throw new Error(
-                "PAYMENT_METHOD_ALREADY_SELECTED"
-              );
-            }
-
-            await deleteAsaasPayment(
-              checkout.providerPaymentId
-            );
-
-            const providerReset =
-              await resetPendingEventPaymentProviderReference(
-                prisma,
-                checkout.churchId,
-                checkout.paymentId,
-                checkout.providerPaymentId
-              );
-
-            if (!providerReset) {
-              throw new Error(
-                "EVENT_PAYMENT_PROVIDER_REFERENCE_NOT_RESET"
-              );
-            }
-
-            app.log.info(
-              {
-                churchId:
-                  checkout.churchId,
-                eventPaymentId:
-                  checkout.paymentId,
-                paymentMethod
-              },
-              "Event payment charge replaced"
-            );
-          }
-        }
-
-        const charge =
-          await createAsaasChargeForExistingTransaction(
-            prisma,
-            checkout.churchId,
-            {
-              transactionId:
-                checkout.transactionId,
-              referenceId:
-                checkout.paymentId,
-              billingType,
-              customer: {
-                ...checkout.customer,
-                cpfCnpj: cpf
-              },
-              description:
-                `Inscrição - ${checkout.eventTitle}`,
-              dueDate:
-                new Date()
-                  .toISOString()
-                  .slice(0, 10),
-              value: checkout.amount
-            }
-          );
-
-        await attachEventPaymentProviderId(
-          prisma,
-          checkout.churchId,
-          checkout.paymentId,
-          charge.paymentId
-        );
-
-        if (
-          charge.payment.status === "RECEIVED" ||
-          charge.payment.status === "CONFIRMED"
-        ) {
-          const paymentApplied =
-            await applyEventPaymentProviderStatus(
-              prisma,
-              checkout.churchId,
-              {
-                eventPaymentId:
-                  checkout.paymentId,
-                providerPaymentId:
-                  charge.paymentId,
-                paymentStatus: "PAID"
-              }
-            );
-
-          if (!paymentApplied) {
-            throw new Error(
-              "EVENT_PAYMENT_PROVIDER_STATUS_NOT_APPLIED"
-            );
-          }
-
-          return null;
-        }
-
-        const actualBillingType =
-          charge.payment.billingType;
-
-        if (
-          actualBillingType === "PIX"
-        ) {
-          if (!charge.pixQrCode) {
-            throw new Error(
-              "EVENT_PIX_QR_CODE_NOT_AVAILABLE"
-            );
-          }
-
-          return {
-            method: "PIX" as const,
-            pix: {
-              encodedImage:
-                charge.pixQrCode
-                  .encodedImage,
-              payload:
-                charge.pixQrCode.payload,
-              expirationDate:
-                charge.pixQrCode
-                  .expirationDate
-            }
-          };
-        }
-
-        if (!charge.invoiceUrl) {
-          throw new Error(
-            "EVENT_PAYMENT_INVOICE_URL_NOT_AVAILABLE"
-          );
-        }
-
-        const cardMethod =
-          paymentMethod ===
-          "DEBIT_CARD"
-            ? "DEBIT_CARD" as const
-            : "CREDIT_CARD" as const;
-
-        return {
-          method: cardMethod,
-          redirectUrl:
-            charge.invoiceUrl
-        };
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          (
-            error.message ===
-              "PAYMENT_METHOD_REPLACEMENT_REQUIRED" ||
-            error.message ===
-              "PAYMENT_METHOD_ALREADY_SELECTED"
-          )
-        ) {
-          throw error;
-        }
-
-        app.log.error(
-          {
-            err: error,
-            registrationId,
-            eventPaymentId:
-              checkout.paymentId
-          },
-          "Event payment checkout failed"
-        );
-
-        throw new Error(
-          "PAYMENT_CHECKOUT_FAILED"
-        );
-      }
-    }
-  );
+  await registerExclusiveCheckoutV2(app, prisma, prepareEventsApiCheckoutV2(prisma));
 
   await registerPublicParticipantAppRoutes(
     app,

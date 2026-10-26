@@ -215,9 +215,11 @@ test("CPF requirement survives safe status polling and resume never persists CPF
   } finally { h.client.dispose(); }
 });
 
-test("active public page stays legacy; prepared wrapper has no route/env activation or automatic resume", async () => {
+test("active public page uses the prepared wrapper; preview and hook stay without env activation or automatic resume", async () => {
   const page = await readFile(new URL("../app/eventos/[eventId]/page.tsx", import.meta.url), "utf8");
-  assert.equal(page.includes("prepareCheckoutV2"), false); assert.equal(page.includes("PreparedPublicEventV2"), false);
+  assert.equal(page.includes("PreparedPublicEventV2"), true);
+  const preview = await readFile(new URL("../app/dashboard/eventos/[eventId]/preview/event-preview-client.tsx", import.meta.url), "utf8");
+  assert.equal(preview.includes("PreparedPublicEventV2"), false);
   const wrapper = await readFile(new URL("../app/eventos/_components/public-event-v2.prepared.tsx", import.meta.url), "utf8");
   assert.equal(wrapper.includes("NEXT_PUBLIC_CHECKOUT_V2"), false);
   const hook = await readFile(new URL("../app/eventos/_components/use-prepared-checkout-v2.ts", import.meta.url), "utf8");
