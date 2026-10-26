@@ -21,7 +21,10 @@ deploy e nenhum valor comercial de produção foi escolhido.
   AOF `always`, ACL `checkout_runtime` sem `+set`, senhas obrigatórias via env.
 - Init administrativo:
   `node --import tsx --tsconfig tsconfig.base.json packages/events/test/init-checkout-security-gate.mjs --initialize-legacy-gate`
-  Só loopback; recusa `CLOSED` e fingerprint divergente; não reabre gate.
+  Só loopback; recusa `CLOSED`/`V2` e fingerprint divergente; não reabre gate.
+- Ativação administrativa `CLOSED → V2`:
+  `node --import tsx packages/events/test/activate-checkout-security-v2-gate.mjs --activate-checkout-v2-gate`
+  Só loopback; recusa missing/`LEGACY`/fingerprint divergente; não volta a `LEGACY`.
 
 ## Contrato de env (sem defaults)
 

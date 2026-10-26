@@ -99,12 +99,27 @@ export function summarizeCheckoutSecurityOperational(values: Env) {
 
 export const CHECKOUT_SECURITY_INIT_LEGACY_SCRIPT = `
 local current = redis.call('GET', KEYS[1])
-if current == 'CLOSED' then return redis.error_reply('CHECKOUT_SECURITY_GATE_CLOSED') end
+if current == 'CLOSED' or (type(current) == 'string' and string.sub(current, 1, 3) == 'V2:') then
+  return redis.error_reply('CHECKOUT_SECURITY_GATE_CLOSED')
+end
 if current == false or current == ARGV[1] then
   redis.call('SET', KEYS[1], ARGV[1])
   return 'OK'
 end
 return redis.error_reply('CHECKOUT_SECURITY_GATE_MISMATCH')
+`;
+
+export const CHECKOUT_SECURITY_ACTIVATE_V2_SCRIPT = `
+local current = redis.call('GET', KEYS[1])
+if current == ARGV[1] then return 'OK' end
+if current ~= 'CLOSED' then
+  if type(current) == 'string' and string.sub(current, 1, 3) == 'V2:' then
+    return redis.error_reply('CHECKOUT_SECURITY_GATE_MISMATCH')
+  end
+  return redis.error_reply('CHECKOUT_SECURITY_GATE_NOT_CLOSED')
+end
+redis.call('SET', KEYS[1], ARGV[1])
+return 'OK'
 `;
 
 export async function initializeCheckoutSecurityLegacyGate(
@@ -120,6 +135,25 @@ export async function initializeCheckoutSecurityLegacyGate(
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("CHECKOUT_SECURITY_GATE_CLOSED")) throw new Error("CHECKOUT_SECURITY_GATE_CLOSED");
+    if (message.includes("CHECKOUT_SECURITY_GATE_MISMATCH")) throw new Error("CHECKOUT_SECURITY_GATE_MISMATCH");
+    if (message === "CHECKOUT_SECURITY_UNAVAILABLE") throw error;
+    throw new Error("CHECKOUT_SECURITY_UNAVAILABLE");
+  }
+}
+
+export async function activateCheckoutSecurityV2Gate(
+  redis: { eval(script: string, numberOfKeys: number, ...args: Array<string | number>): Promise<unknown> },
+  policyFingerprint: string
+) {
+  if (!/^[a-f0-9]{64}$/.test(policyFingerprint)) throw new Error("CHECKOUT_SECURITY_CONFIGURATION_INVALID");
+  try {
+    const result = await redis.eval(
+      CHECKOUT_SECURITY_ACTIVATE_V2_SCRIPT, 1, CHECKOUT_SECURITY_GATE_KEY, `V2:${policyFingerprint}`
+    );
+    if (result !== "OK") throw new Error("CHECKOUT_SECURITY_UNAVAILABLE");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("CHECKOUT_SECURITY_GATE_NOT_CLOSED")) throw new Error("CHECKOUT_SECURITY_GATE_NOT_CLOSED");
     if (message.includes("CHECKOUT_SECURITY_GATE_MISMATCH")) throw new Error("CHECKOUT_SECURITY_GATE_MISMATCH");
     if (message === "CHECKOUT_SECURITY_UNAVAILABLE") throw error;
     throw new Error("CHECKOUT_SECURITY_UNAVAILABLE");

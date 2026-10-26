@@ -73,14 +73,10 @@ uma API com política diferente contorne a outra. Os valores numéricos dos test
 são exclusivamente sintéticos.
 
 O gate `events:checkout-security:{checkout}:gate` só admite
-`LEGACY:<policyFingerprint>` exatamente correspondente. Não há criação/abertura
-automática desse valor pelo código: numa eventual implantação da proteção sobre
-o legado, a inicialização seria ato administrativo explícito e revisado. O método
-`close()` grava `CLOSED`, sem TTL; não existe método de reopen ou estado v2.
-Missing/flush nunca abre checkout. Resta validar ACL/TLS, persistência, latência,
-capacidade e failover: restaurar um snapshot antigo com LEGACY não pode ser
-tratado como fechamento durável. Gate distribuído não substitui contenção no
-ingress e retirada dos processos antigos.
+`V2:<policyFingerprint>` exatamente correspondente. A transição administrativa
+é somente `CLOSED → V2` com o mesmo fingerprint compartilhado; não há retorno
+a `LEGACY`. `close()` grava `CLOSED`, sem TTL. Missing/flush nunca abre
+checkout. Restaurar um snapshot antigo com `LEGACY:` não reabre admissão.
 
 ## Fechamento coordenado, sem ativar v2
 

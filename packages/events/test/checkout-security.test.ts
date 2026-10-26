@@ -345,7 +345,8 @@ test("Redis adapter sends one atomic shared-slot gate/quota operation with expir
   assert.equal(calls[0]![0], CHECKOUT_SECURITY_CONSUME_SCRIPT); assert.equal(calls[0]![1], 3);
   assert.equal(calls[0]![2], CHECKOUT_SECURITY_GATE_KEY);
   assert.deepEqual(calls[0]!.slice(-4), [60_000, "fingerprint", 3, 2]);
-  assert.match(CHECKOUT_SECURITY_CONSUME_SCRIPT, /PEXPIRE/); assert.match(CHECKOUT_SECURITY_CONSUME_SCRIPT, /gate ~= 'LEGACY:'/);
+  assert.match(CHECKOUT_SECURITY_CONSUME_SCRIPT, /PEXPIRE/); assert.match(CHECKOUT_SECURITY_CONSUME_SCRIPT, /gate ~= 'V2:'/);
+  assert.equal(CHECKOUT_SECURITY_CONSUME_SCRIPT.includes("LEGACY:"), false);
   for (const invalid of [null, [], [0, -1], [2, 0], [0, NaN], [0, "12"], [0, 60_001]]) { reply = invalid; await assert.rejects(adapter.consume(buckets, 60_000, "fingerprint")); }
   reply = [1, 0]; assert.equal((await adapter.consume(buckets, 60_000, "fingerprint")).closed, true);
   reply = "OK"; await adapter.close(); assert.match(String(calls.at(-1)![0]), /'CLOSED'/);

@@ -23,9 +23,12 @@ Script administrativo, só loopback, flag explícita, cliente admin (`+set`):
 
 `node --import tsx packages/events/test/close-checkout-security-gate.mjs --close-checkout-gate`
 
-Drenagem: `waitCheckoutPendingDrain` no `onClose` dos dois builders. Este corte
-valida o script e a drenagem em Redis descartável (55438). **Não** executa o
-fechamento em 55439.
+Ativação administrativa `CLOSED → V2`, só loopback, flag explícita, mesmo fingerprint:
+
+`node --import tsx packages/events/test/activate-checkout-security-v2-gate.mjs --activate-checkout-v2-gate`
+
+Drenagem: `waitCheckoutPendingDrain` no `onClose` dos dois builders. Os scripts
+são validados em Redis descartável (55438). Sem retorno a `LEGACY`.
 
 ## Composição exclusiva v2 — ligada nos builders e na página pública
 

@@ -38,7 +38,7 @@ const redisRoot = "events:checkout-security:{checkout}:";
 export const CHECKOUT_SECURITY_GATE_KEY = `${redisRoot}gate`;
 export const CHECKOUT_SECURITY_CONSUME_SCRIPT = `
 local gate = redis.call('GET', KEYS[1])
-if gate ~= 'LEGACY:' .. ARGV[2] then return {1, 0} end
+if gate ~= 'V2:' .. ARGV[2] then return {1, 0} end
 for i = 2, #KEYS do
   local count = redis.call('INCR', KEYS[i])
   if count == 1 then redis.call('PEXPIRE', KEYS[i], ARGV[1]) end
@@ -58,7 +58,7 @@ export function createRedisCheckoutSecurityStore(redis: RedisCommands): Checkout
       return { closed: result[0] === 1, retryAfterMs: result[1] };
     },
     async close() {
-      // Monotonic close. No open/reopen method, local flag or v2 activation path.
+      // Monotonic close. Activation to V2 is an admin-only CLOSED→V2 transition.
       const result = await redis.eval("return redis.call('SET', KEYS[1], 'CLOSED')", 1, CHECKOUT_SECURITY_GATE_KEY);
       if (result !== "OK") throw new Error("CHECKOUT_SECURITY_UNAVAILABLE");
     }

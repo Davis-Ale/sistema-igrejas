@@ -53,7 +53,7 @@ async function appFixture(factory: typeof prepareEventsApiCheckoutSecurity, patc
   app.post(route, async () => { calls++; return { ok: true }; });
   return { app, security, client, store, calls: () => calls };
 }
-const prime = (fingerprint: string) => admin.set(CHECKOUT_SECURITY_GATE_KEY, `LEGACY:${fingerprint}`);
+const prime = (fingerprint: string) => admin.set(CHECKOUT_SECURITY_GATE_KEY, `V2:${fingerprint}`);
 
 test('real Lua missing gate fails closed and runtime ACL rejects keys outside its namespace', async () => {
   const h = await appFixture(prepareEventsApiCheckoutSecurity);
