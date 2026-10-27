@@ -29,6 +29,10 @@ test("operational parser rejects missing, unsafe or production-default-like valu
   assert.match(loaded.policyFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(loaded.config.origins.length, 2);
   assert.equal(classifyCheckoutRedisUrl(env.REDIS_URL), "REDIS_LOOPBACK");
+  assert.equal(classifyCheckoutRedisUrl("redis://checkout_runtime:secret@checkout-redis:6379/0"), "REDIS_INTERNAL");
+  assert.equal(loadCheckoutSecurityOperational({
+    ...env, REDIS_URL: "redis://checkout_runtime:operational-runtime-secret@checkout-redis:6379/0"
+  }).runtimeUrl, "redis://checkout_runtime:operational-runtime-secret@checkout-redis:6379/0");
   assert.equal(classifyCheckoutRedisUrl("rediss://checkout_runtime:secret@redis.example.invalid/0"), "REDISS_PUBLIC");
   assert.equal(classifyCheckoutRedisUrl("redis://checkout_runtime:secret@redis.example.invalid/0"), "OTHER");
   assert.equal(classifyCheckoutRedisUrl("rediss://checkout_runtime:secret@host.invalid/0?extra=1"), "UNSAFE_URL");

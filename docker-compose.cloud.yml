@@ -1,0 +1,198 @@
+# Permanent cloud stack for the existing APIs, PostgreSQL 17 and checkout Redis.
+# Not started by the default compose. Not a Cloudflare Tunnel, trycloudflare or Railway.
+# Does not bind to the operator PC. docker compose -f docker-compose.cloud.yml config
+# Do not up without an authorized owned hostname, DNS and required secrets.
+name: sistema-igrejas-cloud
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sistema_igrejas_cloud_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: sistema_igrejas
+    volumes:
+      - cloud_postgres_data:/var/lib/postgresql/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ "$$POSTGRES_PASSWORD" = "postgres" ]; then
+          echo POSTGRES_PASSWORD_NOT_COMMERCIAL >&2
+          exit 1
+        fi
+        exec /usr/local/bin/docker-entrypoint.sh postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d sistema_igrejas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cloud
+
+  checkout-redis:
+    image: redis:7-alpine
+    container_name: sistema_igrejas_cloud_checkout_redis
+    restart: unless-stopped
+    environment:
+      CHECKOUT_REDIS_PASSWORD: ${CHECKOUT_REDIS_PASSWORD:?CHECKOUT_REDIS_PASSWORD is required}
+      CHECKOUT_REDIS_RUNTIME_PASSWORD: ${CHECKOUT_REDIS_RUNTIME_PASSWORD:?CHECKOUT_REDIS_RUNTIME_PASSWORD is required}
+    volumes:
+      - cloud_checkout_redis_data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        umask 077
+        test -n "$$CHECKOUT_REDIS_PASSWORD"
+        test -n "$$CHECKOUT_REDIS_RUNTIME_PASSWORD"
+        printf 'user default on >%s ~* &* +@all\nuser checkout_runtime on >%s ~events:checkout-security:{checkout}:* +ping +get +incr +pexpire +pttl +eval\n' \
+          "$$CHECKOUT_REDIS_PASSWORD" "$$CHECKOUT_REDIS_RUNTIME_PASSWORD" > /data/users.acl
+        exec redis-server --bind 0.0.0.0 --protected-mode yes --requirepass "$$CHECKOUT_REDIS_PASSWORD" \
+          --aclfile /data/users.acl --dir /data --appendonly yes --appendfsync always --save ""
+    networks:
+      - cloud
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/cloud/Dockerfile
+    container_name: sistema_igrejas_cloud_migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sistema_igrejas?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app/packages/database
+    entrypoint: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    networks:
+      - cloud
+
+  api-br:
+    build:
+      context: .
+      dockerfile: deploy/cloud/Dockerfile
+    container_name: sistema_igrejas_cloud_api_br
+    restart: unless-stopped
+    environment:
+      APP_DIR: api-br
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3333"
+      API_PUBLIC_HOST: ${API_PUBLIC_HOST:?API_PUBLIC_HOST is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sistema_igrejas?schema=public
+      REDIS_URL: redis://checkout_runtime:${CHECKOUT_REDIS_RUNTIME_PASSWORD:?CHECKOUT_REDIS_RUNTIME_PASSWORD is required}@checkout-redis:6379/0
+      CHECKOUT_SECURITY_ORIGINS: ${CHECKOUT_SECURITY_ORIGINS:?CHECKOUT_SECURITY_ORIGINS is required}
+      CHECKOUT_SECURITY_BUCKET_SECRET: ${CHECKOUT_SECURITY_BUCKET_SECRET:?CHECKOUT_SECURITY_BUCKET_SECRET is required}
+      CHECKOUT_SECURITY_WINDOW_MS: ${CHECKOUT_SECURITY_WINDOW_MS:?CHECKOUT_SECURITY_WINDOW_MS is required}
+      CHECKOUT_SECURITY_IP_LIMIT: ${CHECKOUT_SECURITY_IP_LIMIT:?CHECKOUT_SECURITY_IP_LIMIT is required}
+      CHECKOUT_SECURITY_CREDENTIAL_LIMIT: ${CHECKOUT_SECURITY_CREDENTIAL_LIMIT:?CHECKOUT_SECURITY_CREDENTIAL_LIMIT is required}
+      CHECKOUT_SECURITY_BODY_LIMIT: ${CHECKOUT_SECURITY_BODY_LIMIT:?CHECKOUT_SECURITY_BODY_LIMIT is required}
+      CHECKOUT_SECURITY_STORE_TIMEOUT_MS: ${CHECKOUT_SECURITY_STORE_TIMEOUT_MS:?CHECKOUT_SECURITY_STORE_TIMEOUT_MS is required}
+      CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS: ${CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS:?CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS is required}
+      CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP: "false"
+      CHECKOUT_SECURITY_HTTPS_ONLY: "true"
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      ASAAS_WEBHOOK_PUBLIC_URL: https://${API_PUBLIC_HOST}/webhooks/asaas
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EVENTS_EMAIL_FROM: ${EVENTS_EMAIL_FROM:-}
+      EVENTS_APP_BASE_URL: ${EVENTS_APP_BASE_URL:-}
+      EVENTS_INTEGRATIONS_ENCRYPTION_KEY: ${EVENTS_INTEGRATIONS_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      checkout-redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - cloud
+
+  events-api:
+    build:
+      context: .
+      dockerfile: deploy/cloud/Dockerfile
+    container_name: sistema_igrejas_cloud_events_api
+    restart: unless-stopped
+    environment:
+      APP_DIR: events-api
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3002"
+      API_PUBLIC_HOST: ${API_PUBLIC_HOST:?API_PUBLIC_HOST is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sistema_igrejas?schema=public
+      REDIS_URL: redis://checkout_runtime:${CHECKOUT_REDIS_RUNTIME_PASSWORD:?CHECKOUT_REDIS_RUNTIME_PASSWORD is required}@checkout-redis:6379/0
+      CHECKOUT_SECURITY_ORIGINS: ${CHECKOUT_SECURITY_ORIGINS:?CHECKOUT_SECURITY_ORIGINS is required}
+      CHECKOUT_SECURITY_BUCKET_SECRET: ${CHECKOUT_SECURITY_BUCKET_SECRET:?CHECKOUT_SECURITY_BUCKET_SECRET is required}
+      CHECKOUT_SECURITY_WINDOW_MS: ${CHECKOUT_SECURITY_WINDOW_MS:?CHECKOUT_SECURITY_WINDOW_MS is required}
+      CHECKOUT_SECURITY_IP_LIMIT: ${CHECKOUT_SECURITY_IP_LIMIT:?CHECKOUT_SECURITY_IP_LIMIT is required}
+      CHECKOUT_SECURITY_CREDENTIAL_LIMIT: ${CHECKOUT_SECURITY_CREDENTIAL_LIMIT:?CHECKOUT_SECURITY_CREDENTIAL_LIMIT is required}
+      CHECKOUT_SECURITY_BODY_LIMIT: ${CHECKOUT_SECURITY_BODY_LIMIT:?CHECKOUT_SECURITY_BODY_LIMIT is required}
+      CHECKOUT_SECURITY_STORE_TIMEOUT_MS: ${CHECKOUT_SECURITY_STORE_TIMEOUT_MS:?CHECKOUT_SECURITY_STORE_TIMEOUT_MS is required}
+      CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS: ${CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS:?CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS is required}
+      CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP: "false"
+      CHECKOUT_SECURITY_HTTPS_ONLY: "true"
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      ASAAS_WEBHOOK_PUBLIC_URL: https://${API_PUBLIC_HOST}/webhooks/asaas
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EVENTS_EMAIL_FROM: ${EVENTS_EMAIL_FROM:-}
+      EVENTS_APP_BASE_URL: ${EVENTS_APP_BASE_URL:-}
+      EVENTS_INTEGRATIONS_ENCRYPTION_KEY: ${EVENTS_INTEGRATIONS_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      checkout-redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - cloud
+
+  api-https:
+    image: caddy:2-alpine
+    container_name: sistema_igrejas_cloud_api_https
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_PUBLIC_HOST: ${API_PUBLIC_HOST:?API_PUBLIC_HOST is required}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?CADDY_ACME_EMAIL is required}
+    volumes:
+      - ./deploy/cloud/Caddyfile:/etc/caddy/Caddyfile:ro
+      - cloud_caddy_data:/data
+      - cloud_caddy_config:/config
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        test -n "$$API_PUBLIC_HOST"
+        test -n "$$CADDY_ACME_EMAIL"
+        case "$$API_PUBLIC_HOST" in
+          *trycloudflare*|*cfargotunnel*|*railway*|*localhost*|*[/:]* )
+            echo API_PUBLIC_HOST_NOT_FIXED_HTTPS >&2
+            exit 1
+            ;;
+        esac
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    depends_on:
+      - api-br
+    networks:
+      - cloud
+
+networks:
+  cloud:
+
+volumes:
+  cloud_postgres_data:
+  cloud_checkout_redis_data:
+  cloud_caddy_data:
+  cloud_caddy_config:

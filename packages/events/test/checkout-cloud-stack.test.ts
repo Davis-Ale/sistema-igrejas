@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+
+test("cloud stack hosts APIs, PostgreSQL and Redis without the PC, Railway or tunnels", async () => {
+  const main = await readFile(new URL("../../../docker-compose.yml", import.meta.url), "utf8");
+  const cloud = await readFile(new URL("../../../docker-compose.cloud.yml", import.meta.url), "utf8");
+  const dockerfile = await readFile(new URL("../../../deploy/cloud/Dockerfile", import.meta.url), "utf8");
+  const entry = await readFile(new URL("../../../deploy/cloud/api-entrypoint.sh", import.meta.url), "utf8");
+  const caddy = await readFile(new URL("../../../deploy/cloud/Caddyfile", import.meta.url), "utf8");
+  const dockerignore = await readFile(new URL("../../../.dockerignore", import.meta.url), "utf8");
+
+  assert.equal(main.includes("sistema-igrejas-cloud"), false);
+  assert.equal(main.includes("caddy"), false);
+  assert.match(cloud, /name:\s*sistema-igrejas-cloud/);
+  assert.match(cloud, /image:\s*postgres:17-alpine/);
+  assert.match(cloud, /image:\s*redis:7-alpine/);
+  assert.match(cloud, /image:\s*caddy:2-alpine/);
+  assert.match(cloud, /APP_DIR: api-br/);
+  assert.match(cloud, /APP_DIR: events-api/);
+  assert.match(cloud, /NODE_ENV: production/);
+  assert.match(cloud, /CHECKOUT_SECURITY_HTTPS_ONLY: "true"/);
+  assert.match(cloud, /CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP: "false"/);
+  assert.match(cloud, /redis:\/\/checkout_runtime:.*@checkout-redis:6379\/0/);
+  assert.match(cloud, /@postgres:5432\/sistema_igrejas/);
+  assert.match(caddy, /reverse_proxy api-br:3333/);
+  assert.equal(cloud.includes("host.docker.internal"), false);
+  assert.equal(cloud.includes("5433:5432"), false);
+  assert.equal(cloud.includes("55439"), false);
+  assert.equal(cloud.includes("3333:3333"), false);
+  assert.equal(cloud.includes("up.railway.app"), false);
+  assert.equal(cloud.includes("cloudflared"), false);
+  assert.equal(cloud.includes("trycloudflare"), true);
+  assert.equal(cloud.includes("cfargotunnel"), true);
+  assert.equal(/checkout_runtime[^\n]*\+set/.test(cloud), false);
+  assert.match(cloud, /POSTGRES_PASSWORD_NOT_COMMERCIAL/);
+  assert.match(entry, /PAYMENT_TEST_MODE_FORBIDDEN/);
+  assert.match(entry, /API_PUBLIC_HOST_NOT_FIXED_HTTPS/);
+  assert.match(dockerfile, /FROM node:24-bookworm-slim/);
+  assert.equal(dockerfile.includes(".env"), false);
+  assert.equal(dockerignore.includes(".env"), true);
+  assert.equal(caddy.includes("/api/"), false);
+});

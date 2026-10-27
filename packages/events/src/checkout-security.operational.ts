@@ -15,6 +15,7 @@ type Env = Record<string, string | undefined>;
 const fail = (): never => { throw new Error("CHECKOUT_SECURITY_CONFIGURATION_INVALID"); };
 const present = (value: string | undefined): value is string => typeof value === "string" && value.trim().length > 0;
 const loopback = (hostname: string) => ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+const dockerInternalRedis = (hostname: string) => hostname === "checkout-redis";
 const unusedStore: CheckoutSecurityStore = {
   async consume() { throw new Error("CHECKOUT_SECURITY_UNAVAILABLE"); },
   async close() { throw new Error("CHECKOUT_SECURITY_UNAVAILABLE"); }
@@ -25,9 +26,11 @@ export function classifyCheckoutRedisUrl(value: string | undefined) {
   try {
     const url = new URL(value);
     if (url.search || url.hash) return "UNSAFE_URL";
-    const local = loopback(url.hostname);
+    const host = url.hostname.toLowerCase();
+    const local = loopback(host);
     if (url.protocol === "rediss:") return local ? "REDISS_LOOPBACK" : "REDISS_PUBLIC";
     if (url.protocol === "redis:" && local) return "REDIS_LOOPBACK";
+    if (url.protocol === "redis:" && dockerInternalRedis(host)) return "REDIS_INTERNAL";
     return "OTHER";
   } catch { return "INVALID"; }
 }
@@ -49,9 +52,11 @@ function runtimeRedisUrl(value: string | undefined) {
   if (!present(value)) return fail();
   let url: URL;
   try { url = new URL(value.trim()); } catch { return fail(); }
-  const local = loopback(url.hostname);
+  const host = url.hostname.toLowerCase();
+  const local = loopback(host);
+  const internal = dockerInternalRedis(host);
   if (url.search || url.hash || url.pathname !== "/0" || url.username !== "checkout_runtime" || !url.password
-    || !(url.protocol === "rediss:" || (url.protocol === "redis:" && local))) return fail();
+    || !(url.protocol === "rediss:" || (url.protocol === "redis:" && (local || internal)))) return fail();
   return value.trim();
 }
 

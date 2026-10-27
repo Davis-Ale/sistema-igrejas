@@ -16,11 +16,11 @@ node --import tsx packages/events/test/inspect-checkout-operational.mjs --provid
 webhook, e-mails nem corpos de provider.
 
 Webhook Asaas sandbox exige HTTPS fixo em `ASAAS_WEBHOOK_PUBLIC_URL`
-(`https://…/webhooks/asaas`). Infra compatível: overlay Caddy
-`docker-compose.api-https.yml` na frente do `api-br` existente (`:3333`),
-Let’s Encrypt, hostname público já pertencente ao operador. Cloudflare
-Tunnel, trycloudflare e Railway são recusados. O overlay não sobe no
-compose padrão e não publica sem `API_PUBLIC_HOST` autorizado. Aplicação no Asaas:
+(`https://…/webhooks/asaas`). Infra permanente: `docker-compose.cloud.yml`
+(Caddy + `api-br` + `events-api` + PostgreSQL 17 + Redis 7), Let’s Encrypt,
+hostname público já pertencente ao operador. Sem Railway, túnel ou
+`host.docker.internal`. O compose padrão local permanece só PostgreSQL e
+não publica sem `API_PUBLIC_HOST` autorizado. Aplicação no Asaas:
 
 `node --import tsx packages/events/test/apply-checkout-asaas-webhook.mjs --apply-asaas-sandbox-webhook`
 
