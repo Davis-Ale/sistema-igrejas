@@ -5,9 +5,11 @@ Escopo: evidência objetiva do código atual. **Não separar** neste corte.
 
 A extração prevista é de **produto** (aplicação, dashboard, navegação, identidade, configuração e deploy próprios), na forma mais simples compatível com o domínio. Não obriga microserviços, Kafka, Kubernetes, service mesh, novo banco ou nova cloud.
 
+**Item 4 obrigatório (2026-10-27):** uma implementação, dois acessos. Eventos continua no Sistema Igrejas **e** funciona como SaaS para quem contratar só Eventos. Não redesenhar, não reconstruir, não duplicar. Contrato: `packages/events/src/product-access.ts`.
+
 ## Decisão deste corte
 
-Eventos permanece standalone-ready **no monorepo atual**, com o mesmo PostgreSQL e o mesmo JWT. Nenhuma rota, pacote, deploy ou schema foi extraído.
+Eventos permanece standalone-ready **no monorepo atual**, com o mesmo PostgreSQL e o mesmo JWT. Nenhuma rota, pacote, deploy ou schema foi extraído. O caminho de extração **não** desliga o handoff de `web-br` nem cria um segundo Eventos.
 
 ## Backup e migration local (pré-requisito deste corte)
 
@@ -63,7 +65,16 @@ O mesmo JWT (`packages/auth`) autentica `api-br` e `events-api`. `packages/event
 
 O Admin (`events-admin`) usa `NEXT_PUBLIC_API_BASE_URL` com default `http://localhost:3333` (`api-br`). Extração de processo falha se o Admin continuar falando com o monólito da igreja.
 
-`web-br` `/dashboard/eventos` já é handoff, não uma segunda implementação.
+`web-br` `/dashboard/eventos` já é handoff, não uma segunda implementação. O SaaS direto já entra em `events-admin` `/login` e cai em `/dashboard/eventos`. Os dois modos usam o mesmo app, JWT, RBAC, checkout e dados.
+
+## Acesso dual (item 4 obrigatório)
+
+Contrato: `EVENTS_PRODUCT_ACCESS` em `packages/events/src/product-access.ts`.
+
+- `CHURCH_SUITE`: `apps/web-br` `/dashboard/eventos` → iframe `/auth/handoff` → `events-admin` `/dashboard/eventos`.
+- `EVENTS_SAAS`: `apps/events-admin` `/login` → `/dashboard/eventos`.
+- `web-br` não importa `@sistema-igrejas/events` e não registra rotas de Eventos.
+- Telas, contratos, dados, RBAC e checkout existentes permanecem. Este corte não redesenha.
 
 ## Isolamento multi-tenant
 
@@ -131,8 +142,8 @@ Não são bloqueios de extração: apps, pente-fino, IA, observabilidade.
 1. Manter monorepo **ou** extrair apps/packages de Eventos **sem** novo banco.
 2. Preservar JWT/`packages/auth`, `churchId`, Transaction única, Asaas só como adapter.
 3. Desmontar `registerFinancialRoutes` (Financeiro geral) de `events-api`; manter só financeiro de Eventos + webhook da cobrança de evento.
-4. Apontar `events-admin` para o processo Eventos, não para `api-br`.
-5. Manter `web-br` como handoff.
+4. **Obrigatório — uma implementação, dois acessos.** O mesmo `events-admin` + `packages/events` serve (a) Sistema Igrejas via handoff `web-br` `/dashboard/eventos` → `/auth/handoff` e (b) SaaS Eventos via `/login`. Não redesenhar, não duplicar, não remover o handoff, não exigir dashboard da igreja no SaaS. Se o runtime da API mudar, os dois acessos permanecem neste app e nestes contratos.
+5. `web-br` continua **somente** encaminhamento. Proibido segundo Eventos em `web-br`.
 6. Deixar o assistente em `api-br` até haver contrato HTTP de Eventos; não criar pacote de IA.
 7. Auditar Person/Visitor na inscrição: snapshot no Registration vs FK viva — decidir no corte de extração, sem duplicar identidade agora.
 8. Não reduzir RBAC, IDOR, PII, auditoria nem proteção de secrets.
@@ -147,3 +158,4 @@ Não são bloqueios de extração: apps, pente-fino, IA, observabilidade.
 | Isolamento multi-tenant no domínio atual é suficiente para extrair produto sem novo banco? | Sim, se JWT/`churchId`/FKs forem preservados. |
 | A futura IA bloqueia a extração? | Não. |
 | Extraído neste corte? | Não. |
+| Uma implementação e dois acessos (SI + SaaS)? | Sim no código atual (handoff + login). Extração não pode desfazer. |

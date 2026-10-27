@@ -1,5 +1,12 @@
 # CURRENT STATE
 
+## EXTRAÇÃO — ITEM 4 OBRIGATÓRIO, ACESSO DUAL (2026-10-27)
+
+- Uma implementação (`packages/events` + `apps/events-admin`), dois acessos: Sistema Igrejas (handoff `web-br` `/dashboard/eventos` → `/auth/handoff`) e SaaS Eventos (`/login` → `/dashboard/eventos`).
+- Contrato: `packages/events/src/product-access.ts`. Regra: `.cursor/rules/events-dual-access.mdc`. Telas, contratos, RBAC, checkout e dados existentes preservados; sem redesenho.
+- Extração física **não** executada e **não** pode remover o handoff nem duplicar Eventos em `web-br`.
+- Diffs alheios preservados.
+
 ## EXTRAÇÃO FÍSICA — AUDITORIA 2026-10-27 (NÃO SEPARAR)
 
 - Backup recuperável do PostgreSQL local `127.0.0.1:5433/sistema_igrejas` **antes** da migration: `.cursor/tmp/backups/sistema_igrejas-5433-20261027-144054.dump` (`pg_dump -Fc`, 44 TABLE DATA). Fora do Git. Produção não tocada.
@@ -374,7 +381,7 @@ Dashboard Geral de Eventos; criação/gestão de evento; Ingressos; Descontos; F
 Não exigir, para extrair: App do Participante finalizado; App do Organizador finalizado; pente-fino visual final.
 
 ### Objetivo da extração
-Produto independente: aplicação, dashboard, navegação, identidade visual, configuração e deploy próprios; domínio isolado; baixo acoplamento; venda standalone.
+Produto independente: aplicação, dashboard, navegação, identidade visual, configuração e deploy próprios; domínio isolado; baixo acoplamento; venda standalone. **Item 4 obrigatório (2026-10-27):** uma implementação, dois acessos (Sistema Igrejas + SaaS Eventos). A extração não desliga o handoff nem duplica o produto.
 
 Não duplicar core sem necessidade. Antes da extração, auditar o que deve ser compartilhado, extraído, desacoplado, mantido como core comum ou convertido em contrato/API. Não duplicar tenant, autenticação, permissões, modelos, lógica financeira ou componentes sem necessidade arquitetural real.
 
@@ -397,7 +404,7 @@ A numeração pode evoluir conforme novos cortes. A regra de extração não.
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
 7. fechar gaps principais do Admin (Preview, API Keys e Configurações gerais feitos; restam Integrações essenciais PARTIAL e checkout/página pública conforme escopo)
-8. **SEPARAR EVENTOS DO SISTEMA GERAL**
+8. **SEPARAR EVENTOS DO SISTEMA GERAL** — produto extraível com **uma implementação e dois acessos** (handoff no Sistema Igrejas + SaaS Eventos). Não desligar integração. Não duplicar.
 9. ajustes visuais do produto standalone
 10. App do Participante
 11. App do Organizador
@@ -598,7 +605,7 @@ Não é arquitetura rígida. É o plano atual (decisão 2026-09-10). A numeraç�
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
 7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; Configurações gerais **feitas neste corte**; restam Integrações essenciais PARTIAL, página pública/checkout conforme escopo aprovado)
-8. **SEPARAR EVENTOS DO SISTEMA GERAL**
+8. **SEPARAR EVENTOS DO SISTEMA GERAL** — produto extraível com **uma implementação e dois acessos** (handoff no Sistema Igrejas + SaaS Eventos). Não desligar integração. Não duplicar.
 9. ajustes visuais do produto standalone
 10. App do Participante
 11. App do Organizador

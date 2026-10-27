@@ -1,0 +1,17 @@
+---
+description: Eventos — uma implementação, dois acessos (Sistema Igrejas + SaaS)
+alwaysApply: true
+---
+
+# Eventos — item 4 obrigatório (acesso dual)
+
+Eventos permanece integrado ao Sistema Igrejas **e** opera como SaaS para quem contratar só Eventos.
+
+- Uma implementação: `packages/events` + `apps/events-admin`.
+- Dois acessos, mesmos contratos, dados, RBAC, checkout e fluxos:
+  - Sistema Igrejas: `web-br` `/dashboard/eventos` → handoff `/auth/handoff` → `/dashboard/eventos`.
+  - SaaS Eventos: `events-admin` `/login` → `/dashboard/eventos`.
+- Não duplicar Eventos em `web-br`. Não redesenhar nem reconstruir telas nesta extração.
+- Extração física **não** remove o handoff, **não** exige dashboard da igreja no SaaS e **não** cria segundo backend/checkout/RBAC.
+- Se o runtime da API mudar, os dois acessos continuam no mesmo app e nos mesmos contratos.
+- Contrato: `packages/events/src/product-access.ts`. Detalhe: `.cursor/rules/system-general.mdc`.

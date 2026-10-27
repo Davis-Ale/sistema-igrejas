@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
 | Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
-| Separação física (repo/banco/JWT/deploy) | `MISSING` | Admin em `:3333` (`api-br`); `events-api` ainda monta Financeiro geral; Prisma compartilhado. Não separar neste corte. |
+| Item 4 — uma implementação, dois acessos (SI + SaaS) | `IMPLEMENTED` | Contrato `product-access.ts`: handoff `web-br` e login `events-admin` no mesmo app. Sem segundo Eventos. Extração física continua `MISSING`. |
+| Separação física (repo/banco/JWT/deploy) | `MISSING` | Admin em `:3333` (`api-br`); `events-api` ainda monta Financeiro geral; Prisma compartilhado. Não separar neste corte. Extração futura deve preservar os dois acessos. |
 | Futura IA de Eventos | `USER_DEFERRED` | Sem `packages/ai` e sem LLM. Assistente rule-based em `api-br`. Não implementar antes da extração. |
 
 ## Checkout v2 — HTTPS permanente da API (2026-10-27)
@@ -285,7 +286,7 @@ Schema/migration, builders, serviços anteriores e integração preparados prese
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
 7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; Configurações gerais **feito neste corte**; Integrações essenciais **PARTIAL em EVENTS-INTEGRATIONS-1**; página pública/checkout **IMPLEMENTED no fluxo principal em `fc9f861`, com pendências e prova externa ainda abertas**, conforme reconciliação acima)
-8. **SEPARAR EVENTOS DO SISTEMA GERAL**
+8. **SEPARAR EVENTOS DO SISTEMA GERAL** — uma implementação, dois acessos (handoff Sistema Igrejas + SaaS Eventos). Não desligar integração. Não duplicar.
 9. ajustes visuais do produto standalone
 10. App do Participante (fonte: `.cursor/benchmarks/app-participantes/` — NÃO é Sympla)
 11. App do Organizador

@@ -13,6 +13,8 @@ Não iniciar duplicação de componentes, tenant, usuários ou sincronização a
 
 **Regra de extração (2026-09-10):** separar Eventos **logo após** os fluxos principais e contratos estáveis, **antes** do App do Participante, do App do Organizador e do pente-fino final. Detalhe: `.cursor/rules/system-general.mdc` e `.cursor/project/CURRENT.md`.
 
+**Item 4 obrigatório (2026-10-27):** a extração preserva **dois acessos** ao mesmo produto — handoff em `web-br` e login SaaS em `events-admin`. Não redesenhar. `.cursor/rules/events-dual-access.mdc`.
+
 A navegação de Eventos deve permanecer coerente como produto, sem depender da dashboard geral da igreja nem do Financeiro geral (`/dashboard/financeiro`) para operar.
 
 # Dashboard Geral de Eventos — EVENTS-DASHBOARD-1

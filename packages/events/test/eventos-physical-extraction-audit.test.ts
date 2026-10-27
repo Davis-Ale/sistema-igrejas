@@ -18,11 +18,14 @@ test("physical extraction audit records current couplings and forbids extracting
     "## Isolamento multi-tenant",
     "## Futura IA",
     "## Bloqueios reais para extração física agora",
+    "## Acesso dual (item 4 obrigatório)",
     "## Veredito"
   ]) {
     assert.match(audit, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(audit, /Não separar/i);
+  assert.match(audit, /uma implementação, dois acessos/i);
+  assert.match(audit, /Obrigatório — uma implementação, dois acessos/);
   assert.match(audit, /Extraído neste corte\?\s*\|\s*Não/);
   assert.match(audit, /localhost.*5433/);
   assert.match(audit, /20261027180000_event_public_description_location/);
