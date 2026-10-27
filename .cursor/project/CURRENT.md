@@ -1,5 +1,10 @@
 # CURRENT STATE
 
+## ADMIN — CONFIGURAÇÕES GERAIS DE EVENTOS (2026-10-27)
+
+- Tela global `/dashboard/eventos/configuracoes` na nav do produto, depois de Integrações. Lê conta de recebimento, API Keys e Integrações já existentes; escrita continua nas telas atuais. RBAC: LEADER vê; `SUPER_ADMIN` | `PASTOR` alteram nas telas de origem. Sem taxa contratual, split, RD/CAPI ou espaçamento.
+- Diffs alheios preservados.
+
 ## ADMIN — PERMISSÕES, LOTES, FORMULÁRIO E CONFIGURAÇÕES (2026-10-27)
 
 - API Keys: criar/revogar só `SUPER_ADMIN` | `PASTOR` na UI, alinhado ao hub de Integrações. LEADER continua lendo a lista.
@@ -378,7 +383,7 @@ A numeração pode evoluir conforme novos cortes. A regra de extração não.
 4. reorganizar Gestão Financeira na navegação global — **feito neste Dashboard** (nav global; não duplicar no workspace)
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
-7. fechar gaps principais do Admin (Preview e API Keys feitos; restam Integrações essenciais e checkout/página pública conforme escopo)
+7. fechar gaps principais do Admin (Preview, API Keys e Configurações gerais feitos; restam Integrações essenciais PARTIAL e checkout/página pública conforme escopo)
 8. **SEPARAR EVENTOS DO SISTEMA GERAL**
 9. ajustes visuais do produto standalone
 10. App do Participante
@@ -450,7 +455,7 @@ Estrutura:
 - Dashboard / Meus eventos — `/dashboard/eventos` (lista operacional; **não** redireciona ao workspace)
 - Criar novo evento — mesmo modal / `POST /api/events`
 - Gestão Financeira — nav global `/dashboard/eventos/gestao-financeira`
-- Configurações gerais — ainda `MISSING`; **sem** botão morto
+- Configurações gerais — `/dashboard/eventos/configuracoes` (hub dos dados já existentes)
 - futuras Integrações / API — ainda `MISSING`; **sem** botão morto
 
 Na Dashboard Geral, os eventos da igreja aparecem em **lista operacional** (um abaixo do outro). Cada item abre/gerencia aquele evento. Não criar uma página principal diferente para cada evento. O evento individual abre a partir da lista.
@@ -579,7 +584,7 @@ Não é arquitetura rígida. É o plano atual (decisão 2026-09-10). A numeraç�
 4. reorganizar Gestão Financeira na navegação global — **feito neste Dashboard** (nav global; removida do workspace)
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
-7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; restam Integrações essenciais, página pública/checkout conforme escopo aprovado)
+7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; Configurações gerais **feitas neste corte**; restam Integrações essenciais PARTIAL, página pública/checkout conforme escopo aprovado)
 8. **SEPARAR EVENTOS DO SISTEMA GERAL**
 9. ajustes visuais do produto standalone
 10. App do Participante

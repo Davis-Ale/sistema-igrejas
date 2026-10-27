@@ -70,7 +70,7 @@ Home do produto. Separada do workspace de um evento. Implementada localmente; n�
 | Dashboard / Meus eventos (lista operacional) | `IMPLEMENTED` | `/dashboard/eventos` lista compacta paginada. **Não** redireciona ao workspace. Tela antiga (Cadastrar/Inscrever/Check-in) permanece proibida. |
 | Criar novo evento na Dashboard Geral | `IMPLEMENTED` | Mesmo modal compartilhado e `POST /api/events` do workspace. Sem segundo formulário. |
 | Gestão Financeira na navegação global | `IMPLEMENTED` | Item na nav global da Dashboard. Removido do menu do workspace. Rota `/dashboard/eventos/gestao-financeira` inalterada. |
-| Configurações gerais de Eventos | `MISSING` | Inclui, conceitualmente, conta de recebimento global se não ficar em Gestão Financeira. Sem botão morto neste corte. |
+| Configurações gerais de Eventos | `IMPLEMENTED` | Hub global `/dashboard/eventos/configuracoes`. Lê conta de recebimento, API Keys, Integrações e RBAC existentes. Cadastro/alteração permanece nas telas atuais. Sem taxa contratual, split ou credencial nova. |
 | API Keys | `IMPLEMENTED` | EVENTS-ADMIN-ESSENTIALS-1. Chave da igreja, UI `/dashboard/eventos/api-keys`, consumer `/api/v1`. Criar/revogar na UI só `SUPER_ADMIN` \| `PASTOR`. |
 | Integrações globais | `PARTIAL` | EVENTS-INTEGRATIONS-1. Hub + 5 conexões reais (GA, Ads, Pixel, Mailchimp ping, WhatsApp token). ERROR editável. Mailchimp/WhatsApp avisam chave de cifra ausente. RD visível e bloqueada (`connectable: false`) por falta do app OAuth da plataforma. Sem sync Mailchimp, sem envio WhatsApp, sem CAPI Meta, sem Embedded Signup. |
 
@@ -275,7 +275,7 @@ Schema/migration, builders, serviços anteriores e integração preparados prese
 4. reorganizar Gestão Financeira na navegação global — **feito neste Dashboard**
 5. conta de recebimento da igreja — **feito em GESTAO-FINANCEIRA-2** (cadastro global)
 6. operações financeiras: estorno administrativo **feito em FINANCEIRO-OPERACOES-1**; split/subconta/repasse/transferência/saque = **BLOQUEIO PRÉ-PRODUÇÃO**
-7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; Integrações essenciais **PARTIAL em EVENTS-INTEGRATIONS-1**; página pública/checkout **IMPLEMENTED no fluxo principal em `fc9f861`, com pendências e prova externa ainda abertas**, conforme reconciliação acima)
+7. fechar gaps principais do Admin (Preview **feito em EVENTS-PREVIEW-1**; API Keys **feito em EVENTS-ADMIN-ESSENTIALS-1**; Configurações gerais **feito neste corte**; Integrações essenciais **PARTIAL em EVENTS-INTEGRATIONS-1**; página pública/checkout **IMPLEMENTED no fluxo principal em `fc9f861`, com pendências e prova externa ainda abertas**, conforme reconciliação acima)
 8. **SEPARAR EVENTOS DO SISTEMA GERAL**
 9. ajustes visuais do produto standalone
 10. App do Participante (fonte: `.cursor/benchmarks/app-participantes/` — NÃO é Sympla)

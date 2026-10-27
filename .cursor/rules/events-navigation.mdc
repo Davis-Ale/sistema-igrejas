@@ -1,0 +1,122 @@
+---
+description: Regras obrigatórias de navegação do módulo Eventos
+alwaysApply: true
+---
+
+# Produto Eventos — standalone-ready (atualizado 2026-09-10)
+
+Eventos é produto com fronteira própria, ainda na mesma base **neste momento** (monorepo, banco, JWT).
+
+Não separar repositório, banco, deploy ou autenticação neste corte.
+
+Não iniciar duplicação de componentes, tenant, usuários ou sincronização artificial sem necessidade arquitetural real.
+
+**Regra de extração (2026-09-10):** separar Eventos **logo após** os fluxos principais e contratos estáveis, **antes** do App do Participante, do App do Organizador e do pente-fino final. Detalhe: `.cursor/rules/system-general.mdc` e `.cursor/project/CURRENT.md`.
+
+A navegação de Eventos deve permanecer coerente como produto, sem depender da dashboard geral da igreja nem do Financeiro geral (`/dashboard/financeiro`) para operar.
+
+# Dashboard Geral de Eventos — EVENTS-DASHBOARD-1
+
+A home do produto standalone Eventos é a **Dashboard Geral**, separada do workspace de um evento específico.
+
+Rota: `/dashboard/eventos`.
+
+Estrutura:
+
+- Dashboard / Meus eventos
+- Criar novo evento
+- Gestão Financeira
+- API Keys
+- Integrações
+- Configurações gerais (`/dashboard/eventos/configuracoes`)
+
+Na Dashboard Geral, os eventos da igreja aparecem em **lista operacional** (um abaixo do outro). Cada item abre/gerencia aquele evento.
+
+Não criar uma página principal diferente para cada evento. O evento individual é aberto a partir da lista.
+
+Regras vigentes:
+
+- Eventos na sidebar leva à Dashboard Geral / Meus eventos, não automaticamente a um workspace específico;
+- `/dashboard/eventos` **não** redireciona para o primeiro evento;
+- Criar evento pertence à Dashboard Geral (mesmo fluxo/`POST` do workspace; sem segundo formulário);
+- Gestão Financeira está na navegação **global** de Eventos (não no menu permanente do workspace);
+- o retorno do workspace vai à Dashboard Geral de Eventos (`/dashboard/eventos`, texto **Meus eventos**), não ao dashboard da igreja como home do produto Eventos.
+
+# Entrada — tela antiga proibida
+
+- `/dashboard/eventos` é a lista operacional. Nunca redirecionar automaticamente para um `eventId`.
+- A antiga tela contendo Cadastrar evento, Inscrever participante, Eventos cadastrados e Check-in **não** pode ser exibida.
+- Empty state da Dashboard: nenhum evento cadastrado + ação Criar evento (modal existente).
+- Loading da lista: estado neutro (“Carregando eventos...”). Proibido “Abrindo Eventos...” com redirect.
+
+# Workspace do evento
+
+Ao abrir um evento específico, o usuário entra no workspace daquele evento.
+
+A navegação do produto Eventos possui **dois níveis no mesmo sidebar**:
+
+1. **Global:** Meus eventos · Criar evento · Gestão Financeira · API Keys · Integrações · Configurações gerais
+2. **Evento selecionado:** seletor + capacidades do evento atual
+
+Menu do evento (capacidades do **evento atual**, abaixo do seletor):
+
+- Visão geral
+- Informações
+- Ingressos
+- Descontos
+- Formulário de inscrição
+- Participantes
+- Check-in
+- Financeiro
+- Aplicativo do Evento
+
+Gestão Financeira **não** pertence ao bloco do evento. Permanece somente no nível global.
+
+Descontos permanece no evento individual (junto de Ingressos e Formulário). Não mover Descontos para Gestão Financeira.
+
+Na Dashboard Geral, na Gestão Financeira, em API Keys, em Integrações e em Configurações gerais, o seletor apenas define o eventId usado ao clicar numa capacidade do evento. Não transforma essas telas globais em tela do evento.
+
+# Gestão Financeira — global
+
+Gestão Financeira é capacidade **global do produto Eventos**. Consolida todos os eventos autorizados do tenant.
+
+Acessível na navegação global da Dashboard Geral (`/dashboard/eventos/gestao-financeira`). **Não** duplicar no menu do workspace.
+
+# Integrações — global
+
+Integrações é capacidade **global do produto Eventos**. Conta da igreja, não do evento.
+
+Acessível na navegação global (`/dashboard/eventos/integracoes`), depois de API Keys. **Não** duplicar no menu do workspace.
+
+# Configurações gerais — global
+
+Configurações gerais é capacidade **global do produto Eventos**. Reúne dados e permissões já existentes da igreja (conta de recebimento, API Keys, Integrações e RBAC). Não duplica cadastro nem inventa taxa contratual, split ou credencial.
+
+Acessível na navegação global (`/dashboard/eventos/configuracoes`), depois de Integrações. **Não** duplicar no menu do workspace. Conta de recebimento permanece editável na Gestão Financeira.
+
+# Organização
+
+- Criar evento pertence ao módulo Eventos. Destino: Dashboard Geral (e o mesmo modal no workspace). Um único `POST /api/events`.
+- Inscrição manual pertence à área Participantes do evento selecionado.
+- Check-in pertence ao evento selecionado.
+- Lista operacional de eventos pertence à Dashboard Geral. O seletor de eventos fica no sidebar (bloco Evento selecionado) na Dashboard, na Gestão Financeira, em API Keys, Integrações, Configurações gerais e no workspace. Troca no workspace preserva a seção.
+- Não duplicar funções do workspace em uma tela geral, salvo as capacidades globais do produto (Dashboard / Meus eventos, criar, Gestão Financeira, API Keys, Integrações, configurações gerais).
+- A tela antiga de entrada operacional (Cadastrar / Inscrever / Check-in) continua proibida.
+
+# Navegação entre eventos
+
+- Ao trocar o evento no seletor, **manter a seção atual** do workspace.
+- Exemplo: Conferência > Financeiro → trocar para Teste 2026 → Teste 2026 > Financeiro.
+- Trocar evento não deve jogar automaticamente para Visão geral.
+- Mudanças de navegação devem ser verificadas na rota e arquivo exatos antes da alteração.
+- Prints enviados pelo usuário são referência de aceitação do comportamento visual.
+
+# Retorno do workspace do evento
+
+O workspace do evento retorna à Dashboard Geral de Eventos:
+
+- href `/dashboard/eventos`;
+- texto **Meus eventos**;
+- não usar history.back() como navegação principal do workspace.
+
+Sair do produto Eventos (Dashboard Geral ou Gestão Financeira) usa **Voltar ao painel** → `/dashboard`.

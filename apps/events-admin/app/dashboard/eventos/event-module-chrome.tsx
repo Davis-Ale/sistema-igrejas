@@ -18,6 +18,7 @@ import {
   Wallet,
   KeyRound,
   Plug,
+  Settings,
   type LucideIcon
 } from "lucide-react";
 import styles from "./event-module-chrome.module.css";
@@ -43,7 +44,8 @@ export type EventModuleProductActive =
   | "events"
   | "financial"
   | "api-keys"
-  | "integrations";
+  | "integrations"
+  | "settings";
 
 export type EventModuleEventOption = {
   id: string;
@@ -444,6 +446,12 @@ export function EventModuleNav({
           href="/dashboard/eventos/integracoes"
         >
           <NavItemContent icon={Plug} label="Integrações" />
+        </Link>
+        <Link
+          className={navItemClassName(productActive === "settings")}
+          href="/dashboard/eventos/configuracoes"
+        >
+          <NavItemContent icon={Settings} label="Configurações gerais" />
         </Link>
       </div>
     </nav>
