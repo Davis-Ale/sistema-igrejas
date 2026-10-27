@@ -457,6 +457,8 @@ model Event {
   slug                      String
   publicSlug                String?  @unique
   date                      DateTime
+  description               String?
+  location                  String?
   capacity                  Int
   price                     Decimal  @default(0) @db.Decimal(12, 2)
   isPublic                  Boolean  @default(false)

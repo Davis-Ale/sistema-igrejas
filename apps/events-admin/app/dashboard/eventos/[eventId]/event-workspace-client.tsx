@@ -85,6 +85,8 @@ type EventDetail = {
   slug: string;
   publicSlug: string | null;
   date: string;
+  description: string | null;
+  location: string | null;
   capacity: number;
   price: string | number;
   isPublic: boolean;
@@ -3843,6 +3845,8 @@ export function EventWorkspaceClient({
     const date = String(formData.get("date") ?? "");
     const capacity = Number(formData.get("capacity"));
     const price = Number(formData.get("price"));
+    const description = String(formData.get("description") ?? "").trim();
+    const location = String(formData.get("location") ?? "").trim();
 
     setError(null);
     setInformationMessage(null);
@@ -3858,6 +3862,8 @@ export function EventWorkspaceClient({
             date,
             capacity,
             price,
+            description: description || null,
+            location: location || null,
             isPaid: price > 0,
             waitlistEnabled:
               formData.get("waitlistEnabled") === "on"
@@ -5696,7 +5702,60 @@ export function EventWorkspaceClient({
                         type="number"
                       />
                     </label>
+
+                    <label
+                      style={{
+                        color: "#e2e8f0",
+                        display: "grid",
+                        fontWeight: 800,
+                        gap: "8px"
+                      }}
+                    >
+                      Local
+
+                      <input
+                        defaultValue={event.location ?? ""}
+                        maxLength={200}
+                        name="location"
+                        placeholder="Endereço ou nome do local"
+                        style={{
+                          background: "#0f172a",
+                          border:
+                            "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: "12px",
+                          color: "#ffffff",
+                          padding: "12px"
+                        }}
+                      />
+                    </label>
                   </div>
+
+                  <label
+                    style={{
+                      color: "#e2e8f0",
+                      display: "grid",
+                      fontWeight: 800,
+                      gap: "8px"
+                    }}
+                  >
+                    Descrição
+
+                    <textarea
+                      defaultValue={event.description ?? ""}
+                      maxLength={2000}
+                      name="description"
+                      rows={4}
+                      style={{
+                        background: "#0f172a",
+                        border:
+                          "1px solid rgba(148, 163, 184, 0.3)",
+                        borderRadius: "12px",
+                        color: "#ffffff",
+                        padding: "12px",
+                        resize: "vertical"
+                      }}
+                    />
+                  </label>
 
                   <div
                     style={{
@@ -5813,6 +5872,15 @@ export function EventWorkspaceClient({
 
                   <article>
                     <strong style={{ color: "#94a3b8" }}>
+                      Local
+                    </strong>
+                    <p style={{ marginBottom: 0 }}>
+                      {event.location || "Não informado"}
+                    </p>
+                  </article>
+
+                  <article>
+                    <strong style={{ color: "#94a3b8" }}>
                       Publicação
                     </strong>
                     <p style={{ marginBottom: 0 }}>
@@ -5822,6 +5890,15 @@ export function EventWorkspaceClient({
                     </p>
                   </article>
                 </div>
+
+                <article>
+                  <strong style={{ color: "#94a3b8" }}>
+                    Descrição
+                  </strong>
+                  <p style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                    {event.description || "Não informada"}
+                  </p>
+                </article>
 
                 <div
                   style={{

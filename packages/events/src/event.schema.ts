@@ -70,7 +70,9 @@ export const updateEventSchema = z
     isPublic: z.boolean().optional(),
     isPaid: z.boolean().optional(),
     publicRegistrationEnabled: z.boolean().optional(),
-    waitlistEnabled: z.boolean().optional()
+    waitlistEnabled: z.boolean().optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional()
   })
   .refine(
     (input) => Object.keys(input).length > 0,

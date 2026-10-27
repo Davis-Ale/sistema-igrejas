@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { eventIdParamsSchema } from "./event.schema.js";
+import { publicEventCoverWhere } from "./event-public-content.js";
 import { MAX_MAP_IMAGE_BASE64, validateMapImage } from "./participant-map-image.js";
 
 const coverSchema = z.object({
@@ -18,6 +19,18 @@ function sendCoverError(error: unknown, reply: FastifyReply) {
   return reply.code(500).send({ error: "INTERNAL_SERVER_ERROR", message: "Não foi possível carregar ou salvar a capa." });
 }
 
+function sendCoverImage(
+  reply: FastifyReply,
+  image: { data: Uint8Array; contentType: string },
+  cacheControl: string
+) {
+  return reply.header("Cache-Control", cacheControl)
+    .header("X-Content-Type-Options", "nosniff")
+    .header("Content-Security-Policy", "default-src 'none'; sandbox")
+    .header("Content-Disposition", `inline; filename="capa.${image.contentType === "image/png" ? "png" : "jpg"}"`)
+    .type(image.contentType).send(Buffer.from(image.data));
+}
+
 export async function registerEventCoverRoutes(app: FastifyInstance, prisma: PrismaClient) {
   app.get("/events/:eventId/cover", async (request, reply) => {
     if (!request.churchId) return reply.code(401).send({ error: "UNAUTHORIZED" });
@@ -28,11 +41,7 @@ export async function registerEventCoverRoutes(app: FastifyInstance, prisma: Pri
         select: { data: true, contentType: true }
       });
       if (!image) return reply.code(404).send({ error: "EVENT_COVER_IMAGE_NOT_FOUND" });
-      return reply.header("Cache-Control", "private, no-store")
-        .header("X-Content-Type-Options", "nosniff")
-        .header("Content-Security-Policy", "default-src 'none'; sandbox")
-        .header("Content-Disposition", `inline; filename="capa.${image.contentType === "image/png" ? "png" : "jpg"}"`)
-        .type(image.contentType).send(Buffer.from(image.data));
+      return sendCoverImage(reply, image, "private, no-store");
     } catch (error) { return sendCoverError(error, reply); }
   });
 
@@ -53,5 +62,26 @@ export async function registerEventCoverRoutes(app: FastifyInstance, prisma: Pri
       });
       return { updatedAt: saved.updatedAt.toISOString() };
     } catch (error) { return sendCoverError(error, reply); }
+  });
+}
+
+export async function registerPublicEventCoverRoutes(
+  app: FastifyInstance,
+  prisma: PrismaClient
+) {
+  app.get("/public/events/:eventId/cover", async (request, reply) => {
+    try {
+      const { eventId } = eventIdParamsSchema.parse(request.params);
+      const image = await prisma.eventCoverImage.findFirst({
+        where: publicEventCoverWhere(eventId),
+        select: { data: true, contentType: true }
+      });
+      if (!image) {
+        return reply.code(404).send({ error: "EVENT_COVER_IMAGE_NOT_FOUND" });
+      }
+      return sendCoverImage(reply, image, "public, max-age=60");
+    } catch (error) {
+      return sendCoverError(error, reply);
+    }
   });
 }

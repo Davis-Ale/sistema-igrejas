@@ -34,6 +34,7 @@ import {
   getPublicRegistrationByTokenBySlugs
 } from "./public.service.js";
 import { isParticipantAppEligible } from "./participant-app.service.js";
+import { registerPublicEventCoverRoutes } from "./event-cover.routes.js";
 
 const publicRegistrationAccessSchema = z.object({
   checkInToken: z.string().trim().min(10)
@@ -290,6 +291,7 @@ export async function registerPublicEventRoutes(
   checkout: "legacy" | "omit" = "legacy"
 ): Promise<void> {
   if (checkout !== "legacy" && checkout !== "omit") throw new Error("PUBLIC_CHECKOUT_COMPOSITION_INVALID");
+  await registerPublicEventCoverRoutes(app, prisma);
   // The prepared containment composition omits these handlers entirely.
   if (checkout === "legacy") app.post("/public/churches/:churchSlug/events/:eventSlug/checkout/status", async (request, reply) => {
     try {

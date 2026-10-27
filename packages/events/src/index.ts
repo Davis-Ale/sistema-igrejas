@@ -1,4 +1,5 @@
 export * from "./event.routes.js";
+export * from "./event-public-content.js";
 export * from "./public.routes.js";
 export * from "./participant-app.schema.js";
 export * from "./participant-app.service.js";

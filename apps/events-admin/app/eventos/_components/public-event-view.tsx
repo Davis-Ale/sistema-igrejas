@@ -69,6 +69,9 @@ type PublicEvent = {
   slug: string;
   publicSlug: string | null;
   date: string;
+  description: string | null;
+  location: string | null;
+  hasCoverImage: boolean;
   price: string | number;
   isPaid: boolean;
   publicRegistrationEnabled: boolean;
@@ -243,6 +246,11 @@ export function PublicEventView({
     event,
     setEvent
   ] = useState<PublicEvent | null>(null);
+
+  const [
+    coverUrl,
+    setCoverUrl
+  ] = useState<string | null>(null);
 
   const [
     legacyRegistration,
@@ -563,6 +571,62 @@ export function PublicEventView({
     void loadEvent();
   }, [eventId, isPreview, router]);
 
+  useEffect(() => {
+    if (!event?.hasCoverImage) {
+      setCoverUrl(null);
+      return;
+    }
+
+    if (!isPreview) {
+      setCoverUrl(
+        `${API_BASE_URL}/public/events/${event.id}/cover`
+      );
+      return;
+    }
+
+    const token = getSessionToken();
+
+    if (!token) {
+      setCoverUrl(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+
+    void fetch(`${API_BASE_URL}/api/events/${event.id}/cover`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      signal: controller.signal
+    }).then(async (response) => {
+      if (!response.ok) {
+        return;
+      }
+
+      const image = await response.blob();
+
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      objectUrl = URL.createObjectURL(image);
+      setCoverUrl(objectUrl);
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setCoverUrl(null);
+      }
+    });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [event?.id, event?.hasCoverImage, isPreview]);
+
   const selectedTicket =
     event?.ticketTypes.find(
       (ticket) => ticket.id === ticketId
@@ -861,6 +925,20 @@ export function PublicEventView({
                 padding: "30px"
               }}
             >
+              {coverUrl ? (
+                <img
+                  alt={`Imagem de divulgação de ${event.title}`}
+                  src={coverUrl}
+                  style={{
+                    background: "#020617",
+                    borderRadius: "18px",
+                    height: "220px",
+                    objectFit: "cover",
+                    width: "100%"
+                  }}
+                />
+              ) : null}
+
               <h1
                 style={{
                   color: "#ffffff",
@@ -872,6 +950,20 @@ export function PublicEventView({
               >
                 {event.title}
               </h1>
+
+              {event.description ? (
+                <p
+                  style={{
+                    color: "#e2e8f0",
+                    fontSize: "16px",
+                    lineHeight: 1.7,
+                    margin: 0,
+                    whiteSpace: "pre-wrap"
+                  }}
+                >
+                  {event.description}
+                </p>
+              ) : null}
 
               <p
                 style={{
@@ -912,6 +1004,29 @@ export function PublicEventView({
                     {formatDate(event.date)}
                   </p>
                 </div>
+
+                {event.location ? (
+                  <div
+                    style={{
+                      background:
+                        "rgba(2, 6, 23, 0.42)",
+                      borderRadius: "18px",
+                      padding: "16px"
+                    }}
+                  >
+                    <strong>Local</strong>
+
+                    <p
+                      style={{
+                        color: "#cbd5e1",
+                        margin: "8px 0 0",
+                        whiteSpace: "pre-wrap"
+                      }}
+                    >
+                      {event.location}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div
                   style={{

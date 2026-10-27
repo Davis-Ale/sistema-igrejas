@@ -1,5 +1,10 @@
 # CURRENT STATE
 
+## PÁGINA PÚBLICA — IMAGEM, DESCRIÇÃO E LOCAL (2026-10-27)
+
+- Reutiliza `EventCoverImage` e o editor de capa. GET público `/public/events/:eventId/cover` só para evento publicado. Descrição e local: colunas aditivas em `Event`, editáveis em Informações, exibidas na página pública e na prévia.
+- FORMULARIO-1, taxa contratual, RD/CAPI/sync/WhatsApp e espaçamento reservado intactos. Diffs alheios preservados.
+
 ## ADMIN — CONFIGURAÇÕES GERAIS DE EVENTOS (2026-10-27)
 
 - Tela global `/dashboard/eventos/configuracoes` na nav do produto, depois de Integrações. Lê conta de recebimento, API Keys e Integrações já existentes; escrita continua nas telas atuais. RBAC: LEADER vê; `SUPER_ADMIN` | `PASTOR` alteram nas telas de origem. Sem taxa contratual, split, RD/CAPI ou espaçamento.
@@ -110,9 +115,9 @@
 
 - **IMPLEMENTED no código:** página pública apenas de evento publicado; ingresso/lote visível, disponibilidade, formulário ativo e desconto revalidado no backend; jornada ingresso → dados → pagamento → confirmação; PIX com QR/Copia e Cola e crédito/débito distintos na UI, com redirecionamento seguro ao Asaas; cobrança vinculada a `EventOrder`/`EventPayment`/`Transaction` oficial; retomada de cobrança pendente e proteção contra clique/requisição repetidos; webhook Asaas com token, sincronização de pagamento e bloqueio de credencial/app/check-in enquanto PENDING. O modo de auto-confirmação de teste é desativado em produção.
 - **PARTIAL:** confirmação por e-mail tem adapter Resend, QR anexado, chave de idempotência e marcador `confirmationEmailSentAt`; tentativa após PAID e retentativa em webhook repetido. Não há outbox/worker de retry durável. O formulário exige e-mail, mas `createPublicRegistrationSchema` aceita e-mail ausente; uma chamada direta pode confirmar inscrição paga sem destinatário para a credencial.
-- **MISSING na página pública:** imagem de divulgação, descrição e local do evento. `Event` não possui esses campos públicos; `EventCoverImage` existe no schema, mas não é consumido pela página/DTO público. Não inferir solução nem migration neste corte.
+- **IMPLEMENTED na página pública:** imagem de divulgação via `EventCoverImage` + GET público; descrição e local em `Event` (migration aditiva) e na tela Informações.
 - **BLOQUEIOS DE PROVA/PRÉ-PRODUÇÃO:** os E2E de `public-checkout` usam Asaas simulado e o teste de e-mail usa Resend simulado. Não comprovam PIX/cartões, webhook e entrega de e-mail reais ponta a ponta. Rotas públicas críticas não têm rate limit; CORS do `events-api` usa `origin: true`. Homologação externa e hardening exigem corte próprio e condições de ambiente/infraestrutura, sem inventá-las agora.
-- **Próximo corte mínimo permitido:** fechar a inconsistência de e-mail obrigatório no contrato de inscrição pública e validar o fluxo sem destinatário, com alteração delimitada à estrutura atual e testes isolados; antes de implementar, conferir impacto em inscrições gratuitas e retomada. Imagem/descrição/local e retry durável permanecem para decisão específica. Não iniciar este corte automaticamente.
+- **Próximo corte mínimo permitido:** retry durável de e-mail e hardening/homologação externa seguem gates próprios. FORMULARIO-1 e taxa contratual permanecem adiados. Não iniciar automaticamente.
 
 ## CHECKOUT — CORTE ESTRUTURAL DE AUTORIZAÇÃO (2026-10-13)
 

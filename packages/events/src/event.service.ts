@@ -19,6 +19,7 @@ import {
 } from "./platform-fee.js";
 import { sendPendingRegistrationConfirmationEmail } from "./registration-confirmation-delivery.service.js";
 import type { CreateCheckoutRegistration } from "./checkout-access.service.js";
+import { presentPublicEventContent } from "./event-public-content.js";
 
 const publicRegistrationInclude = {
   visitor: { select: { id: true, name: true, phone: true, email: true } },
@@ -248,7 +249,8 @@ export async function duplicateEvent(
                 ticketScopes: true
               }
             },
-            discounts: true
+            discounts: true,
+            coverImage: true
           }
         });
 
@@ -275,9 +277,21 @@ export async function duplicateEvent(
             waitlistEnabled:
               source.waitlistEnabled,
             trailStageId:
-              source.trailStageId
+              source.trailStageId,
+            description: source.description,
+            location: source.location
           }
         });
+
+      if (source.coverImage) {
+        await transaction.eventCoverImage.create({
+          data: {
+            eventId: duplicated.id,
+            data: source.coverImage.data,
+            contentType: source.coverImage.contentType
+          }
+        });
+      }
 
       const dateShift =
         input.date.getTime() -
@@ -515,6 +529,14 @@ export async function updateEvent(
 
   if (input.waitlistEnabled !== undefined) {
     data.waitlistEnabled = input.waitlistEnabled;
+  }
+
+  if (input.description !== undefined) {
+    data.description = input.description?.trim() || null;
+  }
+
+  if (input.location !== undefined) {
+    data.location = input.location?.trim() || null;
   }
 
   return prisma.event.update({
@@ -1101,6 +1123,13 @@ const publicEventPageSelect = {
   isPublic: true,
   publicRegistrationEnabled: true,
   waitlistEnabled: true,
+  description: true,
+  location: true,
+  coverImage: {
+    select: {
+      eventId: true
+    }
+  },
   church: {
     select: {
       name: true,
@@ -1186,7 +1215,7 @@ export async function getPublicEventById(prisma: PrismaClient, eventId: string) 
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
   }
 
-  return event;
+  return presentPublicEventContent(event);
 }
 
 export async function getEventPreviewById(
@@ -1207,7 +1236,7 @@ export async function getEventPreviewById(
     throw new Error("EVENT_NOT_FOUND");
   }
 
-  return event;
+  return presentPublicEventContent(event);
 }
 
 export async function createRegistration(

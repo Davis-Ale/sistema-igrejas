@@ -9,6 +9,7 @@ import type {
 import {
   createPublicRegistration
 } from "./event.service.js";
+import { presentPublicEventContent } from "./event-public-content.js";
 
 const publicEventSelect = {
   id: true,
@@ -22,6 +23,13 @@ const publicEventSelect = {
   isPublic: true,
   publicRegistrationEnabled: true,
   waitlistEnabled: true,
+  description: true,
+  location: true,
+  coverImage: {
+    select: {
+      eventId: true
+    }
+  },
   church: {
     select: {
       name: true,
@@ -214,7 +222,7 @@ export async function getPublicEventBySlugs(
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
   }
 
-  return event;
+  return presentPublicEventContent(event);
 }
 
 export async function getPublicEventByPublicSlug(
@@ -234,7 +242,7 @@ export async function getPublicEventByPublicSlug(
     throw new Error("PUBLIC_EVENT_NOT_FOUND");
   }
 
-  return event;
+  return presentPublicEventContent(event);
 }
 
 export async function getPublicRegistrationByTokenBySlugs(

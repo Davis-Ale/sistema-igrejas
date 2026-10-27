@@ -156,7 +156,7 @@ Fonte: benchmark 02 (Salvar rascunho / Pré-visualizar / Publicar Evento) + deci
 | Preview não publica | `IMPLEMENTED` | `GET /api/events/:eventId/preview` só lê; não escreve `isPublic`. |
 | Checkout real bloqueado na prévia | `IMPLEMENTED` | UI desativa inscrição/pagamento; `POST` público de draft continua 404. |
 | Botão Pré-visualizar no fluxo admin | `IMPLEMENTED` | Header do workspace, Informações (ao lado de Publicar) e card de rascunho da Visão geral. Salvar informações e Publicar preservados. |
-| Imagem / descrição / local na página pública | `MISSING` | Campos inexistentes no `Event`. Preview não inventa. |
+| Imagem / descrição / local na página pública | `IMPLEMENTED` | Capa existente (`EventCoverImage`) na página pública/prévia. `Event.description` e `Event.location` aditivos, editáveis em Informações. |
 
 ### Página pública e checkout — reconciliação do HEAD após `fc9f861` (2026-10-12)
 
@@ -168,11 +168,11 @@ Os commits posteriores `d384c08` e `67e86a4` trataram Integrações. Classifica�
 | Jornada pública e meios de pagamento | `IMPLEMENTED` | `PublicEventView` apresenta ingresso → dados → pagamento → confirmação; `createPublicRegistrationSchema` aceita PIX, CREDIT_CARD e DEBIT_CARD. PIX retorna QR/Copia e Cola; cartões preservam escolha sem receber dados do cartão no produto e seguem `invoiceUrl` do Asaas. |
 | Cobrança única, retomada e confirmação | `IMPLEMENTED` | `EventOrder`/`EventPayment` ligados à `Transaction` oficial; lock e reuso de cobrança pendente; webhook com token aplica estado PAID, bloqueia regressão e repetição; credencial/app/check-in indisponíveis em PENDING. Modo de auto-confirmação de teste não funciona em produção. |
 | E-mail de credencial após pagamento | `PARTIAL` | Adapter Resend gera QR anexado, usa idempotency key e `confirmationEmailSentAt`; retenta em novo webhook. Sem outbox/worker durável. UI exige e-mail, mas schema público o deixa opcional, permitindo confirmação paga sem destinatário. |
-| Imagem de divulgação, descrição e local públicos | `MISSING` | `Event` não contém esses campos de conteúdo; `EventCoverImage` existe no schema, mas não integra DTO/renderização pública. Requer decisão de escopo e persistência antes de implementação. |
+| Imagem de divulgação, descrição e local públicos | `IMPLEMENTED` | GET público da capa só se `isPublic`; DTO com `hasCoverImage`, `description` e `location`. Sem bytes no JSON. FORMULARIO-1 e taxa contratual intactos. |
 | Proteção contra abuso das rotas públicas | `MISSING` | Sem rate limit em registro/status/webhook; `events-api` configura CORS com `origin: true`. Bloqueio pré-produção; não inventar infraestrutura. |
 | Homologação real Asaas → webhook → credencial/e-mail | `PARTIAL` | `public-checkout.e2e-spec.ts` substitui chamadas Asaas por `fetch` simulado e mocka o envio de e-mail; teste do adapter mocka Resend. Prova real externa não registrada por esses testes. |
 
-Próximo corte mínimo permitido: alinhar a obrigatoriedade do e-mail no contrato público e validar o caso sem destinatário, respeitando inscrição gratuita e retomada. Não reimplementar PIX/Asaas/webhook/e-mail. Imagem/descrição/local e retry durável exigem decisão específica; homologação externa e hardening têm gates próprios. Não iniciar automaticamente.
+Próximo corte mínimo permitido: retry durável de e-mail e hardening/homologação externa em gates próprios. Não reimplementar PIX/Asaas/webhook. FORMULARIO-1 e taxa contratual permanecem adiados. Não iniciar automaticamente.
 
 ### Autorização/idempotência do checkout — corte estrutural (2026-10-13)
 

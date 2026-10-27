@@ -63,7 +63,7 @@ export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
       }
       setSaved(file); setFile(null);
       if (input.current) input.current.value = "";
-      setMessage("Capa salva. Ela será exibida no Aplicativo do Organizador.");
+      setMessage("Capa salva. Ela será exibida na página pública e no Aplicativo do Organizador.");
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Não foi possível salvar a capa.");
     } finally {
@@ -86,7 +86,7 @@ export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
           }
           setFile(next);
         }} />
-      <small>JPG ou PNG, até 5 MB e 16 megapixels. Capa exclusiva do evento, independente da planta.</small>
+      <small>JPG ou PNG, até 5 MB e 16 megapixels. Imagem de divulgação da página pública, independente da planta.</small>
     </label>
     {preview ? <img src={preview} alt="Pré-visualização da capa do evento"
       style={{ width: "100%", maxWidth: 520, height: 180, objectFit: "contain", background: "#020617", borderRadius: 12 }} /> :
