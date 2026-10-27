@@ -12,6 +12,7 @@ import {
 
 type LoginSession = {
   token: string;
+  user?: { role?: string };
 };
 
 type EventListItem = {
@@ -56,7 +57,7 @@ const SCOPE_OPTIONS: Array<{
   { value: "participants:read", label: "participants:read" }
 ];
 
-function getSessionToken() {
+function getSession(): LoginSession | null {
   const storedSession = localStorage.getItem("sistema-igrejas.session");
 
   if (!storedSession) {
@@ -64,13 +65,21 @@ function getSessionToken() {
   }
 
   try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
+    return JSON.parse(storedSession) as LoginSession;
   } catch {
     localStorage.removeItem("sistema-igrejas.session");
     return null;
   }
+}
+
+function getSessionToken() {
+  return getSession()?.token ?? null;
+}
+
+function canManageApiKeys(session: LoginSession | null) {
+  return (
+    session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "PASTOR"
+  );
 }
 
 function formatDateTimeCompact(value: string | null) {
@@ -102,6 +111,7 @@ export function EventApiKeysClient() {
   const [revokingKey, setRevokingKey] = useState<EventApiKeyItem | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [canManage, setCanManage] = useState(false);
 
   async function loadEvents(token: string) {
     const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
@@ -159,6 +169,7 @@ export function EventApiKeysClient() {
         return;
       }
 
+      setCanManage(canManageApiKeys(getSession()));
       setIsLoading(true);
       setError(null);
 
@@ -190,6 +201,10 @@ export function EventApiKeysClient() {
 
   async function handleCreateKey(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
+
+    if (!canManage || !canManageApiKeys(getSession())) {
+      return;
+    }
 
     const token = getSessionToken();
 
@@ -274,6 +289,10 @@ export function EventApiKeysClient() {
 
   async function handleRevokeKey() {
     if (!revokingKey) {
+      return;
+    }
+
+    if (!canManage || !canManageApiKeys(getSession())) {
       return;
     }
 
@@ -468,6 +487,7 @@ export function EventApiKeysClient() {
             </div>
           ) : null}
 
+          {canManage ? (
           <section
             className={settings.card}
           >
@@ -545,6 +565,7 @@ export function EventApiKeysClient() {
               </button>
             </form>
           </section>
+          ) : null}
 
           <section
             className={settings.card}
@@ -639,7 +660,7 @@ export function EventApiKeysClient() {
                         Criada {formatDateTimeCompact(item.createdAt)} · Último
                         uso {formatDateTimeCompact(item.lastUsedAt)}
                       </p>
-                      {!isRevoked ? (
+                      {!isRevoked && canManage ? (
                         <button
                           onClick={() => {
                             setRevokeError(null);

@@ -925,6 +925,10 @@ export function EventWorkspaceClient({
     setOverlayFormFieldSensitive
   ] = useState(false);
   const [
+    overlayFormFieldActive,
+    setOverlayFormFieldActive
+  ] = useState(true);
+  const [
     overlayTicketScopeEnabled,
     setOverlayTicketScopeEnabled
   ] = useState(false);
@@ -2404,6 +2408,7 @@ export function EventWorkspaceClient({
     setOverlayFormFieldLabel("");
     setOverlayFormFieldRequired(false);
     setOverlayFormFieldSensitive(false);
+    setOverlayFormFieldActive(true);
     setOverlayTicketScopeEnabled(false);
     setOverlayTicketIds([]);
     setOverlayFieldOptions("");
@@ -2419,6 +2424,7 @@ export function EventWorkspaceClient({
     setOverlayFormFieldLabel(field.label);
     setOverlayFormFieldRequired(field.isRequired);
     setOverlayFormFieldSensitive(field.isSensitive);
+    setOverlayFormFieldActive(field.isActive);
     setOverlayTicketScopeEnabled(ticketIds.length > 0);
     setOverlayTicketIds(ticketIds);
     setOverlayFieldOptions(
@@ -2457,6 +2463,11 @@ export function EventWorkspaceClient({
           .replace(/(^-|-$)/g, "")
       }));
 
+    if (overlayTicketScopeEnabled && overlayTicketIds.length === 0) {
+      setError("Selecione ao menos um ingresso para este campo.");
+      return;
+    }
+
     setError(null);
     setFormFieldMessage(null);
     setIsSavingFormFieldOverlay(true);
@@ -2464,6 +2475,7 @@ export function EventWorkspaceClient({
     try {
       const isEditing = editingFormFieldId !== null;
       const payload = {
+        isActive: overlayFormFieldActive,
         isRequired: overlayFormFieldRequired,
         isSensitive: overlayFormFieldSensitive,
         label: overlayFormFieldLabel.trim(),
@@ -2477,12 +2489,7 @@ export function EventWorkspaceClient({
           : [],
         type: overlayFormFieldType
       };
-      const requestPayload = isEditing
-        ? payload
-        : {
-            ...payload,
-            isActive: true
-          };
+      const requestPayload = payload;
       const response = await fetch(
         isEditing
           ? `${API_BASE_URL}/api/events/${eventId}/form-fields/${editingFormFieldId}`
@@ -9167,6 +9174,27 @@ export function EventWorkspaceClient({
                       }}
                     >
                       <input
+                        checked={overlayFormFieldActive}
+                        onChange={(changeEvent) =>
+                          setOverlayFormFieldActive(
+                            changeEvent.target.checked
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Campo ativo no formulário de inscrição
+                    </label>
+
+                    <label
+                      style={{
+                        alignItems: "center",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        fontSize: "14px",
+                        gap: "8px"
+                      }}
+                    >
+                      <input
                         checked={overlayTicketScopeEnabled}
                         onChange={(changeEvent) => {
                           const checked =
@@ -9243,6 +9271,11 @@ export function EventWorkspaceClient({
                                 type="checkbox"
                               />{" "}
                               {ticket.name}
+                              {ticket.batches.length > 0
+                                ? ` — ${ticket.batches
+                                    .map((batch) => batch.name)
+                                    .join(", ")}`
+                                : ""}
                             </label>
                           ))
                         )}
