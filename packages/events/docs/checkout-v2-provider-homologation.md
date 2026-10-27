@@ -15,6 +15,15 @@ node --import tsx packages/events/test/inspect-checkout-operational.mjs --provid
 `/domains`. O relatório e o bloco `homologation` não incluem secrets, URLs de
 webhook, e-mails nem corpos de provider.
 
+Webhook Asaas sandbox exige HTTPS fixo em `ASAAS_WEBHOOK_PUBLIC_URL`
+(`https://…/webhooks/asaas`). Infra compatível já presente: túnel nomeado
+Cloudflare (`cfargotunnel.com`, binário em `.cursor/tools/cloudflared.exe`).
+trycloudflare e Railway são recusados. Aplicação no Asaas:
+
+`node --import tsx packages/events/test/apply-checkout-asaas-webhook.mjs --apply-asaas-sandbox-webhook`
+
+Não cria túnel, não publica hostname e não corre sem URL autorizada.
+
 ## Contrato reutilizado
 
 - Asaas: `createAsaasClient`, webhook `POST /webhooks/asaas` nas duas APIs,

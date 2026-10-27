@@ -11,7 +11,8 @@ export type HomologationBlocker =
   | "RESEND_SENDER_NOT_BARE_EMAIL"
   | "RESEND_DOMAIN_NOT_VERIFIED"
   | "EVENTS_APP_BASE_URL_NOT_HTTPS_PUBLIC"
-  | "FRONTEND_API_BASE_URL_MISSING";
+  | "FRONTEND_API_BASE_URL_MISSING"
+  | "ASAAS_WEBHOOK_URL_NOT_FIXED_HTTPS";
 
 export type HomologationDecision =
   | "KEEP_ASAAS_SANDBOX_FOR_HOMOLOG"
@@ -56,6 +57,8 @@ export function evaluateCheckoutProviderHomologation(input: ProviderHomologation
     const matches = Array.isArray(item.tokenMatchBySource)
       ? item.tokenMatchBySource.some(entry => entry && typeof entry === "object" && "matches" in entry && entry.matches === true)
       : false;
+    const urlClasses = Array.isArray(item.enabledWebhookUrlClasses) ? item.enabledWebhookUrlClasses : [];
+    if (urlClasses.some(value => value !== "HTTPS_PUBLIC")) blockers.add("ASAAS_WEBHOOK_URL_NOT_FIXED_HTTPS");
     if (item.enabledWebhooks !== 1 || item.enabledWebhooksAllHttps !== true || item.interruptedWebhooks !== 0 || !matches) {
       blockers.add("ASAAS_WEBHOOK_ABSENT_OR_TOKEN_UNMATCHED");
     }

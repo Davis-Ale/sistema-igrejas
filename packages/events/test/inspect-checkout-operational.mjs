@@ -3,18 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parse } from 'dotenv';
+import { classifyCheckoutPublicHttpsUrl } from '../src/checkout-public-https.ts';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const present = value => typeof value === 'string' && value.trim().length > 0;
-const classifyUrl = value => {
-  if (!present(value)) return 'MISSING';
-  try {
-    const url = new URL(value);
-    if (url.username || url.password || url.search || url.hash) return 'UNSAFE_URL';
-    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-    return url.protocol === 'https:' && !local ? 'HTTPS_PUBLIC' : url.protocol === 'http:' && local ? 'HTTP_LOOPBACK' : 'OTHER';
-  } catch { return 'INVALID'; }
-};
+const classifyUrl = classifyCheckoutPublicHttpsUrl;
 const senderAddress = value => /<([^<>]+)>/.exec(value ?? '')?.[1] ?? value?.trim();
 const senderDomain = value => /^[^\s@]+@([^\s@]+)$/.exec(senderAddress(value) ?? '')?.[1]?.toLowerCase();
 
@@ -30,6 +23,7 @@ export function summarizeConfig(values) {
     redisUrlPresent: present(values.REDIS_URL), redisTls: present(values.REDIS_URL) ? values.REDIS_URL.startsWith('rediss://') : null,
     jwtSecretPresent: present(values.JWT_SECRET), paymentTestModeConfigured: present(values.EVENTS_TEST_PAYMENT_MODE),
     paymentProviderMode: ['auto', 'pending'].includes(values.EVENTS_TEST_PAYMENT_MODE?.trim().toLowerCase()) && values.NODE_ENV !== 'production' ? 'TEST' : 'EXTERNAL_OR_DEFAULT',
+    webhookPublicUrl: classifyUrl(values.ASAAS_WEBHOOK_PUBLIC_URL),
     checkoutSecurity: {
       originsPresent: present(values.CHECKOUT_SECURITY_ORIGINS), bucketSecretPresent: present(values.CHECKOUT_SECURITY_BUCKET_SECRET),
       windowMsPresent: present(values.CHECKOUT_SECURITY_WINDOW_MS), ipLimitPresent: present(values.CHECKOUT_SECURITY_IP_LIMIT),
@@ -83,7 +77,7 @@ export async function inspectOperational({ external = false } = {}) {
     report.frontend.push({ file, publicApiBaseUrl: classifyUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? values.NEXT_PUBLIC_API_BASE_URL) });
   }
   const [a, b] = inputs.slice(1).map(input => input.values);
-  for (const key of ['ASAAS_API_KEY', 'ASAAS_ENVIRONMENT', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'EVENTS_EMAIL_FROM', 'EVENTS_APP_BASE_URL', 'REDIS_URL',
+  for (const key of ['ASAAS_API_KEY', 'ASAAS_ENVIRONMENT', 'ASAAS_WEBHOOK_TOKEN', 'ASAAS_WEBHOOK_PUBLIC_URL', 'RESEND_API_KEY', 'EVENTS_EMAIL_FROM', 'EVENTS_APP_BASE_URL', 'REDIS_URL',
     'CHECKOUT_REDIS_ADMIN_URL', 'CHECKOUT_SECURITY_ORIGINS', 'CHECKOUT_SECURITY_BUCKET_SECRET', 'CHECKOUT_SECURITY_WINDOW_MS', 'CHECKOUT_SECURITY_IP_LIMIT',
     'CHECKOUT_SECURITY_CREDENTIAL_LIMIT', 'CHECKOUT_SECURITY_BODY_LIMIT', 'CHECKOUT_SECURITY_STORE_TIMEOUT_MS', 'CHECKOUT_SECURITY_REQUEST_TIMEOUT_MS',
     'CHECKOUT_SECURITY_ALLOW_LOCAL_HTTP', 'CHECKOUT_SECURITY_HTTPS_ONLY']) {
@@ -107,6 +101,7 @@ export async function inspectOperational({ external = false } = {}) {
           webhookHasMore: webhook.data?.hasMore === true,
           enabledWebhooks: entries?.filter(entry => entry.enabled === true).length ?? null,
           interruptedWebhooks: entries?.filter(entry => entry.interrupted === true).length ?? null,
+          enabledWebhookUrlClasses: entries?.filter(entry => entry.enabled === true).map(entry => classifyUrl(entry.url)) ?? null,
           enabledWebhooksAllHttps: entries?.some(entry => entry.enabled === true) ? entries.filter(entry => entry.enabled === true).every(entry => classifyUrl(entry.url) === 'HTTPS_PUBLIC') : null,
           tokenMatchBySource: [{ source: file, matches: entries && present(values.ASAAS_WEBHOOK_TOKEN)
             ? entries.some(entry => entry.enabled === true && entry.authToken === values.ASAAS_WEBHOOK_TOKEN) : null }],

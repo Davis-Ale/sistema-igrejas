@@ -549,7 +549,7 @@ export function EventIntegrationsClient() {
                   const canConnect =
                     canManage && item.connectable && item.status !== "CONNECTED";
                   const canEdit =
-                    canManage && item.connectable && item.status === "CONNECTED";
+                    canManage && item.connectable && (item.status === "CONNECTED" || item.status === "ERROR");
                   const canDisconnect = canEdit;
 
                   return (

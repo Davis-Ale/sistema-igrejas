@@ -10,6 +10,8 @@ test('operational report exposes only booleans/classifications, never env values
     CHECKOUT_SECURITY_BUCKET_SECRET: 'private-operational-secret-32-characters',
     CHECKOUT_SECURITY_ORIGINS: 'https://private-origin.invalid', CHECKOUT_REDIS_ADMIN_URL: 'redis://default:private-admin@private.host/0' });
   assert.equal(result.participantUrl, 'UNSAFE_URL'); assert.equal(result.resend.assistedSenderAcceptsSameFrom, false);
+  assert.equal(summarizeConfig({ EVENTS_APP_BASE_URL: 'https://host.trycloudflare.com' }).participantUrl, 'HTTPS_TEMPORARY');
+  assert.equal(summarizeConfig({ ASAAS_WEBHOOK_PUBLIC_URL: 'https://app.up.railway.app/webhooks/asaas' }).webhookPublicUrl, 'HTTPS_RAILWAY');
   assert.equal(result.checkoutSecurity.bucketSecretPresent, true); assert.equal(result.checkoutSecurity.originsPresent, true);
   const serialized = JSON.stringify(result);
   for (const marker of ['private-', 'private.host', 'Private Name', 'example.invalid', '?key=secret', 'private-origin']) assert.equal(serialized.includes(marker), false);
