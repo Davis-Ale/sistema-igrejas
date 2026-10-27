@@ -1,0 +1,39 @@
+# Permanent HTTPS terminator for the existing host api-br. Not started by the default compose.
+# Not a Cloudflare Tunnel, not trycloudflare, not Railway, not production activation.
+# docker compose -f docker-compose.api-https.yml config
+# Requires API_PUBLIC_HOST, CADDY_ACME_EMAIL. Do not up without an authorized owned hostname.
+services:
+  api-https:
+    image: caddy:2-alpine
+    container_name: sistema_igrejas_api_https
+    restart: "no"
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      API_PUBLIC_HOST: ${API_PUBLIC_HOST:?API_PUBLIC_HOST is required}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?CADDY_ACME_EMAIL is required}
+      API_BR_UPSTREAM: ${API_BR_UPSTREAM:-host.docker.internal:3333}
+    volumes:
+      - ./deploy/api-https/Caddyfile:/etc/caddy/Caddyfile:ro
+      - api_https_caddy_data:/data
+      - api_https_caddy_config:/config
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        test -n "$$API_PUBLIC_HOST"
+        test -n "$$CADDY_ACME_EMAIL"
+        test -n "$$API_BR_UPSTREAM"
+        case "$$API_PUBLIC_HOST" in
+          *trycloudflare*|*cfargotunnel*|*railway*|*localhost*|*[/:]* )
+            echo API_PUBLIC_HOST_NOT_FIXED_HTTPS >&2
+            exit 1
+            ;;
+        esac
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+
+volumes:
+  api_https_caddy_data:
+  api_https_caddy_config:

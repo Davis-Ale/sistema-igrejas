@@ -74,6 +74,34 @@ const EMPTY_PUBLIC_CONFIG: PublicIntegrationConfig = {
   datacenter: null
 };
 
+const SECRET_INTEGRATION_PROVIDERS: EventIntegrationProviderName[] = [
+  "MAILCHIMP",
+  "WHATSAPP_BUSINESS_CLOUD"
+];
+
+export const INTEGRATION_ENCRYPTION_MISSING_REQUIREMENT =
+  "Chave de cifra das integrações do produto Eventos";
+
+export function withEncryptionRequirement(
+  item: EventIntegrationPublicItem
+): EventIntegrationPublicItem {
+  if (
+    !SECRET_INTEGRATION_PROVIDERS.includes(item.provider)
+    || isIntegrationEncryptionConfigured()
+    || item.missingRequirements.includes(INTEGRATION_ENCRYPTION_MISSING_REQUIREMENT)
+  ) {
+    return item;
+  }
+
+  return {
+    ...item,
+    missingRequirements: [
+      ...item.missingRequirements,
+      INTEGRATION_ENCRYPTION_MISSING_REQUIREMENT
+    ]
+  };
+}
+
 const integrationPublicSelect = {
   provider: true,
   status: true,
@@ -217,7 +245,7 @@ export async function listEventIntegrations(
   );
 
   return EVENT_INTEGRATION_CATALOG.map((item) =>
-    toPublicItem(item.provider, byProvider.get(item.provider))
+    withEncryptionRequirement(toPublicItem(item.provider, byProvider.get(item.provider)))
   );
 }
 

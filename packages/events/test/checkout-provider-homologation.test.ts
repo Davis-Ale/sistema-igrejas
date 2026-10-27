@@ -72,11 +72,13 @@ test("current local gaps become explicit blockers without leaking secrets or URL
   assert.ok(verdict.decisions.includes("RESEND_VERIFIED_BARE_SENDER"));
 });
 
-test("temporary or Railway webhook HTTPS is a homologation blocker", () => {
-  const input = ready();
-  input.external[0] = { ...input.external[0], enabledWebhookUrlClasses: ["HTTPS_TEMPORARY"], enabledWebhooksAllHttps: false };
-  const verdict = evaluateCheckoutProviderHomologation(input);
-  assert.ok(verdict.blockers.includes("ASAAS_WEBHOOK_URL_NOT_FIXED_HTTPS"));
+test("temporary, tunnel or Railway webhook HTTPS is a homologation blocker", () => {
+  for (const urlClass of ["HTTPS_TEMPORARY", "HTTPS_TUNNEL", "HTTPS_RAILWAY"]) {
+    const input = ready();
+    input.external[0] = { ...input.external[0], enabledWebhookUrlClasses: [urlClass], enabledWebhooksAllHttps: false };
+    const verdict = evaluateCheckoutProviderHomologation(input);
+    assert.ok(verdict.blockers.includes("ASAAS_WEBHOOK_URL_NOT_FIXED_HTTPS"), urlClass);
+  }
 });
 
 test("display-name sender is a homologation blocker because assisted recovery requires a bare email", () => {

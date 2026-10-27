@@ -635,6 +635,17 @@ export function EventIntegrationsClient() {
                             ? ` ${item.missingRequirements.join(" ")}`
                             : ""}
                         </p>
+                      ) : item.missingRequirements.length > 0 ? (
+                        <p
+                          style={{
+                            color: "#fde68a",
+                            fontSize: "13px",
+                            lineHeight: 1.5,
+                            margin: 0
+                          }}
+                        >
+                          {item.missingRequirements.join(" ")}
+                        </p>
                       ) : null}
                       <div
                         className={settings.actions}

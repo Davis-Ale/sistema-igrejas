@@ -1,0 +1,21 @@
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+{$API_PUBLIC_HOST} {
+	encode gzip
+
+	@public {
+		path /health
+		path /webhooks/asaas
+		path /public/*
+	}
+
+	handle @public {
+		reverse_proxy {$API_BR_UPSTREAM}
+	}
+
+	handle {
+		respond 404
+	}
+}

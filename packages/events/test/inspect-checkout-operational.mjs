@@ -24,6 +24,10 @@ export function summarizeConfig(values) {
     jwtSecretPresent: present(values.JWT_SECRET), paymentTestModeConfigured: present(values.EVENTS_TEST_PAYMENT_MODE),
     paymentProviderMode: ['auto', 'pending'].includes(values.EVENTS_TEST_PAYMENT_MODE?.trim().toLowerCase()) && values.NODE_ENV !== 'production' ? 'TEST' : 'EXTERNAL_OR_DEFAULT',
     webhookPublicUrl: classifyUrl(values.ASAAS_WEBHOOK_PUBLIC_URL),
+    apiPublicHost: present(values.API_PUBLIC_HOST)
+      ? classifyUrl(`https://${values.API_PUBLIC_HOST.trim()}/webhooks/asaas`)
+      : 'MISSING',
+    encryptionKeyPresent: /^[0-9a-fA-F]{64}$/.test(values.EVENTS_INTEGRATIONS_ENCRYPTION_KEY ?? ''),
     checkoutSecurity: {
       originsPresent: present(values.CHECKOUT_SECURITY_ORIGINS), bucketSecretPresent: present(values.CHECKOUT_SECURITY_BUCKET_SECRET),
       windowMsPresent: present(values.CHECKOUT_SECURITY_WINDOW_MS), ipLimitPresent: present(values.CHECKOUT_SECURITY_IP_LIMIT),

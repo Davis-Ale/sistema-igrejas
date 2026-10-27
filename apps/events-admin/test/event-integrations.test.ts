@@ -6,4 +6,5 @@ test("integrations hub can edit ERROR and CONNECTED without changing reserved sp
   const source = await readFile(new URL("../app/dashboard/eventos/integracoes/event-integrations-client.tsx", import.meta.url), "utf8");
   assert.equal(source.includes('item.status === "CONNECTED" || item.status === "ERROR"'), true);
   assert.equal(source.includes("Editar configuração"), true);
+  assert.equal(source.includes(") : item.missingRequirements.length > 0 ? ("), true);
 });
