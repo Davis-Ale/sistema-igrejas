@@ -1,5 +1,13 @@
 # CURRENT STATE
 
+## EXTRAÇÃO FÍSICA — AUDITORIA 2026-10-27 (NÃO SEPARAR)
+
+- Backup recuperável do PostgreSQL local `127.0.0.1:5433/sistema_igrejas` **antes** da migration: `.cursor/tmp/backups/sistema_igrejas-5433-20261027-144054.dump` (`pg_dump -Fc`, 44 TABLE DATA). Fora do Git. Produção não tocada.
+- `prisma migrate deploy` aplicou só `20261027180000_event_public_description_location` nesse banco. `Event.description` / `Event.location` + CHECKs presentes.
+- Auditoria objetiva: `packages/events/docs/eventos-physical-extraction-audit.md`. Domínio em `packages/events`; Admin ainda fala com `api-br :3333`; `events-api` ainda monta Financeiro geral + Asaas; Prisma/JWT/`Transaction` compartilhados. Sem `packages/ai`; assistente rule-based em `api-br` consulta `prisma.event`.
+- **Não extraído.** IA não bloqueia. Apps, pente-fino e observabilidade (stack não escolhida) não entram agora.
+- Diffs alheios preservados (Gestão Financeira client, next-env, dumps, tmp).
+
 ## PÁGINA PÚBLICA — IMAGEM, DESCRIÇÃO E LOCAL (2026-10-27)
 
 - Reutiliza `EventCoverImage` e o editor de capa. GET público `/public/events/:eventId/cover` só para evento publicado. Descrição e local: colunas aditivas em `Event`, editáveis em Informações, exibidas na página pública e na prévia.
@@ -658,7 +666,7 @@ NÃO criar arquitetura agora. NÃO criar código agora.
 ## Pente-fino
 O pente-fino **final completo** (abrir TODOS os prints de `.cursor/benchmarks/events-admin/` e registrar cobertura print por print na matriz) acontece **depois** da extração, dos ajustes visuais e dos apps. Conclusão genérica de equivalência é inválida.
 
-Fechar **gaps principais** do Admin (Preview e API Keys feitos; restam Integrações essenciais, checkout/página pública e demais do mínimo de extração) acontece **antes** da separação física. O pente-fino final não bloqueia a extração.
+Fechar **gaps principais** do Admin (Preview, API Keys, Configurações gerais e conteúdo público imagem/descrição/local feitos; restam Integrações essenciais PARTIAL, FORMULARIO-1, checkout homologado) acontece **antes** da separação física. Auditoria de extração **feita em 2026-10-27**; extração **não** executada. O pente-fino final não bloqueia a extração.
 
 ## Processo obrigatório — Eventos
 Antes de propor ou implementar qualquer tela/fluxo de Eventos: `events-admin-benchmark.mdc`, `events-admin-mandatory-process.mdc`, CURRENT.md, EVENTS_MATRIX.md, Arquitetura Viva v5, product-reference-and-layout.md, prints da área, código real.
@@ -682,7 +690,6 @@ Antes de propor ou implementar qualquer tela/fluxo de Eventos: `events-admin-ben
 
 ## Decisão sobre IA — 2026-10-12
 - A IA do Sistema Igrejas geral permanece independente do produto Eventos.
-- Avaliar a futura IA de Eventos durante a auditoria de arquitetura anterior à separação física.
-- Não implementar IA de Eventos antes da separação.
-- Após a separação, implementar somente funcionalidades de IA expressamente aprovadas pelo usuário.
+- Auditoria de extração 2026-10-27 avaliou a IA: assistente rule-based em `api-br`, sem pacote/LLM; não bloqueia a extração; não implementar IA de Eventos antes da separação.
+- Após a separação, o assistente da igreja deve consumir contrato/API de Eventos em vez de `prisma.event` direto. Somente funcionalidades de IA expressamente aprovadas pelo usuário.
 - Preservar a sequência operacional vigente, sem antecipar etapas.

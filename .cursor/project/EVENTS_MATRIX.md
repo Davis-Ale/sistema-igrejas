@@ -1,5 +1,14 @@
 # EVENTS ADMIN - MATRIZ OPERACIONAL
 
+## Extração física — auditoria 2026-10-27
+
+| Capacidade | Classe | Evidência / limite |
+| --- | --- | --- |
+| Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
+| Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
+| Separação física (repo/banco/JWT/deploy) | `MISSING` | Admin em `:3333` (`api-br`); `events-api` ainda monta Financeiro geral; Prisma compartilhado. Não separar neste corte. |
+| Futura IA de Eventos | `USER_DEFERRED` | Sem `packages/ai` e sem LLM. Assistente rule-based em `api-br`. Não implementar antes da extração. |
+
 ## Checkout v2 — HTTPS permanente da API (2026-10-27)
 
 - Webhook Asaas: `PARTIAL`. Stack de nuvem `docker-compose.cloud.yml` (Caddy + APIs + PostgreSQL + Redis) preparado; compose padrão só PostgreSQL. Cloudflare Tunnel/trycloudflare/Railway recusados. Sem hostname/VPS autorizados, sem publicação, sem apply no Asaas.
@@ -156,7 +165,7 @@ Fonte: benchmark 02 (Salvar rascunho / Pré-visualizar / Publicar Evento) + deci
 | Preview não publica | `IMPLEMENTED` | `GET /api/events/:eventId/preview` só lê; não escreve `isPublic`. |
 | Checkout real bloqueado na prévia | `IMPLEMENTED` | UI desativa inscrição/pagamento; `POST` público de draft continua 404. |
 | Botão Pré-visualizar no fluxo admin | `IMPLEMENTED` | Header do workspace, Informações (ao lado de Publicar) e card de rascunho da Visão geral. Salvar informações e Publicar preservados. |
-| Imagem / descrição / local na página pública | `IMPLEMENTED` | Capa existente (`EventCoverImage`) na página pública/prévia. `Event.description` e `Event.location` aditivos, editáveis em Informações. |
+| Imagem / descrição / local na página pública | `IMPLEMENTED` | Capa existente (`EventCoverImage`) na página pública/prévia. `Event.description` e `Event.location` aditivos, editáveis em Informações. Migration `20261027180000` aplicada no PostgreSQL local 5433. |
 
 ### Página pública e checkout — reconciliação do HEAD após `fc9f861` (2026-10-12)
 
