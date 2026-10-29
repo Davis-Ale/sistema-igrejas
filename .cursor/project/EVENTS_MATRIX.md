@@ -4,6 +4,7 @@
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
+| App do Organizador — operação de recepção (item 7) | `IMPLEMENTED` | `apps/events-organizer`: eventos, QR, check-in, localizar participante, consultar inscrição e bloqueios. Sem Participante/Sympla. Sem offline/portarias. |
 | App do Participante — Home/Cronograma/Credencial/Mapa/Perfil (item 6) | `IMPLEMENTED` | `apps/events-participant` contra prints de `app-participantes` e Arquitetura Viva v5. Identidade igreja/evento. Sem Sympla/ADR. Admin/checkout intactos. |
 | Admin chrome — marca ADR Solutions (item 5) | `IMPLEMENTED` | Wordmark ADR Solutions em layout/home/login/shell de events-admin; descrição Plataforma de Eventos; item 9 visual standalone NÃO feito; dual-access, nav da suíte e chave de sessão intactos. |
 | Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
@@ -300,11 +301,11 @@ A numeração pode evoluir. A regra de extração (passo 8 logo após fluxos pri
 
 Histórico já encerrado nesta linha: CHECKIN-2 (`0dc71eb`); governança benchmark; PARTICIPANTES-2.
 
-## App Organizador — depois da extração
+## App Organizador — item 7 (2026-10-29)
 
-Separado do App do Participante. Operação da equipe: selecionar evento, localizar participante, validar credencial, check-in, consultar inscrição e bloqueios; QR/scanner somente quando autorizado.
+Separado do App do Participante. Operação da equipe em `apps/events-organizer`: selecionar evento, localizar participante, validar credencial, check-in, consultar inscrição e bloqueios; QR/scanner quando o navegador autoriza câmera.
 
-Entra **depois** da extração física, dos ajustes visuais e do App do Participante. NÃO criar arquitetura nem código agora.
+Offline, portarias, equipes, vendas e financeiro resumido continuam fora deste corte. Sem prints do Participante e sem Sympla.
 
 ## 1. Criação e configuração de evento
 - Criar novo evento como ação do módulo Eventos.

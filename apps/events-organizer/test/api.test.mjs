@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { ApiError, checkIn, listEvents, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
+import { ApiError, checkIn, listEvents, listRegistrations, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
 
 const originalFetch = globalThis.fetch;
 const originalBase = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -41,6 +41,19 @@ test("event listing forwards pagination, search, bearer and cancellation, never 
   assert.equal(request.headers.get("Authorization"), "Bearer test-token");
   assert.equal(request.signal, signal);
   assert.equal(request.cache, "no-store");
+});
+
+test("participant lookup uses the existing registrations contract without churchId", async () => {
+  const requests = respond({ items: [], pagination: { page: 1, totalPages: 1, total: 0 } });
+  const signal = new AbortController().signal;
+  await listRegistrations("test-token", "event-test", 1, " Ana ", signal);
+  const request = requests[0];
+  const url = new URL(request.url);
+  assert.equal(url.pathname, "/api/events/event-test/registrations");
+  assert.deepEqual(Object.fromEntries(url.searchParams), { page: "1", limit: "20", search: "Ana" });
+  assert.equal(request.headers.get("Authorization"), "Bearer test-token");
+  assert.equal(request.signal, signal);
+  assert.doesNotMatch(request.url, /churchId/);
 });
 
 test("check-in sends only selected event and credential, and returns the server participant", async () => {

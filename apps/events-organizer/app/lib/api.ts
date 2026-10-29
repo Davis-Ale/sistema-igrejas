@@ -18,6 +18,21 @@ export type CheckInResult = {
   person: { name: string } | null;
   visitor: { name: string } | null;
 };
+export type RegistrationSummary = {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  checkInToken: string | null;
+  waitlistedAt: string | null;
+  person: { name: string; phone: string; email: string | null } | null;
+  visitor: { name: string; phone: string; email: string | null } | null;
+  ticket: { name: string } | null;
+  ticketBatch: { name: string } | null;
+};
+export type RegistrationPage = {
+  items: RegistrationSummary[];
+  pagination: { page: number; totalPages: number; total: number };
+};
 
 export function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
@@ -94,6 +109,22 @@ export async function loadEventCover(token: string, eventId: string, signal: Abo
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiError(response.status, "EVENT_COVER_UNAVAILABLE", "Capa indisponível.");
   return response.blob();
+}
+
+export function listRegistrations(
+  token: string,
+  eventId: string,
+  page: number,
+  search: string,
+  signal: AbortSignal
+) {
+  const query = new URLSearchParams({ page: String(page), limit: "20" });
+  if (search.trim()) query.set("search", search.trim());
+  return request<RegistrationPage>(
+    `/api/events/${encodeURIComponent(eventId)}/registrations?${query}`,
+    { signal },
+    token
+  );
 }
 
 export async function checkIn(token: string, eventId: string, code: string) {

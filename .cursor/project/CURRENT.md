@@ -1,5 +1,12 @@
 # CURRENT STATE
 
+## ITEM 7 — APP DO ORGANIZADOR (2026-10-29)
+
+- `apps/events-organizer` finaliza a operação já prevista: login, selecionar evento, QR, check-in manual, localizar participante, consultar inscrição e bloqueios (pagamento, espera, cancelado, já presente).
+- Reusa `GET /api/events/:eventId/registrations` e o check-in por token existentes. Sem vendas, offline, portarias, equipes ou financeiro. Sem prints do Participante e sem Sympla.
+- Admin, checkout, dual-access e arquitetura não foram alterados.
+- Diffs alheios e regras privadas preservados.
+
 ## ITEM 6 — APP DO PARTICIPANTE (2026-10-29)
 
 - `apps/events-participant` completa Home, Cronograma, Credencial, Mapa e Perfil contra os prints de `.cursor/benchmarks/app-participantes/` e a Arquitetura Viva v5.
@@ -689,15 +696,13 @@ Eventos permanece extraível e vendável à parte, na **mesma base neste momento
 - Possível solução: seção compacta/recolhível e estado "Adicionado".
 - NÃO implementar agora.
 
-## App Organizador — depois da extração
+## App Organizador — item 7 (2026-10-29)
 
 Aplicativo operacional da equipe/organizador, separado do App do Participante.
 
-Objetivo previsto: selecionar evento, localizar participante, validar credencial, check-in, consultar inscrição e bloqueios relevantes; QR/scanner somente quando autorizado.
+Operação neste corte: selecionar evento, localizar participante, validar credencial, check-in, consultar inscrição e bloqueios relevantes; QR/scanner somente quando autorizado.
 
-Entra **depois** da separação física de Eventos, dos ajustes visuais do produto standalone e do App do Participante (sequência 2026-09-10). Não exige o pente-fino final completo antes de existir.
-
-NÃO criar arquitetura agora. NÃO criar código agora.
+Offline, portarias, equipes, vendas e financeiro resumido continuam fora. Sem prints do Participante e sem Sympla.
 
 ## App do Participante
 - Benchmark separado: `.cursor/benchmarks/app-participantes/`
