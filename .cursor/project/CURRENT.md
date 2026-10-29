@@ -1,5 +1,11 @@
 # CURRENT STATE
 
+## DEV LOCAL PÓS-ITEM 4 (2026-10-29)
+
+- `pnpm dev` da raiz sobe `api-br` (:3333), `web-br` (:3000), `events-api` (:3002) e `events-admin` (:3001). Não sobe `events-participant`.
+- Destinos: `web-br` → `api-br :3333`; `events-admin` → `events-api :3002`. Dual-access (handoff + login SaaS) intacto.
+- Diffs alheios e regras privadas preservados.
+
 ## ITEM 4 — EVENTS-API SEM FINANCEIRO GERAL (2026-10-29)
 
 - `events-api` não monta mais `registerFinancialRoutes` nem `registerAsaasRoutes`. Mantém JWT, Eventos, financeiro de Eventos, checkout e webhook Asaas da cobrança.
