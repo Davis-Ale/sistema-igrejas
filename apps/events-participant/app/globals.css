@@ -1,6 +1,6 @@
 :root {
-  background: #020617;
-  color: #f8fafc;
+  background: #eef0f3;
+  color: #111827;
   font-family:
     Inter,
     ui-sans-serif,
@@ -22,13 +22,7 @@ body {
 }
 
 body {
-  background:
-    radial-gradient(
-      circle at top,
-      rgba(37, 99, 235, 0.2),
-      transparent 36%
-    ),
-    #020617;
+  background: #eef0f3;
 }
 
 button,

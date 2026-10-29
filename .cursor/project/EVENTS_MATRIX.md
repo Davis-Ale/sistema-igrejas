@@ -4,6 +4,7 @@
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
+| App do Participante — Home/Cronograma/Credencial/Mapa/Perfil (item 6) | `IMPLEMENTED` | `apps/events-participant` contra prints de `app-participantes` e Arquitetura Viva v5. Identidade igreja/evento. Sem Sympla/ADR. Admin/checkout intactos. |
 | Admin chrome — marca ADR Solutions (item 5) | `IMPLEMENTED` | Wordmark ADR Solutions em layout/home/login/shell de events-admin; descrição Plataforma de Eventos; item 9 visual standalone NÃO feito; dual-access, nav da suíte e chave de sessão intactos. |
 | Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
 | Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
@@ -504,17 +505,17 @@ Código: `packages/events/src/event.{service,schema,routes}.ts`,
 - Avisos.
 - Certificados quando entrarem no corte.
 
-### PARTICIPANT-APP (2026-09-16)
+### PARTICIPANT-APP (item 6, 2026-10-29)
 
-Implementação local, sem commit/push. `church-reviewer`: **APPROVED**; validação visual do usuário pendente.
+Home, Cronograma, Credencial, Mapa e Perfil alinhados aos prints de `.cursor/benchmarks/app-participantes/` e à Arquitetura Viva v5. Sem Sympla. Identidade igreja/evento.
 
 | Capacidade | Classe | Justificativa |
 | --- | --- | --- |
-| Home / Inscrição | `IMPLEMENTED` | Evento, participante, status, data/local reais quando existentes, próxima sessão, demais sessões e jornada. Sem formulário de inscrição. |
+| Home / Inscrição | `IMPLEMENTED` | Herói com igreja, data/local/contagem, participante, instalar, próxima sessão, demais sessões, resumo, atalhos e card do evento. Sem formulário de inscrição. |
 | Cronograma | `IMPLEMENTED` | Busca, Todos/Meus, dias, timeline, horário, tipo, facilitador, local e detalhes com dados publicados. |
 | Credencial | `IMPLEMENTED` | QR/checkInToken real, código textual, status e ingresso; backend bloqueia PENDING, CANCELLED e lista de espera. |
 | Mapa | `IMPLEMENTED` | Planta por URL HTTPS e pontos úteis reais configurados no Admin. Estado vazio sem conteúdo fake. |
-| Perfil | `IMPLEMENTED` | Nome, papel/status, ingresso, e-mail/telefone e acesso à credencial. CPF omitido porque não é persistido. |
+| Perfil | `IMPLEMENTED` | Nome, papel/status, ingresso, e-mail/telefone, credencial e evento. CPF omitido porque não é persistido. |
 | Navegação inferior | `IMPLEMENTED` | Home, Cronograma, Credencial central, Mapa e Perfil. |
 | Instalação PWA | `IMPLEMENTED` | Manifesto por `publicSlug`, prompt real no Chromium e orientação iOS; token não entra no manifesto/start URL. |
 | Recuperação e encerramento | `IMPLEMENTED` | Token recebido no fragmento, removido após captura, mantido em `sessionStorage` e apagado ao encerrar acesso. |

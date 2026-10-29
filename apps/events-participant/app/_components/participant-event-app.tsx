@@ -95,6 +95,27 @@ function formatEventDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatHeroDate(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    timeZone: EVENT_TIME_ZONE
+  }).format(new Date(value));
+}
+
+function formatCountdown(value: string) {
+  const eventTime = new Date(value).getTime();
+  const diffMs = eventTime - Date.now();
+
+  if (!Number.isFinite(eventTime) || diffMs <= 0) {
+    return null;
+  }
+
+  const days = Math.max(1, Math.ceil(diffMs / 86_400_000));
+  return days === 1 ? "Em 1 dia" : `Em ${days} dias`;
+}
+
 function formatDay(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -102,6 +123,18 @@ function formatDay(value: string) {
     weekday: "short",
     timeZone: EVENT_TIME_ZONE
   }).format(new Date(value));
+}
+
+function formatScheduleDay(value: string) {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    timeZone: EVENT_TIME_ZONE
+  }).formatToParts(new Date(value));
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+
+  return `${weekday.replace(".", "")} ${day}`;
 }
 
 function formatTime(value: string) {
@@ -196,23 +229,62 @@ function getStatusLabel(status: string) {
     : "Confirmada";
 }
 
-function SessionCard({ session }: { session: EventSession }) {
+function SessionCard({
+  session,
+  variant = "home",
+  detailsOpen = false,
+  onToggleDetails
+}: {
+  session: EventSession;
+  variant?: "home" | "timeline";
+  detailsOpen?: boolean;
+  onToggleDetails?: () => void;
+}) {
+  const homeMeta = [
+    `${formatHeroDate(session.startsAt)} · ${formatTime(session.startsAt)} – ${formatTime(session.endsAt)}`,
+    session.type,
+    session.location
+  ].filter(Boolean).join(" · ");
+
   return (
-    <article className={styles.sessionCard}>
-      <span className={styles.sessionInitials}>
-        {getInitials(session.title)}
-      </span>
+    <article
+      className={
+        variant === "timeline" ? styles.timelineCard : styles.sessionCard
+      }
+    >
+      {variant === "home" ? (
+        <span className={styles.sessionInitials}>
+          {getInitials(session.title)}
+        </span>
+      ) : (
+        <span className={styles.timelineAccent} aria-hidden />
+      )}
       <div className={styles.sessionBody}>
         <div className={styles.sessionTitleRow}>
           <h3>{session.title}</h3>
           {session.type ? <span>{session.type}</span> : null}
         </div>
-        <p>
-          {formatTime(session.startsAt)} – {formatTime(session.endsAt)}
-          {session.facilitator ? ` · ${session.facilitator}` : ""}
-          {session.location ? ` · ${session.location}` : ""}
-        </p>
-        {session.details ? (
+        {variant === "home" ? (
+          <p>{homeMeta}</p>
+        ) : (
+          <>
+            <p>
+              {formatTime(session.startsAt)} – {formatTime(session.endsAt)}
+              {session.facilitator ? ` · ${session.facilitator}` : ""}
+            </p>
+            {session.location ? <p>{session.location}</p> : null}
+          </>
+        )}
+        {session.details && onToggleDetails ? (
+          <button
+            className={styles.detailsToggle}
+            onClick={onToggleDetails}
+            type="button"
+          >
+            Detalhes
+          </button>
+        ) : null}
+        {detailsOpen && session.details ? (
           <p className={styles.sessionDetails}>{session.details}</p>
         ) : null}
       </div>
@@ -241,6 +313,7 @@ export function ParticipantEventApp({
   const [scheduleScope, setScheduleScope] =
     useState<"all" | "mine">("all");
   const [selectedDay, setSelectedDay] = useState<string>("all");
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
   const [
     installPrompt,
     setInstallPrompt
@@ -581,27 +654,35 @@ export function ParticipantEventApp({
     (session) => session.id !== nextSession?.id
   );
   const eventLocation =
-    appData.event.location?.address ??
     appData.event.location?.name ??
+    appData.event.location?.address ??
     null;
+  const countdown = formatCountdown(appData.event.date);
+  const firstName = appData.participant.name.split(" ")[0];
+  const enrolledSessions = appData.sessions.filter(
+    (session) => session.isMine
+  ).length;
 
   return (
     <main className={styles.appShell} id="aplicativo">
       <header className={styles.hero}>
-        <p>Olá, {appData.participant.name.split(" ")[0]}</p>
-        <strong>{appData.event.churchName}</strong>
-        <h1>{appData.event.title}</h1>
-        <div className={styles.heroMeta}>
-          <span>{formatEventDate(appData.event.date)}</span>
-          {eventLocation ? <span>{eventLocation}</span> : null}
+        <div className={styles.heroTop}>
+          <p>Olá, {firstName}</p>
+          <button
+            aria-label="Abrir perfil"
+            className={styles.heroAvatar}
+            onClick={() => setActiveTab("profile")}
+            type="button"
+          >
+            {getInitials(appData.participant.name)}
+          </button>
         </div>
-        <button
-          className={styles.endAccess}
-          onClick={handleEndAccess}
-          type="button"
-        >
-          Encerrar acesso
-        </button>
+        <strong>{appData.event.churchName}</strong>
+        <div className={styles.heroMeta}>
+          <span>{formatHeroDate(appData.event.date)}</span>
+          {eventLocation ? <span>{eventLocation}</span> : null}
+          {countdown ? <span>{countdown}</span> : null}
+        </div>
       </header>
 
       <div className={styles.content}>
@@ -624,11 +705,11 @@ export function ParticipantEventApp({
             (installPrompt || showIosInstallInstructions) ? (
               <article className={styles.installCard}>
                 <div>
-                  <strong>Instalar aplicativo</strong>
+                  <strong>Instalar o app</strong>
                   <p>
                     {installPrompt
                       ? "Instale este evento neste dispositivo para acesso direto."
-                      : "No Safari, use Compartilhar → Adicionar à Tela de Início."}
+                      : "Toque em Compartilhar e em Adicionar à Tela de Início."}
                   </p>
                 </div>
                 {installPrompt ? (
@@ -636,9 +717,11 @@ export function ParticipantEventApp({
                     onClick={() => void handleInstall()}
                     type="button"
                   >
-                    Instalar
+                    Ok
                   </button>
-                ) : null}
+                ) : (
+                  <span>Ok</span>
+                )}
               </article>
             ) : null}
 
@@ -665,7 +748,7 @@ export function ParticipantEventApp({
             ) : null}
 
             <section>
-              <p className={styles.sectionLabel}>Jornada</p>
+              <p className={styles.sectionLabel}>Resumo</p>
               <div className={styles.journey}>
                 <span className={styles.journeyDone}>Inscrito</span>
                 <span className={styles.journeyDone}>Confirmado</span>
@@ -680,6 +763,40 @@ export function ParticipantEventApp({
                   Presente
                 </span>
               </div>
+            </section>
+
+            <section className={styles.shortcutGrid}>
+              <button
+                className={styles.shortcutCard}
+                onClick={() => setActiveTab("credential")}
+                type="button"
+              >
+                <NavIcon tab="credential" />
+                <strong>Credencial</strong>
+                <span>Pronta para uso</span>
+              </button>
+              <button
+                className={styles.shortcutCard}
+                onClick={() => setActiveTab("schedule")}
+                type="button"
+              >
+                <NavIcon tab="schedule" />
+                <strong>Sessões</strong>
+                <span>
+                  {enrolledSessions > 0
+                    ? `${enrolledSessions} inscritas`
+                    : `${appData.sessions.length} publicadas`}
+                </span>
+              </button>
+            </section>
+
+            <section>
+              <p className={styles.sectionLabel}>Evento</p>
+              <article className={styles.eventCard}>
+                <h2>{appData.event.title}</h2>
+                <p>{formatHeroDate(appData.event.date)}</p>
+                {eventLocation ? <p>{eventLocation}</p> : null}
+              </article>
             </section>
           </>
         ) : null}
@@ -730,7 +847,7 @@ export function ParticipantEventApp({
                     onClick={() => setSelectedDay(day.key)}
                     type="button"
                   >
-                    {formatDay(day.sample)}
+                    {formatScheduleDay(day.sample)}
                   </button>
                 ))}
               </div>
@@ -743,7 +860,19 @@ export function ParticipantEventApp({
                     {group.sessions.map((session) => (
                       <div className={styles.timelineRow} key={session.id}>
                         <time>{formatTime(session.startsAt)}</time>
-                        <SessionCard session={session} />
+                        <SessionCard
+                          detailsOpen={openSessionId === session.id}
+                          onToggleDetails={
+                            session.details
+                              ? () =>
+                                  setOpenSessionId((current) =>
+                                    current === session.id ? null : session.id
+                                  )
+                              : undefined
+                          }
+                          session={session}
+                          variant="timeline"
+                        />
                       </div>
                     ))}
                   </section>
@@ -838,8 +967,10 @@ export function ParticipantEventApp({
               onClick={() => setActiveTab("credential")}
               type="button"
             >
-              Acessar minha credencial
+              <span>Minha credencial</span>
+              <code>{appData.registration.checkInToken}</code>
             </button>
+            <p className={styles.sectionLabel}>Meus dados</p>
             <dl className={styles.profileData}>
               {appData.registration.ticketName ? (
                 <div>
@@ -858,6 +989,19 @@ export function ParticipantEventApp({
                 <dd>{appData.participant.phone}</dd>
               </div>
             </dl>
+            <p className={styles.sectionLabel}>Evento</p>
+            <article className={styles.eventCard}>
+              <h2>{appData.event.title}</h2>
+              <p>{formatHeroDate(appData.event.date)}</p>
+              {eventLocation ? <p>{eventLocation}</p> : null}
+            </article>
+            <button
+              className={styles.endAccess}
+              onClick={handleEndAccess}
+              type="button"
+            >
+              Encerrar acesso
+            </button>
           </section>
         ) : null}
       </div>

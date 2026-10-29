@@ -1,5 +1,12 @@
 # CURRENT STATE
 
+## ITEM 6 — APP DO PARTICIPANTE (2026-10-29)
+
+- `apps/events-participant` completa Home, Cronograma, Credencial, Mapa e Perfil contra os prints de `.cursor/benchmarks/app-participantes/` e a Arquitetura Viva v5.
+- Identidade da igreja/evento (nome, data, local existentes). Sem Sympla, sem ADR Solutions, sem CPF/cidade inventados, sem notificação.
+- Admin, checkout, dual-access e arquitetura não foram alterados. Item 9 visual standalone continua pendente.
+- Diffs alheios e regras privadas preservados.
+
 ## ITEM 5 — MARCA VISUAL NO CHROME DO ADMIN (2026-10-29)
 
 - Wordmark do Admin Eventos é **ADR Solutions**: título do layout, eyebrow da home, eyebrow do login e eyebrow do dashboard shell. Descrição do documento: **Plataforma de Eventos**.
