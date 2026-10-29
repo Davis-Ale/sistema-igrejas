@@ -32,7 +32,7 @@ export default function HomePage() {
             textTransform: "uppercase"
           }}
         >
-          Sistema Igrejas
+          ADR Solutions
         </p>
 
         <h1

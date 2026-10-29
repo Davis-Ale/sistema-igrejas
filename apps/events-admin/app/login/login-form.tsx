@@ -124,7 +124,7 @@ export function LoginForm() {
             textTransform: "uppercase"
           }}
         >
-          Sistema Igrejas
+          ADR Solutions
         </p>
 
         <h1

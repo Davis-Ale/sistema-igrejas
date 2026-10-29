@@ -1,5 +1,11 @@
 # CURRENT STATE
 
+## ITEM 5 — MARCA VISUAL NO CHROME DO ADMIN (2026-10-29)
+
+- Wordmark do Admin Eventos é **ADR Solutions**: título do layout, eyebrow da home, eyebrow do login e eyebrow do dashboard shell. Descrição do documento: **Plataforma de Eventos**.
+- Funcionalidades e os dois acessos (handoff do Sistema Igrejas e login SaaS) permanecem iguais.
+- Item 9 (overhaul visual standalone: nova entrada, dashboard, navegação, coerência de identidade e remoção da aparência de módulo da igreja) **não** foi feito.
+
 ## DEV LOCAL PÓS-ITEM 4 (2026-10-29)
 
 - `pnpm dev` da raiz sobe `api-br` (:3333), `web-br` (:3000), `events-api` (:3002) e `events-admin` (:3001). Não sobe `events-participant`.
@@ -19,8 +25,8 @@
 - Identidade da igreja/evento **somente** nas páginas públicas e no App do Participante, pelas configurações já existentes. Sem campos novos de marca.
 - URL pública: `/{igreja}/{evento}` em domínio-base **neutro ainda a definir**. Sem subdomínio DNS por evento.
 - Sympla permanece benchmark **exclusivo do Admin**. Referências visuais v4/v5 do Participante (Arquitetura Viva v5 + `.cursor/benchmarks/app-participantes/`) preservadas.
-- Arquitetura, dual-access, telas e checkout intactos. Prazo de produto: **20/11/2026**.
-- Somente regras locais + este CURRENT. Sem alteração funcional. Sem push de regras privadas. Regra: `.cursor/rules/branding-adr-solutions.mdc`.
+- Chrome do Admin (item 5) aplicado; item 9 visual standalone não feito. Arquitetura, dual-access e checkout intactos. Prazo de produto: **20/11/2026**.
+- Sem alteração funcional. Sem push de regras privadas. Regra: `.cursor/rules/branding-adr-solutions.mdc`.
 
 ## EXTRAÇÃO — ITEM 4 OBRIGATÓRIO, ACESSO DUAL (2026-10-27)
 

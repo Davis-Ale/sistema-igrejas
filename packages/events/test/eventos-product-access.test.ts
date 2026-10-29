@@ -65,3 +65,27 @@ test("single Eventos implementation exposes church-suite handoff and SaaS login"
   assert.match(workspace, /\/api\/events\/financial\/transactions/);
   assert.doesNotMatch(workspace, /\/api\/financial\/summary/);
 });
+
+test("events-admin chrome wordmark is ADR Solutions and dual-access contracts stay", () => {
+  const chromeFiles = [
+    "apps/events-admin/app/layout.tsx",
+    "apps/events-admin/app/page.tsx",
+    "apps/events-admin/app/login/login-form.tsx",
+    "apps/events-admin/app/dashboard/dashboard-shell.tsx"
+  ];
+
+  for (const relativePath of chromeFiles) {
+    const source = read(relativePath);
+    assert.match(source, /ADR Solutions/);
+    assert.doesNotMatch(source, /Sistema Igrejas/);
+  }
+
+  const layout = read("apps/events-admin/app/layout.tsx");
+  assert.match(layout, /Plataforma de Eventos/);
+
+  const saasLogin = read("apps/events-admin/app/login/login-form.tsx");
+  assert.match(saasLogin, /\/auth\/login/);
+  assert.match(saasLogin, /router\.replace\("\/dashboard\/eventos"\)/);
+  assert.match(saasLogin, /localhost:3002/);
+  assert.match(saasLogin, /sistema-igrejas\.session/);
+});

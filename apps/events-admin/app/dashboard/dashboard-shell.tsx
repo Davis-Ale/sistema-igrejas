@@ -172,7 +172,7 @@ export function DashboardShell({
               textTransform: "uppercase"
             }}
           >
-            Sistema Igrejas
+            ADR Solutions
           </p>
 
           <nav

@@ -4,6 +4,7 @@
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
+| Admin chrome — marca ADR Solutions (item 5) | `IMPLEMENTED` | Wordmark ADR Solutions em layout/home/login/shell de events-admin; descrição Plataforma de Eventos; item 9 visual standalone NÃO feito; dual-access, nav da suíte e chave de sessão intactos. |
 | Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
 | Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
 | Item 4 — uma implementação, dois acessos (SI + SaaS) | `IMPLEMENTED` | Contrato `product-access.ts`: handoff `web-br` e login `events-admin` no mesmo app. Sem segundo Eventos. |

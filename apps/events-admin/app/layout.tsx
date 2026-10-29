@@ -8,8 +8,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema Igrejas",
-  description: "Sistema de gestão para igrejas"
+  title: "ADR Solutions",
+  description: "Plataforma de Eventos"
 };
 
 export default function RootLayout({
