@@ -5,7 +5,7 @@ import { createPublicCheckoutV2Client, type PublicCheckoutV2Factory } from "./pu
 
 // Public page composition only. Preview stays without this wrapper. No env flag.
 const prepareCheckoutV2: PublicCheckoutV2Factory = target => createPublicCheckoutV2Client({
-  target, apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333",
+  target, apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002",
   storage: window.sessionStorage, crypto: window.crypto
 });
 

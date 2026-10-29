@@ -6,8 +6,9 @@
 | --- | --- | --- |
 | Backup local recuperável + migration `20261027180000` | `IMPLEMENTED` | Dump `-Fc` de `127.0.0.1:5433/sistema_igrejas` antes do deploy; colunas `description`/`location` + CHECKs no banco local. Produção não tocada. Dump fora do Git. |
 | Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
-| Item 4 — uma implementação, dois acessos (SI + SaaS) | `IMPLEMENTED` | Contrato `product-access.ts`: handoff `web-br` e login `events-admin` no mesmo app. Sem segundo Eventos. Extração física continua `MISSING`. |
-| Separação física (repo/banco/JWT/deploy) | `MISSING` | Admin em `:3333` (`api-br`); `events-api` ainda monta Financeiro geral; Prisma compartilhado. Não separar neste corte. Extração futura deve preservar os dois acessos. |
+| Item 4 — uma implementação, dois acessos (SI + SaaS) | `IMPLEMENTED` | Contrato `product-access.ts`: handoff `web-br` e login `events-admin` no mesmo app. Sem segundo Eventos. |
+| Item 4 — `events-api` sem Financeiro geral + Admin na API própria | `IMPLEMENTED` | `events-api` sem `registerFinancialRoutes`/`registerAsaasRoutes`. `events-admin` default `:3002`. Workspace Financeiro em `/api/events/financial/*`. JWT/`churchId`/checkout preservados. |
+| Separação física (repo/banco/JWT/deploy) | `MISSING` | Prisma/JWT ainda compartilhados. Extração futura deve preservar os dois acessos. |
 | Futura IA de Eventos | `USER_DEFERRED` | Sem `packages/ai` e sem LLM. Assistente rule-based em `api-br`. Não implementar antes da extração. |
 
 ## Checkout v2 — HTTPS permanente da API (2026-10-27)

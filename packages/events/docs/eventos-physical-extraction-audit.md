@@ -23,8 +23,8 @@ Eventos permanece standalone-ready **no monorepo atual**, com o mesmo PostgreSQL
 | Peça | Papel atual | Extraível agora? |
 | --- | --- | --- |
 | `packages/events` | Domínio Eventos (rotas, checkout, ingressos, form, financeiro do evento, API Keys, integrações do produto) | Domínio sim; ainda acoplado a Prisma compartilhado, JWT/`requireRole` e `ensureCampusBelongsToChurch` |
-| `apps/events-admin` | Admin Web do produto (porta 3001) | UI sim; **runtime aponta para `api-br :3333`**, não para `events-api :3002` |
-| `apps/events-api` | Processo :3002 com Eventos + auth JWT + **Financeiro geral da igreja** + Asaas | Não é processo puro de Eventos |
+| `apps/events-admin` | Admin Web do produto (porta 3001) | UI sim; default `NEXT_PUBLIC_API_BASE_URL` = `events-api :3002` (item 4, 2026-10-29) |
+| `apps/events-api` | Processo :3002 com Eventos + auth JWT + financeiro de Eventos + webhook Asaas de cobrança | Financeiro geral da igreja **desmontado** (item 4) |
 | `apps/api-br` | Monólito da igreja: Eventos + membros + trilhos + voluntários + ministérios + financeiro + assistente | Hospeda o Admin de Eventos hoje |
 | `apps/web-br` | Handoff iframe para `NEXT_PUBLIC_EVENTS_APP_URL` (default `:3001`) | Já não duplica o produto |
 | `apps/events-participant` | PWA; default `EVENTS_API_BASE_URL` `:3002` | Fora da sequência até depois da extração |
@@ -58,12 +58,13 @@ O mesmo JWT (`packages/auth`) autentica `api-br` e `events-api`. `packages/event
 ### Composição dos servidores
 
 - `apps/api-br/src/app.ts` registra Eventos **e** membros, trilhos, voluntários, ministérios, financeiro da igreja, Asaas e assistente.
-- `apps/events-api/src/app.ts` registra Eventos, checkout v2, participant app público, `registerAuthRoutes`, `registerFinancialRoutes` (Financeiro geral), rotas Asaas e `authorizeFinancialRoute` em `/financial/` e `/events/financial/`.
-- `events-api` **não** monta membros/trilhos/assistente. Ainda monta o Financeiro geral da igreja.
+- `apps/events-api/src/app.ts` registra Eventos, checkout v2, participant app público, `registerAuthRoutes`, financeiro de Eventos (`registerEventFinancialRoutes`) e webhook Asaas da cobrança. **Não** monta `registerFinancialRoutes` nem `registerAsaasRoutes` (Financeiro geral).
+- `authorizeFinancialRoute` permanece para `/events/financial/`.
+- `events-api` **não** monta membros/trilhos/assistente.
 
 ### Frontend
 
-O Admin (`events-admin`) usa `NEXT_PUBLIC_API_BASE_URL` com default `http://localhost:3333` (`api-br`). Extração de processo falha se o Admin continuar falando com o monólito da igreja.
+O Admin (`events-admin`) usa `NEXT_PUBLIC_API_BASE_URL` com default `http://localhost:3002` (`events-api`). `web-br` permanece em `api-br :3333`. Handoff e login SaaS inalterados.
 
 `web-br` `/dashboard/eventos` já é handoff, não uma segunda implementação. O SaaS direto já entra em `events-admin` `/login` e cai em `/dashboard/eventos`. Os dois modos usam o mesmo app, JWT, RBAC, checkout e dados.
 
@@ -126,8 +127,8 @@ Mínimo de fluxos estáveis (ainda com gaps): Dashboard Geral, criação/gestão
 
 Não extraído. Bloqueios objetivos:
 
-1. **Admin fala com `api-br :3333`.** Trocar o processo sem retarget do frontend deixa o produto Eventos no monólito da igreja.
-2. **`events-api` ainda monta o Financeiro geral** (`registerFinancialRoutes`, Asaas geral). Extrair o binário atual levaria o Financeiro da igreja junto.
+1. **Admin default aponta para `events-api :3002` (item 4).** Se `NEXT_PUBLIC_API_BASE_URL` local ainda for `:3333`, o fallback do código não vale.
+2. **Financeiro geral desmontado de `events-api`.** Restam Prisma compartilhado e JWT.
 3. **Schema Prisma único** com FKs para Person, Visitor, Campus, TrailStage, Church e Transaction. Primeira extração deve manter o banco; split de schema é corte posterior.
 4. **Integrações essenciais PARTIAL** (RD/OAuth, CAPI, sync, envio). Gap de Admin, não de domínio.
 5. **Checkout pago homologado incompleto:** gate `CLOSED`, hostname/VPS/webhook Asaas HTTPS não publicados, Resend incompleto. Extração de produto não resolve cobrança.
@@ -141,8 +142,8 @@ Não são bloqueios de extração: apps, pente-fino, IA, observabilidade.
 
 1. Manter monorepo **ou** extrair apps/packages de Eventos **sem** novo banco.
 2. Preservar JWT/`packages/auth`, `churchId`, Transaction única, Asaas só como adapter.
-3. Desmontar `registerFinancialRoutes` (Financeiro geral) de `events-api`; manter só financeiro de Eventos + webhook da cobrança de evento.
-4. **Obrigatório — uma implementação, dois acessos.** O mesmo `events-admin` + `packages/events` serve (a) Sistema Igrejas via handoff `web-br` `/dashboard/eventos` → `/auth/handoff` e (b) SaaS Eventos via `/login`. Não redesenhar, não duplicar, não remover o handoff, não exigir dashboard da igreja no SaaS. Se o runtime da API mudar, os dois acessos permanecem neste app e nestes contratos.
+3. **Feito em 2026-10-29:** desmontado `registerFinancialRoutes` / `registerAsaasRoutes` de `events-api`; mantidos financeiro de Eventos + webhook da cobrança.
+4. **Obrigatório e feito em 2026-10-29 — uma implementação, dois acessos.** O mesmo `events-admin` + `packages/events` serve (a) Sistema Igrejas via handoff `web-br` `/dashboard/eventos` → `/auth/handoff` e (b) SaaS Eventos via `/login`, agora contra `events-api`. Não redesenhar, não duplicar, não remover o handoff.
 5. `web-br` continua **somente** encaminhamento. Proibido segundo Eventos em `web-br`.
 6. Deixar o assistente em `api-br` até haver contrato HTTP de Eventos; não criar pacote de IA.
 7. Auditar Person/Visitor na inscrição: snapshot no Registration vs FK viva — decidir no corte de extração, sem duplicar identidade agora.
@@ -153,7 +154,7 @@ Não são bloqueios de extração: apps, pente-fino, IA, observabilidade.
 | Pergunta | Resposta |
 | --- | --- |
 | O domínio Eventos já tem fronteira de pacote? | Sim (`packages/events`). |
-| O produto já tem Admin e API próprios? | Admin sim; API `events-api` existe mas não é o runtime do Admin e ainda carrega Financeiro geral. |
+| O produto já tem Admin e API próprios? | Sim: Admin em `events-admin` contra `events-api`. Financeiro geral ficou em `api-br`. |
 | Pode separar repositório/banco/JWT neste corte? | Não. |
 | Isolamento multi-tenant no domínio atual é suficiente para extrair produto sem novo banco? | Sim, se JWT/`churchId`/FKs forem preservados. |
 | A futura IA bloqueia a extração? | Não. |

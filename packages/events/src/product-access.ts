@@ -6,6 +6,8 @@ export const EVENTS_PRODUCT_ACCESS = {
   implementation: "single",
   app: "apps/events-admin",
   domainPackage: "packages/events",
+  api: "apps/events-api",
+  apiDefaultUrl: "http://localhost:3002",
   churchHandoffHost: "apps/web-br",
   preserve: [
     "screens",
@@ -36,7 +38,8 @@ export const EVENTS_PRODUCT_ACCESS = {
       hostApp: "apps/events-admin",
       entryPath: "/login",
       destinationPath: "/dashboard/eventos",
-      apiBaseEnv: "NEXT_PUBLIC_API_BASE_URL"
+      apiBaseEnv: "NEXT_PUBLIC_API_BASE_URL",
+      apiDefaultUrl: "http://localhost:3002"
     }
   }
 } as const;

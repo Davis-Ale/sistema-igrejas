@@ -25,7 +25,7 @@ test("physical extraction audit records current couplings and forbids extracting
   }
   assert.match(audit, /Não separar/i);
   assert.match(audit, /uma implementação, dois acessos/i);
-  assert.match(audit, /Obrigatório — uma implementação, dois acessos/);
+  assert.match(audit, /Obrigatório e feito em 2026-10-29 — uma implementação, dois acessos/);
   assert.match(audit, /Extraído neste corte\?\s*\|\s*Não/);
   assert.match(audit, /localhost.*5433/);
   assert.match(audit, /20261027180000_event_public_description_location/);
@@ -33,7 +33,8 @@ test("physical extraction audit records current couplings and forbids extracting
   assert.match(audit, /Não há dependência OpenAI/);
 
   const eventsApi = read("apps/events-api/src/app.ts");
-  assert.match(eventsApi, /registerFinancialRoutes/);
+  assert.doesNotMatch(eventsApi, /registerFinancialRoutes|registerAsaasRoutes/);
+  assert.match(eventsApi, /registerEventFinancialRoutes/);
   assert.match(eventsApi, /registerAsaasWebhookRoutes/);
   assert.doesNotMatch(eventsApi, /registerAssistantRoutes|registerMemberRoutes/);
 
@@ -44,7 +45,7 @@ test("physical extraction audit records current couplings and forbids extracting
   const eventsAdminApiDefault = read(
     "apps/events-admin/app/dashboard/eventos/events-dashboard-client.tsx"
   );
-  assert.match(eventsAdminApiDefault, /localhost:3333/);
+  assert.match(eventsAdminApiDefault, /localhost:3002/);
 
   const eventsPackage = read("packages/events/package.json");
   assert.doesNotMatch(eventsPackage, /@sistema-igrejas\/financial/);

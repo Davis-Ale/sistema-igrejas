@@ -71,7 +71,7 @@ type ApiErrorResponse = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
 
 const PROVIDER_SLUG: Record<IntegrationProvider, string> = {
   GOOGLE_ANALYTICS: "google-analytics",

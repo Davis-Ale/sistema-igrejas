@@ -1,5 +1,21 @@
 # CURRENT STATE
 
+## ITEM 4 — EVENTS-API SEM FINANCEIRO GERAL (2026-10-29)
+
+- `events-api` não monta mais `registerFinancialRoutes` nem `registerAsaasRoutes`. Mantém JWT, Eventos, financeiro de Eventos, checkout e webhook Asaas da cobrança.
+- `events-admin` default `NEXT_PUBLIC_API_BASE_URL` = `http://localhost:3002`. Financeiro do workspace consome `/api/events/financial/*`.
+- Dual-access preservado: `web-br` handoff + login SaaS. `web-br` continua em `api-br :3333`. Sem redesign, sem infra nova.
+- Diffs alheios e regras privadas preservados.
+
+## BRANDING E URL PÚBLICA — DECISÃO 2026-10-29
+
+- **Sistema de Igrejas** e **Plataforma de Eventos (Admin)** usam marca **ADR Solutions**.
+- Identidade da igreja/evento **somente** nas páginas públicas e no App do Participante, pelas configurações já existentes. Sem campos novos de marca.
+- URL pública: `/{igreja}/{evento}` em domínio-base **neutro ainda a definir**. Sem subdomínio DNS por evento.
+- Sympla permanece benchmark **exclusivo do Admin**. Referências visuais v4/v5 do Participante (Arquitetura Viva v5 + `.cursor/benchmarks/app-participantes/`) preservadas.
+- Arquitetura, dual-access, telas e checkout intactos. Prazo de produto: **20/11/2026**.
+- Somente regras locais + este CURRENT. Sem alteração funcional. Sem push de regras privadas. Regra: `.cursor/rules/branding-adr-solutions.mdc`.
+
 ## EXTRAÇÃO — ITEM 4 OBRIGATÓRIO, ACESSO DUAL (2026-10-27)
 
 - Uma implementação (`packages/events` + `apps/events-admin`), dois acessos: Sistema Igrejas (handoff `web-br` `/dashboard/eventos` → `/auth/handoff`) e SaaS Eventos (`/login` → `/dashboard/eventos`).
@@ -666,7 +682,8 @@ NÃO criar arquitetura agora. NÃO criar código agora.
 
 ## App do Participante
 - Benchmark separado: `.cursor/benchmarks/app-participantes/`
-- Não é benchmark Sympla.
+- Não é benchmark Sympla. Preservar referências visuais v4/v5. Identidade da igreja/evento (não ADR Solutions).
+- URL pública alvo: `/{igreja}/{evento}` em domínio-base neutro ainda a definir; sem subdomínio DNS por evento. Não implementar neste corte.
 - Não expandir agora.
 - Entra **depois** da extração física e dos ajustes visuais do produto standalone, **antes** do App do Organizador e do pente-fino final completo.
 

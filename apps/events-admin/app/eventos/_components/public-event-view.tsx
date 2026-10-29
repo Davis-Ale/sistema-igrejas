@@ -130,7 +130,7 @@ type PublicRegistration = {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:3333";
+  "http://localhost:3002";
 
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ??

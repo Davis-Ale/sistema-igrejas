@@ -152,65 +152,33 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-type EventFinancialParticipant = {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-};
-
-type EventFinancialRegistration = {
-  person: EventFinancialParticipant | null;
-  visitor: EventFinancialParticipant | null;
-  ticket: {
-    id: string;
-    name: string;
-  } | null;
-  ticketBatch: {
-    id: string;
-    name: string;
-  } | null;
-};
-
 type EventFinancialTransaction = {
   id: string;
+  eventId: string;
+  eventTitle: string;
+  participantName: string;
+  ticketName: string | null;
+  batchName: string | null;
+  paymentLabel: string;
+  method: "PIX" | "CARD" | "CASH" | "BOLETO";
   amount: string | number;
-  direction: "IN" | "OUT";
-  status:
-    | "ACTIVE"
-    | "CANCELLED"
-    | "REVERSED";
-  method: string;
-  costCenter: string | null;
+  grossAmount: number | null;
+  platformFeeAmount: number | null;
+  netAmount: number | null;
   at: string;
-  cancelReason: string | null;
-  asaasId: string | null;
-  nfseId: string | null;
-  person:
-    | EventFinancialParticipant
-    | null;
-  eventPayment: {
-    id: string;
-    status: string;
-    provider: string;
-    providerPaymentId:
-      | string
-      | null;
-    order: {
-      registrations:
-        EventFinancialRegistration[];
-    };
-  } | null;
 };
 
 type EventFinancialSummary = {
-  income: string | number;
-  expense: string | number;
-  eventSales?: {
+  eventSales: {
     grossAmount: string | number;
     platformFeeAmount: string | number;
     netAmount: string | number;
-    currentPlatformFeePercent?: string | number;
+  };
+  counts: {
+    paid: number;
+    pending: number;
+    cancelled: number;
+    reversed: number;
   };
 };
 
@@ -340,7 +308,7 @@ type EventParticipantAppAdminResponse = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
 
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ?? "http://localhost:3003";
@@ -3153,50 +3121,6 @@ export function EventWorkspaceClient({
     }
   }
 
-  function getEventFinancialRegistrations(
-    transaction:
-      EventFinancialTransaction
-  ) {
-    return (
-      transaction.eventPayment
-        ?.order.registrations ??
-      []
-    );
-  }
-
-  function getEventFinancialParticipants(
-    transaction:
-      EventFinancialTransaction
-  ) {
-    const participants =
-      getEventFinancialRegistrations(
-        transaction
-      )
-        .map(
-          (registration) =>
-            registration.person ??
-            registration.visitor
-        )
-        .filter(
-          (
-            participant
-          ): participant is
-            EventFinancialParticipant =>
-            Boolean(participant)
-        );
-
-    if (
-      participants.length === 0 &&
-      transaction.person
-    ) {
-      return [
-        transaction.person
-      ];
-    }
-
-    return participants;
-  }
-
   function getEventFinancialMethodLabel(
     method: string
   ) {
@@ -3219,109 +3143,44 @@ export function EventWorkspaceClient({
     return method;
   }
 
-  function getEventPaymentStatusLabel(
-    status: string | null
-  ) {
-    if (status === "PAID") {
-      return "Pago";
-    }
-
-    if (status === "PENDING") {
-      return "Pendente";
-    }
-
-    if (status === "OVERDUE") {
-      return "Vencido";
-    }
-
-    if (status === "REFUND_PENDING") {
-      return "Reembolso em processamento";
-    }
-
-    if (status === "CANCELLED") {
-      return "Cancelado";
-    }
-
-    // Transaction sem EventPayment = lançamento financeiro
-    // interno (POST /financial/transactions ou Asaas charge
-    // com eventId), não ausência de valor.
-    return "Sem cobrança";
-  }
-
   function getEventFinancialRowPaymentLabel(
     transaction: EventFinancialTransaction
   ) {
-    if (transaction.status === "REVERSED") {
-      return "Reembolsado";
-    }
-
-    if (transaction.status === "CANCELLED") {
-      return "Cancelado";
-    }
-
-    return getEventPaymentStatusLabel(
-      transaction.eventPayment?.status ?? null
-    );
+    return transaction.paymentLabel;
   }
 
   function getEventFinancialPaymentTone(
     transaction: EventFinancialTransaction
   ): "success" | "warning" | "danger" | "muted" {
-    if (transaction.status === "REVERSED") {
+    if (
+      transaction.paymentLabel === "Reembolsado" ||
+      transaction.paymentLabel === "Cancelado"
+    ) {
       return "danger";
     }
 
-    if (transaction.status === "CANCELLED") {
-      return "danger";
-    }
-
-    const status =
-      transaction.eventPayment?.status ?? null;
-
-    if (status === "PAID") {
+    if (transaction.paymentLabel === "Pago") {
       return "success";
     }
 
     if (
-      status === "PENDING" ||
-      status === "OVERDUE" ||
-      status === "REFUND_PENDING"
+      transaction.paymentLabel === "Pendente" ||
+      transaction.paymentLabel === "Reembolso em processamento"
     ) {
       return "warning";
     }
 
-    if (status === "CANCELLED") {
-      return "danger";
-    }
-
-    // Sem EventPayment: lançamento interno válido
     return "muted";
   }
 
   function getEventFinancialOrigin(
     transaction: EventFinancialTransaction
   ) {
-    const participants =
-      getEventFinancialParticipants(transaction);
-
-    if (participants.length > 0) {
+    if (transaction.participantName) {
       return {
-        primary: participants
-          .map((participant) => participant.name)
-          .join(", "),
-        secondary:
-          participants[0]?.email ??
-          participants[0]?.phone ??
-          null,
+        primary: transaction.participantName,
+        secondary: transaction.eventTitle || null,
         kind: "participant" as const
-      };
-    }
-
-    if (!transaction.eventPayment) {
-      return {
-        primary: "Lançamento interno",
-        secondary: null,
-        kind: "internal" as const
       };
     }
 
@@ -3335,41 +3194,15 @@ export function EventWorkspaceClient({
   function getEventFinancialTicketLabel(
     transaction: EventFinancialTransaction
   ) {
-    const registrations =
-      getEventFinancialRegistrations(transaction);
-
-    const tickets = registrations
-      .map((registration) => {
-        const ticket = registration.ticket?.name;
-        const batch = registration.ticketBatch?.name;
-
-        if (ticket && batch) {
-          return `${ticket} • ${batch}`;
-        }
-
-        return ticket ?? batch ?? null;
-      })
-      .filter((value): value is string => Boolean(value));
-
-    if (tickets.length > 0) {
+    if (transaction.ticketName && transaction.batchName) {
       return {
-        primary: tickets[0] ?? "—",
-        secondary:
-          tickets.length > 1
-            ? `+${tickets.length - 1} ingresso(s)`
-            : null
-      };
-    }
-
-    if (!transaction.eventPayment) {
-      return {
-        primary: "—",
+        primary: `${transaction.ticketName} • ${transaction.batchName}`,
         secondary: null
       };
     }
 
     return {
-      primary: "Sem ingresso",
+      primary: transaction.ticketName ?? transaction.batchName ?? "—",
       secondary: null
     };
   }
@@ -3422,7 +3255,7 @@ export function EventWorkspaceClient({
       const [summaryResponse, transactionsResponse] =
         await Promise.all([
           fetch(
-            `${API_BASE_URL}/api/financial/summary?${summaryQuery}`,
+            `${API_BASE_URL}/api/events/financial/summary?${summaryQuery}`,
             {
               cache: "no-store",
               headers: {
@@ -3431,7 +3264,7 @@ export function EventWorkspaceClient({
             }
           ),
           fetch(
-            `${API_BASE_URL}/api/financial/transactions?${transactionsQuery.toString()}`,
+            `${API_BASE_URL}/api/events/financial/transactions?${transactionsQuery.toString()}`,
             {
               cache: "no-store",
               headers: {
@@ -4399,7 +4232,7 @@ export function EventWorkspaceClient({
                       value: isLoadingFinancial
                         ? "..."
                         : financialSummary
-                          ? formatMoney(financialSummary.income)
+                          ? formatMoney(financialSummary.eventSales.grossAmount)
                           : "—"
                     },
                     {
@@ -4407,10 +4240,7 @@ export function EventWorkspaceClient({
                       value: isLoadingFinancial
                         ? "..."
                         : financialSummary
-                          ? formatMoney(
-                              Number(financialSummary.income) -
-                                Number(financialSummary.expense)
-                            )
+                          ? formatMoney(financialSummary.eventSales.netAmount)
                           : "—"
                     }
                   ].map((item) => (
@@ -11346,29 +11176,23 @@ export function EventWorkspaceClient({
             {
               label: "Valor bruto",
               value: formatMoney(
-                financialSummary.eventSales?.grossAmount ?? 0
+                financialSummary.eventSales.grossAmount
               ),
               color: "#a7f3d0"
             },
             {
               label: "Taxa da plataforma",
               value: formatMoney(
-                financialSummary.eventSales?.platformFeeAmount ?? 0
+                financialSummary.eventSales.platformFeeAmount
               ),
               color: "#fca5a5",
               hint:
-                financialSummary.eventSales
-                  ?.currentPlatformFeePercent == null
-                  ? undefined
-                  : `Taxa atual: ${formatPlatformFeePercent(
-                      financialSummary.eventSales
-                        .currentPlatformFeePercent
-                    )}`
+                undefined
             },
             {
               label: "Valor líquido",
               value: formatMoney(
-                financialSummary.eventSales?.netAmount ?? 0
+                financialSummary.eventSales.netAmount
               ),
               color: "#e2e8f0"
             }
@@ -11688,16 +11512,16 @@ export function EventWorkspaceClient({
                   fontWeight: 800,
                   minWidth: 0,
                   color:
-                    transaction.direction === "IN"
-                      ? "#a7f3d0"
-                      : "#fca5a5"
+                    transaction.paymentLabel === "Reembolsado" ||
+                    transaction.paymentLabel === "Cancelado"
+                      ? "#fca5a5"
+                      : "#a7f3d0"
                 }}
               >
                 <span className="financial-col-label">
                   Valor
                 </span>
-                {transaction.direction === "IN" ? "+" : "-"}
-                {formatMoney(transaction.amount)}
+                {formatMoney(transaction.netAmount ?? transaction.amount)}
               </span>
 
               <span
