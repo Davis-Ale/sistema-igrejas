@@ -4,7 +4,8 @@
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
-| Admin vs 16 benchmarks Sympla (item 8) | `IMPLEMENTED` | Divergências reais fechadas: `Event.location` na lista, coluna Onde, status Publicado, toggle `isVisible` na lista de ingressos. Sem item 9, FORMULARIO-1, GAPs de domínio, Participante/Organizador. |
+| Espaçamento GF / Integrações / API Keys (item 9) | `IMPLEMENTED` | Removido `maxWidth: 1180px`; padding/gaps alinhados à Dashboard; painéis da Gestão Financeira em grade. Chrome, dados e demais módulos intactos. Overhaul visual standalone permanece fora. |
+| Admin vs 16 benchmarks Sympla (item 8) | `IMPLEMENTED` | Divergências reais fechadas: `Event.location` na lista, coluna Onde, status Publicado, toggle `isVisible` na lista de ingressos. Sem FORMULARIO-1, GAPs de domínio, Participante/Organizador. |
 | App do Organizador — operação de recepção (item 7) | `IMPLEMENTED` | `apps/events-organizer`: eventos, QR, check-in, localizar participante, consultar inscrição e bloqueios. Sem Participante/Sympla. Sem offline/portarias. |
 | App do Participante — Home/Cronograma/Credencial/Mapa/Perfil (item 6) | `IMPLEMENTED` | `apps/events-participant` contra prints de `app-participantes` e Arquitetura Viva v5. Identidade igreja/evento. Sem Sympla/ADR. Admin/checkout intactos. |
 | Admin chrome — marca ADR Solutions (item 5) | `IMPLEMENTED` | Wordmark ADR Solutions em layout/home/login/shell de events-admin; descrição Plataforma de Eventos; item 9 visual standalone NÃO feito; dual-access, nav da suíte e chave de sessão intactos. |
@@ -129,10 +130,9 @@ Ao trocar o evento no seletor, manter a seção atual (ex.: Conferência > Finan
 
 ## Pendências visuais identificadas (2026-09-05) — NÃO implementar neste passo
 
-### Último corte visual — após o pente-fino final completo (decisão 2026-10-12)
-- O corte visual das ações e da edição de configuração das Integrações do Admin foi aprovado pelo usuário.
-- Corrigir o espaço excessivo na Gestão Financeira de Eventos, na tela global de Integrações e na tela API Keys de Eventos. O print aprovado pelo usuário é evidência do problema em API Keys.
-- Os três ajustes de espaçamento ficam no **último corte visual, depois do pente-fino final completo**. Antes de modificar código, investigar a causa real no layout e nos componentes compartilhados; preservar navegação, sidebar, funcionalidades e demais telas. Não corrigir agora nem antecipar a separação física.
+### Espaçamento global — item 9 (2026-10-29)
+- Espaço excessivo em Gestão Financeira, Integrações e API Keys corrigido: largura plena como a Dashboard, padding 32px e gaps internos menores. `EventModuleChrome` preservado.
+- Overhaul visual standalone (entrada/navegação/identidade) permanece fora deste corte.
 
 ### Participantes
 - Visual atual reprovado.

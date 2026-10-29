@@ -460,14 +460,15 @@ export function EventIntegrationsClient() {
 
   return (
     <main
-      className={`${settings.page} ${settings.surface}`}
+      className={`${settings.page} ${settings.surface} ${settings.productFill}`}
     >
       <section
         style={{
           display: "grid",
           gap: "24px",
-          margin: "0 auto",
-          maxWidth: "1180px"
+          margin: 0,
+          minWidth: 0,
+          width: "100%"
         }}
       >
         <EventModuleChrome

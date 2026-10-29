@@ -5,6 +5,39 @@
   padding: 28px 24px 48px;
 }
 
+.productFill {
+  padding: 32px;
+}
+
+.productFill .header {
+  gap: 8px;
+  padding: 22px 28px;
+}
+
+.productFill .card,
+.productFill .integrationCard {
+  gap: 12px;
+  padding: 16px;
+}
+
+.productFill .form {
+  gap: 12px;
+}
+
+.productFill .form h4 {
+  padding-top: 12px;
+}
+
+.productFill .integrationGrid {
+  gap: 12px;
+}
+
+.productFill .listItem,
+.productFill .sessionItem {
+  gap: 8px;
+  padding: 12px 14px;
+}
+
 .surface {
   color-scheme: dark;
   min-width: 0;
@@ -135,6 +168,7 @@ select.input[multiple] { padding: 6px; }
 }
 @media (max-width: 600px) {
   .page { padding: 20px 16px 32px; }
+  .productFill { padding: 20px 16px; }
   .participantPage { padding: 20px 16px !important; }
   .header, .card, .integrationCard { border-radius: 18px; padding: 18px; }
   .sessionItem, .mapPoint { grid-template-columns: minmax(0, 1fr); }

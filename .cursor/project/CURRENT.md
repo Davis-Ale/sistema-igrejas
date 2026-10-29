@@ -1,5 +1,11 @@
 # CURRENT STATE
 
+## ITEM 9 — ESPAÇAMENTO DAS TELAS GLOBAIS (2026-10-29)
+
+- Só Gestão Financeira, Integrações e API Keys: remover `maxWidth: 1180px`, alinhar padding/gaps ao padrão da Dashboard e densificar cards/painéis existentes.
+- `EventModuleChrome`, dados, RBAC, contratos e demais módulos intactos. Sem redesenho, sem Participante/Organizador, sem FORMULARIO-1.
+- Diffs alheios (`next-env`, regras privadas) preservados.
+
 ## ITEM 8 — ADMIN vs 16 BENCHMARKS SYMPLA (2026-10-29)
 
 - Comparação contra `.cursor/benchmarks/events-admin/` (16 arquivos). Sem redesenho, sem duplicar telas, sem apps Participante/Organizador, sem espaçamento do item 9.
@@ -268,12 +274,9 @@
 - BLOQUEIO COMPROVADO REMANESCENTE: checkout-charge.service.ts:73 ainda consulta retorno void sem cast no mutex financeiro. Falham PIX create/retry, owner concorrente, timeout externo/UNCERTAIN/reconciliação, QR e método semântico da cobrança; interrupção ANTES do POST simulado. Esses fluxos ainda não estão aprovados no PostgreSQL. Arquivo mantido intacto pelo escopo restrito solicitado.
 - Regressão 95/95 isolados e TypeScript fonte/tests/events-api/api-br passaram; diff check. Alteração de código somente quatro casts no serviço de acesso; docs/governança atualizadas. Contratos/schema/migrations/outros serviços/rotas/banco atual/diffs anteriores preservados; sem commit/push. Continuidade/provas em packages/events/docs/checkout-postgres-validation.md.
 
-## PENDÊNCIA VISUAL APROVADA — GESTÃO FINANCEIRA, INTEGRAÇÕES E API KEYS (2026-10-12)
+## PENDÊNCIA VISUAL — GESTÃO FINANCEIRA, INTEGRAÇÕES E API KEYS
 
-- O usuário aprovou o corte visual das ações e da edição de configuração das Integrações do Admin.
-- Corrigir o espaço excessivo na Gestão Financeira de Eventos, na tela global de Integrações e na tela API Keys de Eventos **juntos no último corte visual, após o pente-fino final completo**. O print aprovado pelo usuário evidencia o problema em API Keys.
-- Na execução futura, investigar a causa real no layout e nos componentes compartilhados antes de modificar código; preservar navegação, sidebar, funcionalidades e demais telas.
-- Não corrigir esses espaçamentos agora, não antecipar o pente-fino nem alterar a sequência de fechamento dos gaps essenciais do Admin antes da separação física.
+- Item 9 (2026-10-29): espaçamento/alinhamento das três telas globais aplicado. Overhaul visual standalone permanece fora.
 
 ## PARTICIPANT-APP — ESTE PASSO (2026-09-16)
 

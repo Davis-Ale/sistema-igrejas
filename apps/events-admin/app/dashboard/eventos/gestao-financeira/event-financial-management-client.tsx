@@ -142,7 +142,7 @@ type ApiErrorResponse = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
 
 const PAGE_LIMIT = 50;
 
@@ -1005,17 +1005,17 @@ export function EventFinancialManagementClient({
       <style>{`
         .event-financial-summary-grid {
           display: grid;
-          gap: 12px;
+          gap: 10px;
           grid-template-columns: repeat(3, minmax(0, 1fr));
         }
         .event-financial-count-grid {
           display: grid;
-          gap: 12px;
+          gap: 10px;
           grid-template-columns: repeat(4, minmax(0, 1fr));
         }
         .event-financial-filters {
           display: grid;
-          gap: 14px;
+          gap: 10px;
         }
         .event-financial-filters-row {
           display: grid;
@@ -1104,7 +1104,16 @@ export function EventFinancialManagementClient({
           font-size: 13px;
           padding: 10px 12px;
         }
+        .event-financial-panels {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .event-financial-panels > .event-financial-accordion[open] {
+          grid-column: 1 / -1;
+        }
         .event-financial-accordion {
+          align-self: start;
           background: rgba(15, 23, 42, 0.42);
           border: 1px solid rgba(148, 163, 184, 0.16);
           border-radius: 16px;
@@ -1116,7 +1125,7 @@ export function EventFinancialManagementClient({
           display: flex;
           gap: 12px;
           list-style: none;
-          padding: 14px 16px;
+          padding: 10px 14px;
         }
         .event-financial-accordion > summary::-webkit-details-marker {
           display: none;
@@ -1125,10 +1134,11 @@ export function EventFinancialManagementClient({
           transform: rotate(180deg);
         }
         .event-financial-accordion-body {
+          align-content: start;
           border-top: 1px solid rgba(148, 163, 184, 0.12);
           display: grid;
-          gap: 18px;
-          padding: 18px 16px 16px;
+          gap: 8px;
+          padding: 10px 14px;
         }
         .event-financial-account-grid {
           display: grid;
@@ -1136,6 +1146,7 @@ export function EventFinancialManagementClient({
           grid-template-columns: repeat(3, minmax(0, 1fr));
         }
         @media (max-width: 980px) {
+          .event-financial-panels,
           .event-financial-summary-grid,
           .event-financial-count-grid,
           .event-financial-filters-row,
@@ -1164,8 +1175,9 @@ export function EventFinancialManagementClient({
         style={{
           display: "grid",
           gap: "24px",
-          margin: "0 auto",
-          maxWidth: "1180px"
+          margin: 0,
+          minWidth: 0,
+          width: "100%"
         }}
       >
         <EventModuleChrome
@@ -1345,6 +1357,7 @@ export function EventFinancialManagementClient({
           </>
         ) : null}
 
+        <div className="event-financial-panels">
         <details className="event-financial-accordion">
           <summary>
             <Building2 color="#93c5fd" size={18} />
@@ -2317,6 +2330,7 @@ export function EventFinancialManagementClient({
           ) : null}
           </div>
         </details>
+        </div>
         </EventModuleChrome>
       </section>
 
