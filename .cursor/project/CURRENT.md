@@ -1,5 +1,12 @@
 # CURRENT STATE
 
+## ITEM 8 — ADMIN vs 16 BENCHMARKS SYMPLA (2026-10-29)
+
+- Comparação contra `.cursor/benchmarks/events-admin/` (16 arquivos). Sem redesenho, sem duplicar telas, sem apps Participante/Organizador, sem espaçamento do item 9.
+- Divergências reais fechadas com campos já existentes: lista `GET /api/events` passa `Event.location`; Dashboard Geral mostra coluna **Onde** e status **Publicado**; lista de ingressos alterna `isVisible` via PATCH já existente.
+- Preservados sem implementação: categoria, taxa/meia-entrada, min/max, audiência, produtos/grupos, ads Sympla/iFood, FORMULARIO-1, espaçamento de Gestão Financeira / Integrações / API Keys.
+- Dual-access, arquitetura e diffs alheios intactos.
+
 ## ITEM 7 — APP DO ORGANIZADOR (2026-10-29)
 
 - `apps/events-organizer` finaliza a operação já prevista: login, selecionar evento, QR, check-in manual, localizar participante, consultar inscrição e bloqueios (pagamento, espera, cancelado, já presente).

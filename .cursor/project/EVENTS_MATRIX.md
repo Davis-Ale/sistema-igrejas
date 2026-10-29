@@ -4,6 +4,7 @@
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
+| Admin vs 16 benchmarks Sympla (item 8) | `IMPLEMENTED` | Divergências reais fechadas: `Event.location` na lista, coluna Onde, status Publicado, toggle `isVisible` na lista de ingressos. Sem item 9, FORMULARIO-1, GAPs de domínio, Participante/Organizador. |
 | App do Organizador — operação de recepção (item 7) | `IMPLEMENTED` | `apps/events-organizer`: eventos, QR, check-in, localizar participante, consultar inscrição e bloqueios. Sem Participante/Sympla. Sem offline/portarias. |
 | App do Participante — Home/Cronograma/Credencial/Mapa/Perfil (item 6) | `IMPLEMENTED` | `apps/events-participant` contra prints de `app-participantes` e Arquitetura Viva v5. Identidade igreja/evento. Sem Sympla/ADR. Admin/checkout intactos. |
 | Admin chrome — marca ADR Solutions (item 5) | `IMPLEMENTED` | Wordmark ADR Solutions em layout/home/login/shell de events-admin; descrição Plataforma de Eventos; item 9 visual standalone NÃO feito; dual-access, nav da suíte e chave de sessão intactos. |
@@ -82,7 +83,7 @@ Home do produto. Separada do workspace de um evento. Implementada localmente; n�
 
 | Capacidade | Classe | Justificativa |
 | --- | --- | --- |
-| Dashboard / Meus eventos (lista operacional) | `IMPLEMENTED` | `/dashboard/eventos` lista compacta paginada. **Não** redireciona ao workspace. Tela antiga (Cadastrar/Inscrever/Check-in) permanece proibida. |
+| Dashboard / Meus eventos (lista operacional) | `IMPLEMENTED` | `/dashboard/eventos` lista compacta paginada (Status, Evento, Quando, Onde, Inscrições, Gerenciar). Status **Publicado**/Rascunho. `Event.location` vem de `listEvents`. **Não** redireciona ao workspace. Tela antiga (Cadastrar/Inscrever/Check-in) permanece proibida. |
 | Criar novo evento na Dashboard Geral | `IMPLEMENTED` | Mesmo modal compartilhado e `POST /api/events` do workspace. Sem segundo formulário. |
 | Gestão Financeira na navegação global | `IMPLEMENTED` | Item na nav global da Dashboard. Removido do menu do workspace. Rota `/dashboard/eventos/gestao-financeira` inalterada. |
 | Configurações gerais de Eventos | `IMPLEMENTED` | Hub global `/dashboard/eventos/configuracoes`. Lê conta de recebimento, API Keys, Integrações e RBAC existentes. Cadastro/alteração permanece nas telas atuais. Sem taxa contratual, split ou credencial nova. |
@@ -565,7 +566,7 @@ Código real: `apps/web-br/app/dashboard/eventos/[eventId]/event-workspace-clien
 | Valor a receber | MISSING — GAP de domínio | Não existe valor líquido em `EventTicket`/`TicketBatch`. Nenhum cálculo/estimativa foi criado. Coluna deliberadamente não adicionada. |
 | Taxa | MISSING — GAP de domínio | Não existe campo de fee/taxa no schema. Nenhum cálculo foi derivado. Coluna deliberadamente não adicionada. |
 | Valor do comprador | MISSING — GAP de domínio | Depende de taxa inexistente. Coluna deliberadamente não adicionada. A única coluna de valor é "Valor" = `TicketBatch.price` via `formatMoney`. |
-| Visibilidade | PARTIAL | Coluna "Visibilidade" em leitura ("Visível"/"Oculto") a partir de `batch.isVisible` ou `ticket.isVisible`. Toggle inline do benchmark não implementado (sem escopo aprovado de edição de visibilidade). |
+| Visibilidade | IMPLEMENTED | Coluna "Visibilidade" com toggle inline (`PATCH` `isVisible` do lote ou do ingresso). Editor já tinha checkbox. |
 | Editar | IMPLEMENTED | Ação "Editar" por linha abre o editor sob demanda com `PATCH /events/:eventId/tickets/:ticketId` e `PATCH /events/:eventId/ticket-batches/:batchId`. |
 
 Extras existentes fora do benchmark 15 e mantidos: coluna "Período" (janela real de `salesStart`/`salesEnd`),
@@ -584,7 +585,7 @@ busca de ingressos exibida somente quando `tickets.length > 0`, estado vazio de 
 | Venda por data/lote | NOT_APPLICABLE | O domínio não possui alternância "Por data" x "Por lote": lote é entidade obrigatória (`TicketBatch` sempre carrega janela de venda). Não existe modo "por data" sem lote. |
 | Público permitido | MISSING — GAP de domínio | Não existe campo de audiência/restrição a convidados em `EventTicket`/`TicketBatch`. Nenhum controle criado. |
 | Mínimo/máximo por compra | MISSING — GAP de domínio | Não existem campos de mín/máx por compra no schema. Nenhum controle criado. |
-| Visibilidade | PARTIAL | `isVisible` exibido em leitura no editor. Toggle do benchmark não implementado. |
+| Visibilidade | IMPLEMENTED | Checkboxes `isVisible` no editor e toggle na lista, via `PATCH` já existente. |
 
 Nenhum dado de leitura do editor usa `<input>` (nem `disabled`); todos são pares rótulo/valor,
 para não sugerir editabilidade inexistente.
@@ -601,10 +602,10 @@ Nenhum desses valores foi calculado, estimado ou derivado. Migration e schema n�
 
 ### D4. Deltas de benchmark deliberadamente NÃO implementados neste corte
 
-- barra de progresso de "Vendidos/total" (benchmark 15);
-- botões separados "Ingresso pago" e "Ingresso gratuito" (hoje há um único "Criar ingresso" com seletor de tipo);
 - "Grupo de ingressos" e "Produtos" (não aprovados pelo usuário; não pertencem ao domínio atual);
-- toggle de visibilidade inline na lista e no editor.
+- categoria do evento, meia-entrada, min/max por compra e audiência (GAPs de domínio).
+
+Barra de progresso, botões pago/gratuito e toggle de visibilidade na lista foram alinhados ao código real (item 8, 2026-10-29).
 
 Os filtros de relatório da Visão Geral (benchmarks 07/08: período, tipo, gratuito/pago)
 foram implementados em EVENTOS-ADMIN-FINAL-1; canal de venda permanece NOT_APPLICABLE.
@@ -797,9 +798,8 @@ exibido por "Ingresso". D8.7 permanece apenas como histórico; a decisão vigent
 
 - Taxa da plataforma por ingresso/lote — sem schema. Coluna presente exibindo em dash.
 - Valor a receber (líquido do organizador) — sem schema, depende da taxa. Coluna presente exibindo em dash.
-- Toggle de visibilidade do ingresso na lista — o backend de update NÃO aceita `isVisible`
-  (`updateEventTicketSchema` só aceita `name` e `description`; `updateTicketBatchSchema` só `name`).
-  Alterar visibilidade não está no escopo aprovado. Mantido como LEITURA.
+- Toggle de visibilidade do ingresso na lista — implementado no item 8 via `PATCH` `isVisible`
+  (`updateEventTicketSchema` e `updateTicketBatchSchema`).
 - "Quem pode comprar" (todo o público x restrito a convidados) — sem schema.
 - Quantidade mínima/máxima por compra — sem schema.
 - GAP de RBAC de D6 permanece válido e não foi alterado.

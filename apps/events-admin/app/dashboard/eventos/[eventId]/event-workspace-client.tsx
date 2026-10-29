@@ -779,6 +779,8 @@ export function EventWorkspaceClient({
   ] = useState(true);
   const [isSavingBatch, setIsSavingBatch] =
     useState(false);
+  const [togglingVisibilityKey, setTogglingVisibilityKey] =
+    useState<string | null>(null);
   const [ticketSearch, setTicketSearch] = useState("");
   const [isCreateTicketOpen, setIsCreateTicketOpen] =
     useState(false);
@@ -2251,6 +2253,67 @@ export function EventWorkspaceClient({
       return false;
     } finally {
       setIsSavingBatch(false);
+    }
+  }
+
+  async function handleToggleTicketRowVisibility(row: {
+    batch: TicketBatch | null;
+    key: string;
+    ticket: EventTicket;
+  }) {
+    const token = getSessionToken();
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const nextVisible = !(
+      row.batch ? row.batch.isVisible : row.ticket.isVisible
+    );
+
+    setTicketError(null);
+    setTicketMessage(null);
+    setTogglingVisibilityKey(row.key);
+
+    try {
+      const response = await fetch(
+        row.batch
+          ? `${API_BASE_URL}/api/events/${eventId}/ticket-batches/${row.batch.id}`
+          : `${API_BASE_URL}/api/events/${eventId}/tickets/${row.ticket.id}`,
+        {
+          body: JSON.stringify({
+            isVisible: nextVisible
+          }),
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          method: "PATCH"
+        }
+      );
+
+      const data = await response.json() as
+        | EventTicket
+        | TicketBatch
+        | ApiErrorResponse;
+
+      if (!response.ok) {
+        setTicketError(
+          "message" in data && data.message
+            ? data.message
+            : "Não foi possível atualizar a visibilidade."
+        );
+        return;
+      }
+
+      await loadTickets();
+    } catch {
+      setTicketError(
+        "Não foi possível atualizar a visibilidade agora."
+      );
+    } finally {
+      setTogglingVisibilityKey(null);
     }
   }
 
@@ -6412,13 +6475,50 @@ export function EventWorkspaceClient({
                                 row.batch.netReceivableAmount
                               )}
                         </span>
-                        <span
-                          style={{
-                            color: "#94a3b8",
-                            fontSize: "13px",
-                            minWidth: 0,
-                            overflowWrap: "anywhere"
+                        <button
+                          aria-pressed={
+                            row.batch
+                              ? row.batch.isVisible
+                              : row.ticket.isVisible
+                          }
+                          disabled={
+                            togglingVisibilityKey === row.key
+                          }
+                          onClick={() => {
+                            void handleToggleTicketRowVisibility(
+                              row
+                            );
                           }}
+                          style={{
+                            background: (
+                              row.batch
+                                ? row.batch.isVisible
+                                : row.ticket.isVisible
+                            )
+                              ? "rgba(6, 78, 59, 0.42)"
+                              : "rgba(15, 23, 42, 0.62)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.28)",
+                            borderRadius: "999px",
+                            color: (
+                              row.batch
+                                ? row.batch.isVisible
+                                : row.ticket.isVisible
+                            )
+                              ? "#a7f3d0"
+                              : "#cbd5e1",
+                            cursor:
+                              togglingVisibilityKey === row.key
+                                ? "wait"
+                                : "pointer",
+                            fontSize: "11px",
+                            fontWeight: 800,
+                            justifySelf: "start",
+                            minWidth: 0,
+                            overflowWrap: "anywhere",
+                            padding: "3px 8px"
+                          }}
+                          type="button"
                         >
                           {(
                             row.batch
@@ -6427,7 +6527,7 @@ export function EventWorkspaceClient({
                           )
                             ? "Visível"
                             : "Oculto"}
-                        </span>
+                        </button>
                         <button
                           onClick={() => {
                             setEditingTicketId(

@@ -748,6 +748,7 @@ const eventListSelect = {
   title: true,
   slug: true,
   date: true,
+  location: true,
   capacity: true,
   price: true,
   isPublic: true,

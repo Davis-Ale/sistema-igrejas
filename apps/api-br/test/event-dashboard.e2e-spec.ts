@@ -10,6 +10,7 @@ type EventListItem = {
   title: string;
   slug: string;
   date: string;
+  location?: string | null;
   capacity: number;
   registrationCount: number;
   registrations?: unknown;
@@ -483,6 +484,10 @@ describe("Event dashboard list E2E", () => {
     expect(listed.pagination.total).toBeGreaterThanOrEqual(51);
     listed.items.forEach((item) => {
       expect(typeof item.registrationCount).toBe("number");
+      expect(item).toHaveProperty("location");
+      expect(
+        item.location === null || typeof item.location === "string"
+      ).toBe(true);
       expect(item).not.toHaveProperty("registrations");
     });
 

@@ -18,6 +18,7 @@ type EventListItem = {
   id: string;
   title: string;
   date: string;
+  location: string | null;
   capacity: number;
   isPublic: boolean;
   registrationCount: number;
@@ -222,7 +223,7 @@ export function EventsDashboardClient({
           align-items: start;
           display: grid;
           gap: 12px;
-          grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 0.7fr);
+          grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.7fr);
         }
         .events-dashboard-list-header {
           border-bottom: 1px solid rgba(148, 163, 184, 0.16);
@@ -444,6 +445,7 @@ export function EventsDashboardClient({
                 <span>Status</span>
                 <span>Evento</span>
                 <span>Quando</span>
+                <span>Onde</span>
                 <span>Inscrições</span>
                 <span>Ação</span>
               </div>
@@ -474,7 +476,7 @@ export function EventsDashboardClient({
                           padding: "3px 8px"
                         }}
                       >
-                        {item.isPublic ? "Público" : "Rascunho"}
+                        {item.isPublic ? "Publicado" : "Rascunho"}
                       </span>
                     </span>
                     <span>
@@ -492,6 +494,10 @@ export function EventsDashboardClient({
                     <span style={{ color: "#cbd5e1", fontSize: "13px" }}>
                       <span className="events-dashboard-col-label">Quando</span>
                       {formatDateTimeCompact(item.date)}
+                    </span>
+                    <span style={{ color: "#cbd5e1", fontSize: "13px" }}>
+                      <span className="events-dashboard-col-label">Onde</span>
+                      {item.location?.trim() || "—"}
                     </span>
                     <span>
                       <span className="events-dashboard-col-label">
