@@ -53,7 +53,8 @@ test("single Eventos implementation exposes church-suite handoff and SaaS login"
   assert.match(rootDev, /--filter web-br/);
   assert.match(rootDev, /--filter @sistema-igrejas\/events-api/);
   assert.match(rootDev, /--filter @sistema-igrejas\/events-admin/);
-  assert.doesNotMatch(rootDev, /events-participant/);
+  assert.match(rootDev, /--filter @sistema-igrejas\/events-participant/);
+  assert.match(rootDev, /--filter events-organizer/);
 
   const webBrEventsImport = read("apps/web-br/app/dashboard/eventos/[[...path]]/page.tsx");
   assert.doesNotMatch(webBrEventsImport, /registerEventRoutes|EventModuleChrome/);

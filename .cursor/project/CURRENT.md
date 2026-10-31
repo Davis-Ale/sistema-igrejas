@@ -1,5 +1,11 @@
 # CURRENT STATE
 
+## DEV LOCAL — 6 SERVIÇOS (2026-10-31)
+
+- `pnpm dev` da raiz sobe `api-br` (:3333), `web-br` (:3000), `events-api` (:3002), `events-admin` (:3001), `events-participant` (:3003) e `events-organizer` (:3004).
+- Destinos e dual-access intactos. Sem mudança de arquitetura ou funcionalidade.
+- Diffs alheios e regras privadas preservados.
+
 ## ITEM 9 — ESPAÇAMENTO DAS TELAS GLOBAIS (2026-10-29)
 
 - Só Gestão Financeira, Integrações e API Keys: remover `maxWidth: 1180px`, alinhar padding/gaps ao padrão da Dashboard e densificar cards/painéis existentes.
@@ -35,7 +41,7 @@
 
 ## DEV LOCAL PÓS-ITEM 4 (2026-10-29)
 
-- `pnpm dev` da raiz sobe `api-br` (:3333), `web-br` (:3000), `events-api` (:3002) e `events-admin` (:3001). Não sobe `events-participant`.
+- `pnpm dev` da raiz sobe os 6 serviços (api-br :3333, web-br :3000, events-api :3002, events-admin :3001, events-participant :3003, events-organizer :3004).
 - Destinos: `web-br` → `api-br :3333`; `events-admin` → `events-api :3002`. Dual-access (handoff + login SaaS) intacto.
 - Diffs alheios e regras privadas preservados.
 

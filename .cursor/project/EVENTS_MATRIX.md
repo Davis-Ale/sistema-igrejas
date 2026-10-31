@@ -13,7 +13,7 @@
 | Auditoria de dependências / tenant / IA | `IMPLEMENTED` | `packages/events/docs/eventos-physical-extraction-audit.md`. Extração **não** executada. |
 | Item 4 — uma implementação, dois acessos (SI + SaaS) | `IMPLEMENTED` | Contrato `product-access.ts`: handoff `web-br` e login `events-admin` no mesmo app. Sem segundo Eventos. |
 | Item 4 — `events-api` sem Financeiro geral + Admin na API própria | `IMPLEMENTED` | `events-api` sem `registerFinancialRoutes`/`registerAsaasRoutes`. `events-admin` default `:3002`. Workspace Financeiro em `/api/events/financial/*`. JWT/`churchId`/checkout preservados. |
-| Dev local pós-item 4 (`pnpm dev`) | `IMPLEMENTED` | Raiz sobe `api-br`, `web-br`, `events-api` e `events-admin`. Não sobe `events-participant`. |
+| Dev local (`pnpm dev`) | `IMPLEMENTED` | Raiz sobe `api-br` :3333, `web-br` :3000, `events-api` :3002, `events-admin` :3001, `events-participant` :3003 e `events-organizer` :3004. |
 | Separação física (repo/banco/JWT/deploy) | `MISSING` | Prisma/JWT ainda compartilhados. Extração futura deve preservar os dois acessos. |
 | Futura IA de Eventos | `USER_DEFERRED` | Sem `packages/ai` e sem LLM. Assistente rule-based em `api-br`. Não implementar antes da extração. |
 
