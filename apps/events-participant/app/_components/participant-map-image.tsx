@@ -34,6 +34,6 @@ export function ParticipantMapImage({ publicSlug, checkInToken, imageVersion, im
   }, [publicSlug, checkInToken, imageVersion, retry]);
 
   const image = imageVersion ? src : imageUrl;
-  if (error) return <div role="alert"><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div>;
-  return image ? <img alt={`Planta de ${title}`} src={image} /> : <p role="status">Carregando planta...</p>;
+  if (error) return <div role="alert"><p>{error}</p><button type="button" onClick={() => { setError(""); setRetry((value) => value + 1); }}>Tentar novamente</button></div>;
+  return image ? <img alt={`Planta de ${title}`} key={retry} onError={() => setError("Não foi possível carregar a planta.")} src={image} /> : <p role="status">Carregando planta...</p>;
 }

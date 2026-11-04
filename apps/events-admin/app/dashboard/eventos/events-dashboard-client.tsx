@@ -318,7 +318,7 @@ export function EventsDashboardClient({
                   margin: "8px 0 0"
                 }}
               >
-                Eventos desta igreja. Abra um item para gerenciar.
+                Abra um item para gerenciar.
               </p>
             </header>
           }

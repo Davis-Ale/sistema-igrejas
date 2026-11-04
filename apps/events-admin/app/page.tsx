@@ -43,7 +43,7 @@ export default function HomePage() {
             margin: "0 0 28px"
           }}
         >
-          Gestão da igreja em um só lugar.
+          Plataforma de Eventos.
         </h1>
 
         <Link
@@ -58,7 +58,7 @@ export default function HomePage() {
             padding: "14px 22px"
           }}
         >
-          Acessar sistema
+          Entrar
         </Link>
       </section>
     </main>

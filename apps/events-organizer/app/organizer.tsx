@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, checkIn, listEvents, listRegistrations, login, readSession, SESSION_KEY,
   type CheckInResult, type EventPage, type EventSummary, type RegistrationPage, type RegistrationSummary, type Session } from "./lib/api";
+import { canCheckIn, registrationBlock, statusLabel } from "./lib/registration-status";
 import QrScanner from "./qr-scanner";
 import { EventCover } from "./event-cover";
 import styles from "./organizer.module.css";
@@ -19,26 +20,6 @@ function participantName(item: Pick<RegistrationSummary, "person" | "visitor">) 
 function participantContact(item: Pick<RegistrationSummary, "person" | "visitor">) {
   const contact = item.person ?? item.visitor;
   return [contact?.email, contact?.phone].filter(Boolean).join(" · ");
-}
-
-function registrationBlock(item: RegistrationSummary) {
-  if (item.status === "CANCELLED") {
-    return "Esta inscrição foi cancelada e não pode fazer check-in.";
-  }
-  if (item.waitlistedAt) {
-    return "Esta inscrição ainda está na lista de espera.";
-  }
-  if (item.paymentStatus === "PENDING" || item.paymentStatus === "CANCELLED") {
-    return "O pagamento desta inscrição ainda não foi confirmado.";
-  }
-  if (item.status === "CHECKED_IN") {
-    return "Check-in já realizado para esta inscrição.";
-  }
-  return null;
-}
-
-function canCheckIn(item: RegistrationSummary) {
-  return item.status === "CONFIRMED" && Boolean(item.checkInToken) && !registrationBlock(item);
 }
 
 export default function Organizer({ initialEvent }: {
@@ -90,7 +71,7 @@ function Login({ notice, onLogin }: { notice: string; onLogin: (session: Session
     pending.current = true;
     setBusy(true); setError("");
     try {
-      const session = await login(String(data.get("email")), String(data.get("password")));
+      const session = await login(String(data.get("email")).trim(), String(data.get("password")));
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); }
       catch { throw new Error("Permita o armazenamento deste site para manter sua sessão."); }
       form.reset();
@@ -337,7 +318,7 @@ function People({ eventId, token, busy, onExpired, onCheckIn }: {
       {participantContact(selected) ? <p className="muted">{participantContact(selected)}</p> : null}
       {selected.ticket?.name ? <p>{selected.ticket.name}{selected.ticketBatch?.name ? ` · ${selected.ticketBatch.name}` : ""}</p> : null}
       <p><span className={selected.status === "CHECKED_IN" ? "badge" : "muted"}>
-        {selected.status === "CHECKED_IN" ? "Presente" : selected.status === "CONFIRMED" ? "Confirmada" : selected.status}
+        {statusLabel(selected)}
       </span></p>
       {registrationBlock(selected) ? <p className="error" role="status">{registrationBlock(selected)}</p> : null}
       {canCheckIn(selected) ? <button disabled={busy} onClick={() => void onCheckIn(selected.checkInToken ?? "")}>

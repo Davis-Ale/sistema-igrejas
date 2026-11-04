@@ -29,7 +29,10 @@ export async function generateMetadata({
     return {};
   }
 
+  const event = await getPublicEvent(publicSlug);
+
   return {
+    title: event?.title,
     manifest:
       `/${encodeURIComponent(publicSlug)}/manifest.webmanifest`
   };

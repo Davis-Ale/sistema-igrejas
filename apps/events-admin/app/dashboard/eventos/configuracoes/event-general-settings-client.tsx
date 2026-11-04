@@ -506,7 +506,7 @@ export function EventGeneralSettingsClient() {
         </EventModuleChrome>
       </div>
       <CreateEventModal
-        isOpen={isCreateModalOpen}
+        open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
       />
     </div>

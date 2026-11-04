@@ -75,7 +75,7 @@ export function LoginForm() {
 
         setError(
           data.message ??
-            "Não foi possível entrar no sistema."
+            "Não foi possível entrar."
         );
         return;
       }
@@ -92,7 +92,7 @@ export function LoginForm() {
       router.refresh();
     } catch {
       setError(
-        "Não foi possível entrar no sistema agora."
+        "Não foi possível entrar agora."
       );
     } finally {
       setIsSubmitting(false);

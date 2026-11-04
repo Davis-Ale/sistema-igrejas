@@ -207,7 +207,7 @@ export function CreateEventModal({
               textTransform: "uppercase"
             }}
           >
-            Módulo Eventos
+            Eventos
           </p>
 
           <h2

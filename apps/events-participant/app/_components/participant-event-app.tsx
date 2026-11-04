@@ -238,7 +238,7 @@ function SessionCard({
   session: EventSession;
   variant?: "home" | "timeline";
   detailsOpen?: boolean;
-  onToggleDetails?: () => void;
+  onToggleDetails?: (() => void) | undefined;
 }) {
   const homeMeta = [
     `${formatHeroDate(session.startsAt)} · ${formatTime(session.startsAt)} – ${formatTime(session.endsAt)}`,
@@ -359,7 +359,10 @@ export function ParticipantEventApp({
     }
 
     if (persist) {
-      sessionStorage.setItem(sessionKey, checkInToken);
+      sessionStorage.setItem(
+        sessionKey,
+        participantData.registration.checkInToken
+      );
     }
 
     setAppData(participantData);
@@ -376,13 +379,6 @@ export function ParticipantEventApp({
       const tokenFromUrl = new URLSearchParams(hashQuery)
         .get("checkInToken")
         ?.trim();
-      if (tokenFromUrl) {
-        window.history.replaceState(
-          null,
-          "",
-          `${window.location.pathname}#aplicativo`
-        );
-      }
       const legacyToken =
         localStorage.getItem(legacyStorageKeyCurrent) ??
         localStorage.getItem(legacyStorageKey);
@@ -399,6 +395,13 @@ export function ParticipantEventApp({
 
       try {
         await accessParticipantApp(token);
+        if (tokenFromUrl) {
+          window.history.replaceState(
+            null,
+            "",
+            `${window.location.pathname}#aplicativo`
+          );
+        }
       } catch (accessError) {
         sessionStorage.removeItem(sessionKey);
         setError(

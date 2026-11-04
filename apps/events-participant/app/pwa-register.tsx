@@ -12,6 +12,11 @@ export function PwaRegister() {
       void navigator.serviceWorker.register("/sw.js");
     }
 
+    if (document.readyState === "complete") {
+      registerServiceWorker();
+      return;
+    }
+
     window.addEventListener("load", registerServiceWorker);
 
     return () => {

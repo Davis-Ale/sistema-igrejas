@@ -84,9 +84,26 @@ test("events-admin chrome wordmark is ADR Solutions and dual-access contracts st
   const layout = read("apps/events-admin/app/layout.tsx");
   assert.match(layout, /Plataforma de Eventos/);
 
+  const home = read("apps/events-admin/app/page.tsx");
+  assert.match(home, /Plataforma de Eventos/);
+  assert.match(home, />\s*Entrar\s*</);
+  assert.doesNotMatch(home, /Gestão da igreja/);
+  assert.doesNotMatch(home, /Acessar sistema/);
+
+  const createModal = read(
+    "apps/events-admin/app/dashboard/eventos/create-event-modal.tsx"
+  );
+  assert.doesNotMatch(createModal, /Módulo Eventos/);
+
+  const eventsDashboard = read(
+    "apps/events-admin/app/dashboard/eventos/events-dashboard-client.tsx"
+  );
+  assert.doesNotMatch(eventsDashboard, /desta igreja/);
+
   const saasLogin = read("apps/events-admin/app/login/login-form.tsx");
   assert.match(saasLogin, /\/auth\/login/);
   assert.match(saasLogin, /router\.replace\("\/dashboard\/eventos"\)/);
   assert.match(saasLogin, /localhost:3002/);
   assert.match(saasLogin, /sistema-igrejas\.session/);
+  assert.doesNotMatch(saasLogin, /entrar no sistema/);
 });

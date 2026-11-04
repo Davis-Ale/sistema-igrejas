@@ -13,6 +13,9 @@ function read(relativePath: string) {
 test("participant app keeps the five approved tabs with church identity", () => {
   const app = read("app/_components/participant-event-app.tsx");
   const css = read("app/_components/participant-event-app.module.css");
+  const pwa = read("app/pwa-register.tsx");
+  const map = read("app/_components/participant-map-image.tsx");
+  const page = read("app/[publicSlug]/page.tsx");
 
   assert.match(app, /label: "Home"/);
   assert.match(app, /label: "Cronograma"/);
@@ -30,4 +33,18 @@ test("participant app keeps the five approved tabs with church identity", () => 
   assert.doesNotMatch(app, /cpf|CPF|cidade|Cidade/i);
   assert.match(css, /#eef0f3/);
   assert.match(css, /\.navCredential/);
+
+  const restore = app.slice(
+    app.indexOf("async function restoreAccess"),
+    app.indexOf("handleAccess")
+  );
+  const accessCall = "await accessParticipantApp(token)";
+  const accessAt = restore.indexOf(accessCall);
+  assert.equal(accessAt >= 0, true);
+  assert.equal(restore.slice(0, accessAt).includes("replaceState"), false);
+  assert.equal(restore.slice(accessAt).includes("replaceState"), true);
+  assert.match(app, /participantData\.registration\.checkInToken/);
+  assert.match(pwa, /document\.readyState === "complete"/);
+  assert.match(map, /onError/);
+  assert.match(page, /title: event\?\.title/);
 });
