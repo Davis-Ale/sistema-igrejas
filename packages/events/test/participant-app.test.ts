@@ -5,7 +5,8 @@ import {
   updateEventAppMapSchema
 } from "../src/participant-app.schema.ts";
 import {
-  isParticipantAppEligible
+  isParticipantAppEligible,
+  resolveParticipantEventLocation
 } from "../src/participant-app.service.ts";
 
 test("participant app eligibility blocks pending, cancelled and waitlisted registrations", () => {
@@ -74,6 +75,37 @@ test("session contract rejects invalid times and deduplicates registrations", ()
   });
 
   assert.deepEqual(valid.registrationIds, ["registration-1"]);
+});
+
+test("participant access prefers Event.location and falls back to campus", () => {
+  assert.deepEqual(
+    resolveParticipantEventLocation("  Centro de Convenções  ", {
+      name: "Campus sede",
+      address: "Rua da Igreja, 10"
+    }),
+    {
+      name: "Centro de Convenções",
+      address: null
+    }
+  );
+  assert.deepEqual(
+    resolveParticipantEventLocation("   ", {
+      name: "Campus sede",
+      address: "Rua da Igreja, 10"
+    }),
+    {
+      name: "Campus sede",
+      address: "Rua da Igreja, 10"
+    }
+  );
+  assert.deepEqual(
+    resolveParticipantEventLocation("Auditório", null),
+    {
+      name: "Auditório",
+      address: null
+    }
+  );
+  assert.equal(resolveParticipantEventLocation(null, null), null);
 });
 
 test("map contract accepts only HTTPS image URLs", () => {

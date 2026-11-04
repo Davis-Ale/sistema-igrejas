@@ -29,6 +29,29 @@ export function isParticipantAppEligible(
   );
 }
 
+export function resolveParticipantEventLocation(
+  eventLocation: string | null | undefined,
+  campus: { name: string; address: string | null } | null
+) {
+  const registered = eventLocation?.trim() || null;
+
+  if (registered) {
+    return {
+      name: registered,
+      address: null
+    };
+  }
+
+  if (!campus) {
+    return null;
+  }
+
+  return {
+    name: campus.name,
+    address: campus.address
+  };
+}
+
 function nullableText(value: string | null | undefined) {
   return value?.trim() || null;
 }
@@ -503,6 +526,7 @@ export async function getParticipantAppAccessByPublicSlug(
         select: {
           title: true,
           date: true,
+          location: true,
           participantMapImageUrl: true,
           appMapImage: { select: { updatedAt: true } },
           church: {
@@ -600,12 +624,10 @@ export async function getParticipantAppAccessByPublicSlug(
       title: registration.event.title,
       date: registration.event.date,
       churchName: registration.event.church.name,
-      location: registration.event.campus
-        ? {
-            name: registration.event.campus.name,
-            address: registration.event.campus.address
-          }
-        : null
+      location: resolveParticipantEventLocation(
+        registration.event.location,
+        registration.event.campus
+      )
     },
     sessions: registration.event.appSessions.map((session) => ({
       id: session.id,
