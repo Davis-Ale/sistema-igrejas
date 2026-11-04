@@ -1,4 +1,4 @@
-import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import type {
@@ -152,6 +152,7 @@ export async function registerTicketRoutes(
 
   app.post(
     "/events/:eventId/tickets",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -177,6 +178,7 @@ export async function registerTicketRoutes(
 
   app.post(
     "/events/:eventId/ticket-batches",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -202,6 +204,7 @@ export async function registerTicketRoutes(
 
   app.patch(
     "/events/:eventId/tickets/:ticketId",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -230,6 +233,7 @@ export async function registerTicketRoutes(
 
   app.patch(
     "/events/:eventId/ticket-batches/:batchId",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
