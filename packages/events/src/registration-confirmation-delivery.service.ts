@@ -1,58 +1,87 @@
-import type { PrismaClient } from "@prisma/client";
-import { createPublicRegistrationV2Schema } from "./checkout-access.schema.js";
+import type { Prisma, PrismaClient } from "@prisma/client";
+import { checkoutScopeSchema, createPublicRegistrationV2Schema } from "./checkout-access.schema.js";
 import { sendRegistrationConfirmationEmail } from "./registration-confirmation-email.service.js";
+import { createPostgresRegistrationConfirmationDeliveryStore } from "./registration-confirmation-delivery.store.js";
 
-// Shared confirmation consumer; does not register or activate checkout routes.
+type SendEmail = typeof sendRegistrationConfirmationEmail;
+type DeliveryPayload = Parameters<SendEmail>[0];
+
+// Shared confirmation consumer. Does not register routes or touch checkout recovery.
 export async function sendPendingRegistrationConfirmationEmail(
   prisma: PrismaClient,
   churchId: string,
   input: { registrationId: string; eventId: string },
-  sendEmail: typeof sendRegistrationConfirmationEmail = sendRegistrationConfirmationEmail
+  sendEmail: SendEmail = sendRegistrationConfirmationEmail,
+  options?: { deliveryTimeoutMs?: number }
 ): Promise<boolean> {
-  return prisma.$transaction(async transaction => {
-    // Serialize delivery attempts across processes and re-read eligibility after
-    // acquiring the row lock. Payment/registration confirmation is already committed.
-    // JSON extraction works before the additive column migration as well; no
-    // schema probing, exception fallback, or migration is performed here.
-    const [destination] = await transaction.$queryRaw<{ id: string; checkoutEmail: string | null }[]>`
-      SELECT r."id", to_jsonb(r)->>'checkoutEmail' AS "checkoutEmail" FROM "Registration" r
-      WHERE "id" = ${input.registrationId}
-        AND "churchId" = ${churchId}
-        AND "eventId" = ${input.eventId}
-      FOR UPDATE
-    `;
-    const registration = await transaction.registration.findFirst({
-      where: { id: input.registrationId, churchId, eventId: input.eventId },
-      select: {
-        id: true, status: true, paymentStatus: true, waitlistedAt: true,
-        checkInToken: true, confirmationEmailSentAt: true,
-        person: { select: { churchId: true, name: true, email: true } },
-        visitor: { select: { churchId: true, name: true, email: true } },
-        event: { select: {
-          id: true, churchId: true, title: true, date: true, isPaid: true, slug: true, publicSlug: true,
-          church: { select: { slug: true } }
-        } }
-      }
-    });
-    if (!registration || destination?.id !== registration.id ||
-        registration.event.id !== input.eventId || registration.event.churchId !== churchId ||
-        (registration.person && registration.person.churchId !== churchId) ||
-        (registration.visitor && registration.visitor.churchId !== churchId) ||
-        registration.confirmationEmailSentAt ||
-        registration.status !== "CONFIRMED" || registration.paymentStatus !== "PAID" ||
-        registration.waitlistedAt) return false;
-    const participant = registration.person ?? registration.visitor;
-    if (!participant) return false;
-    // The local destination owns this registration, even when contacts are shared.
-    // Only registrations without a local destination retain the legacy fallback.
-    // An invalid nonblank local value must never redirect a credential to a contact.
-    const localEmail = destination.checkoutEmail?.trim();
-    const recipient = createPublicRegistrationV2Schema.shape.email.safeParse(localEmail || participant.email);
-    if (!recipient.success) return false;
+  const timeoutMs = options?.deliveryTimeoutMs ?? 15_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
+    throw new Error("REGISTRATION_CONFIRMATION_DELIVERY_TIMEOUT_INVALID");
+  }
+  const scope = checkoutScopeSchema.parse({
+    churchId, eventId: input.eventId, registrationId: input.registrationId
+  });
+  const store = createPostgresRegistrationConfirmationDeliveryStore(prisma);
+  const claim = await store.claim(scope, tx => resolveEligibleDelivery(tx, scope));
+  if (!claim.claimed) return false;
+  // The provider call is outside the claim transaction and outside its retry.
+  // A late result after the deadline must not write ACCEPTED or send again.
+  const outcome = await observeDelivery(sendEmail, claim.payload, timeoutMs);
+  if (outcome === "accepted") {
+    try {
+      return await store.accept(scope, new Date());
+    } catch {
+      try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
+      return false;
+    }
+  }
+  try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
+  return false;
+}
 
-    // Keep the adapter's stable provider idempotency key for ambiguous failures
-    // between provider acceptance and committing the delivery marker.
-    const sent = await sendEmail({
+async function resolveEligibleDelivery(
+  tx: Prisma.TransactionClient,
+  scope: { churchId: string; eventId: string; registrationId: string }
+): Promise<{ proceed: false } | { proceed: true; payload: DeliveryPayload }> {
+  // JSON extraction works before an additive column is visible to an old client.
+  const [destination] = await tx.$queryRaw<{ id: string; checkoutEmail: string | null }[]>`
+    SELECT r."id", to_jsonb(r)->>'checkoutEmail' AS "checkoutEmail" FROM "Registration" r
+    WHERE "id" = ${scope.registrationId}
+      AND "churchId" = ${scope.churchId}
+      AND "eventId" = ${scope.eventId}
+    FOR UPDATE
+  `;
+  const registration = await tx.registration.findFirst({
+    where: { id: scope.registrationId, churchId: scope.churchId, eventId: scope.eventId },
+    select: {
+      id: true, status: true, paymentStatus: true, waitlistedAt: true,
+      checkInToken: true, confirmationEmailSentAt: true,
+      person: { select: { churchId: true, name: true, email: true } },
+      visitor: { select: { churchId: true, name: true, email: true } },
+      event: { select: {
+        id: true, churchId: true, title: true, date: true, isPaid: true, slug: true, publicSlug: true,
+        church: { select: { slug: true } }
+      } }
+    }
+  });
+  if (!registration || destination?.id !== registration.id ||
+      registration.event.id !== scope.eventId || registration.event.churchId !== scope.churchId ||
+      (registration.person && registration.person.churchId !== scope.churchId) ||
+      (registration.visitor && registration.visitor.churchId !== scope.churchId) ||
+      registration.confirmationEmailSentAt ||
+      registration.status !== "CONFIRMED" || registration.paymentStatus !== "PAID" ||
+      registration.waitlistedAt) return { proceed: false };
+  const participant = registration.person ?? registration.visitor;
+  if (!participant) return { proceed: false };
+  // A local destination owns this registration. Only a null, blank or absent
+  // local value keeps the scoped contact fallback. An invalid nonblank local
+  // value must not redirect the credential.
+  const localEmail = destination.checkoutEmail?.trim();
+  const recipient = createPublicRegistrationV2Schema.shape.email.safeParse(localEmail || participant.email);
+  if (!recipient.success) return { proceed: false };
+  return {
+    proceed: true,
+    payload: {
       registrationId: registration.id,
       recipientEmail: recipient.data,
       participantName: participant.name,
@@ -68,13 +97,22 @@ export async function sendPendingRegistrationConfirmationEmail(
         publicSlug: registration.event.publicSlug,
         churchSlug: registration.event.church.slug
       }
-    });
-    if (sent) {
-      await transaction.registration.update({
-        where: { id: registration.id, churchId, eventId: input.eventId },
-        data: { confirmationEmailSentAt: new Date() }
-      });
     }
-    return sent;
-  }, { timeout: 30000 });
+  };
+}
+
+async function observeDelivery(sendEmail: SendEmail, payload: DeliveryPayload, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const attempt = Promise.resolve().then(() => sendEmail(payload)).then(
+    value => (value === true ? "accepted" as const : "uncertain" as const),
+    () => "uncertain" as const
+  );
+  const deadline = new Promise<"uncertain">(resolve => {
+    timer = setTimeout(() => resolve("uncertain"), timeoutMs);
+  });
+  try {
+    return await Promise.race([attempt, deadline]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

@@ -775,6 +775,7 @@ model Registration {
   appSessions EventAppSessionRegistration[]
   checkoutAccesses EventCheckoutAccess[]
   checkoutRecoveryAudits EventCheckoutRecoveryAudit[]
+  confirmationDeliveryEvents EventRegistrationConfirmationDeliveryEvent[]
 
   @@unique([churchId, eventId, id])
   @@unique([eventId, personId])
@@ -1197,4 +1198,25 @@ model EventCheckoutRecoveryDeliveryEvent {
   actor UserAccount @relation(fields: [churchId, actorUserId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict, map: "checkout_delivery_actor_fkey")
   @@unique([churchId, operationId, stage], map: "checkout_delivery_operation_stage_key")
   @@index([churchId, operationId, sequence], map: "checkout_delivery_history_idx")
+}
+
+// Append-only confirmation delivery. SQL triggers enforce the stage machine.
+// Registration check-in and confirmationEmailSentAt stay writable.
+enum EventRegistrationConfirmationDeliveryStage {
+  DELIVERY_INTENT
+  DELIVERY_ACCEPTED
+  DELIVERY_UNCERTAIN
+}
+
+model EventRegistrationConfirmationDeliveryEvent {
+  id String @id
+  sequence BigInt @unique @default(autoincrement())
+  churchId String
+  eventId String
+  registrationId String
+  stage EventRegistrationConfirmationDeliveryStage
+  createdAt DateTime @default(now())
+  registration Registration @relation(fields: [churchId, eventId, registrationId], references: [churchId, eventId, id], onDelete: Restrict, onUpdate: Restrict, map: "registration_confirmation_delivery_registration_fkey")
+  @@unique([churchId, eventId, registrationId, stage], map: "registration_confirmation_delivery_stage_key")
+  @@index([churchId, eventId, registrationId, sequence], map: "registration_confirmation_delivery_history_idx")
 }

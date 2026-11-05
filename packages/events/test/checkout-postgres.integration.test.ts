@@ -179,37 +179,27 @@ test('concurrent PAID confirmation cannot rewrite confirmedAt after another call
   } finally { resume(); await ongoing?.catch(() => {}); if (oldKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = oldKey; }
 });
 
-test('confirmation email exception and marker rollback preserve financial commits and retry the same recipient/payload', async () => {
+test('confirmation email exception records UNCERTAIN without a second POST and preserves financial commits', async () => {
   const f = await sale();
   await prisma.$transaction([
     prisma.eventPayment.update({ where: { id: f.payment.id }, data: { status: 'PAID' } }),
     prisma.eventOrder.update({ where: { id: f.payment.orderId }, data: { status: 'PAID' } }),
     prisma.registration.update({ where: { id: f.scope.registrationId }, data: { status: 'CONFIRMED', paymentStatus: 'PAID', confirmedAt: new Date() } })
   ]);
-  const before = await financial(f), payloads: unknown[] = [];
+  const before = await financial(f);
   const input = { registrationId: f.scope.registrationId, eventId: f.scope.eventId };
-  await assert.rejects(sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, input, async () => { throw new Error('SIMULATED_EMAIL_EXCEPTION'); }), /SIMULATED_EMAIL_EXCEPTION/);
-  assert.deepEqual(await financial(f), before);
-  const rollback = new Proxy(prisma, { get(target, prop) {
-    if (prop === '$transaction') return (action: (tx: any) => Promise<unknown>, options: any) => target.$transaction(async tx => {
-      await action(tx); throw new Error('SIMULATED_MARKER_ROLLBACK');
-    }, options);
-    const value = Reflect.get(target, prop); return typeof value === 'function' ? value.bind(target) : value;
-  } });
-  const accepted = new Set<string>(); let attempts = 0;
-  const provider: NonNullable<Parameters<typeof sendPendingRegistrationConfirmationEmail>[3]> = async payload => {
-    attempts++; payloads.push(structuredClone(payload)); accepted.add(payload.registrationId);
-    assert.equal(payload.recipientEmail, f.body.email); return true;
+  let attempts = 0;
+  const provider: NonNullable<Parameters<typeof sendPendingRegistrationConfirmationEmail>[3]> = async () => {
+    attempts++; throw new Error('SIMULATED_EMAIL_EXCEPTION');
   };
-  await assert.rejects(sendPendingRegistrationConfirmationEmail(rollback, f.scope.churchId, input, provider), /SIMULATED_MARKER_ROLLBACK/);
-  assert.deepEqual(await financial(f), before);
-  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, input, provider), true);
   assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, input, provider), false);
-  assert.equal(attempts, 2); assert.equal(accepted.size, 1); assert.deepEqual(payloads[0], payloads[1]);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, input, provider), false);
+  assert.equal(attempts, 1);
   const after = await financial(f);
-  assert.ok(after.registration.confirmationEmailSentAt);
-  assert.deepEqual({ ...after.registration, confirmationEmailSentAt: before.registration.confirmationEmailSentAt, updatedAt: before.registration.updatedAt }, before.registration);
+  assert.equal(after.registration.confirmationEmailSentAt, null);
+  assert.deepEqual(after.registration, before.registration);
   assert.deepEqual(after.payment, before.payment); assert.deepEqual(after.order, before.order); assert.deepEqual(after.transaction, before.transaction);
+  assert.deepEqual((await pool.query('SELECT "stage" FROM "EventRegistrationConfirmationDeliveryEvent" WHERE "registrationId"=$1 ORDER BY "sequence"', [f.scope.registrationId])).rows.map(row => row.stage), ['DELIVERY_INTENT', 'DELIVERY_UNCERTAIN']);
 });
 
 test('webhook compare-and-swap contention retries are bounded and do not mutate the financial graph', async () => {
@@ -352,10 +342,10 @@ test('both secured dormant APIs integrate register, concurrent charge, assisted 
   }
 });
 
-test('all 31 migrations applied by Prisma deploy; SQL-only constraints and partial index exist', async () => {
+test('all 33 migrations applied by Prisma deploy; SQL-only constraints and partial index exist', async () => {
   const rows = (await pool.query('SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY migration_name')).rows;
-  assert.equal(rows.length, 31); assert.ok(rows.every(r => r.finished_at && !r.rolled_back_at));
-  assert.equal(rows.at(-1).migration_name, '20261017120000_checkout_recovery_delivery_events');
+  assert.equal(rows.length, 33); assert.ok(rows.every(r => r.finished_at && !r.rolled_back_at));
+  assert.equal(rows.at(-1).migration_name, '20261105140000_registration_confirmation_delivery_events');
   const names = new Set((await pool.query("SELECT conname FROM pg_constraint WHERE conname LIKE 'checkout_%'")).rows.map(r => r.conname));
   for (const name of ['checkout_access_ttl_check', 'checkout_access_source_check', 'checkout_access_hash_check', 'checkout_charge_reference_check', 'checkout_recovery_evidence_check', 'checkout_recovery_actor_check', 'checkout_recovery_access_fkey']) assert.ok(names.has(name));
   const index = (await pool.query("SELECT indexdef FROM pg_indexes WHERE indexname='checkout_access_one_unrevoked_key'")).rows[0];

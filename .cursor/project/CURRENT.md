@@ -193,7 +193,7 @@
 - **PARTIAL:** confirmação por e-mail tem adapter Resend, QR anexado, chave de idempotência e marcador `confirmationEmailSentAt`; tentativa após PAID e retentativa em webhook repetido. Não há outbox/worker de retry durável. O formulário exige e-mail, mas `createPublicRegistrationSchema` aceita e-mail ausente; uma chamada direta pode confirmar inscrição paga sem destinatário para a credencial.
 - **IMPLEMENTED na página pública:** imagem de divulgação via `EventCoverImage` + GET público; descrição e local em `Event` (migration aditiva) e na tela Informações.
 - **BLOQUEIOS DE PROVA/PRÉ-PRODUÇÃO:** os E2E de `public-checkout` usam Asaas simulado e o teste de e-mail usa Resend simulado. Não comprovam PIX/cartões, webhook e entrega de e-mail reais ponta a ponta. Rotas públicas críticas não têm rate limit; CORS do `events-api` usa `origin: true`. Homologação externa e hardening exigem corte próprio e condições de ambiente/infraestrutura, sem inventá-las agora.
-- **Próximo corte mínimo permitido:** retry durável de e-mail e hardening/homologação externa seguem gates próprios. FORMULARIO-1 e taxa contratual permanecem adiados. Não iniciar automaticamente.
+- **Próximo corte mínimo permitido:** hardening/homologação externa seguem gates próprios. FORMULARIO-1 e taxa contratual permanecem adiados. Não iniciar automaticamente.
 
 ## CHECKOUT — CORTE ESTRUTURAL DE AUTORIZAÇÃO (2026-10-13)
 
@@ -757,3 +757,14 @@ Antes de propor ou implementar qualquer tela/fluxo de Eventos: `events-admin-ben
 - Auditoria de extração 2026-10-27 avaliou a IA: assistente rule-based em `api-br`, sem pacote/LLM; não bloqueia a extração; não implementar IA de Eventos antes da separação.
 - Após a separação, o assistente da igreja deve consumir contrato/API de Eventos em vez de `prisma.event` direto. Somente funcionalidades de IA expressamente aprovadas pelo usuário.
 - Preservar a sequência operacional vigente, sem antecipar etapas.
+
+## CONFIRMAÇÃO PAGA — RETRY DURÁVEL DO E-MAIL (2026-11-05)
+
+Caminho `sendPendingRegistrationConfirmationEmail` depois de CONFIRMED + PAID. Não é a entrega assistida de SUPER_ADMIN. Recuperação de checkout, política UNCERTAIN da recovery e reenvio automático da recovery não foram alterados.
+
+- Transação curta, sem provider: lock `registration-confirmation:${churchId}:${eventId}:${registrationId}`, `FOR UPDATE`, elegibilidade e destino. `DELIVERY_INTENT` commita antes do POST. `DELIVERY_ACCEPTED` e `confirmationEmailSentAt` são gravados juntos. False, exceção ou timeout viram `DELIVERY_UNCERTAIN`, sem segundo POST e sem devolver erro do provider ao caller. Sem worker, cron, polling, GET Resend ou reconciliação.
+- Elegibilidade e destino anteriores permanecem. O adapter e a chave `event-registration/${registrationId}` permanecem. Os cinco callers em `event.service.ts` continuam com três argumentos. Deadline opcional de 1 a 30000, default 15000, sem env novo.
+- Migration aditiva `20261105140000_registration_confirmation_delivery_events`. Não foi aplicada no banco principal nem na porta 5433. Não houve `prisma generate`.
+- Validação: 18 testes isolados passaram, 0 falharam. `tsc --noEmit` passou em `packages/events`, `apps/events-api` e `apps/api-br`. `git diff --check` passou. PostgreSQL 17 em `127.0.0.1:55437`, runner `--confirmation-delivery-only`: 6 testes passaram, 0 falharam; container descartável removido.
+- Fora deste corte: worker, reenvio automático de UNCERTAIN, prova real Resend/Asaas, alteração do schema público de e-mail opcional, commit e push.
+- O teste integrado `both secured dormant APIs...` continua esperando um segundo POST de confirmação após rejeição simulada. Esse arquivo não foi reescrito fora dos dois pontos autorizados.
