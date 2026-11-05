@@ -11,9 +11,10 @@ política UNCERTAIN da recovery, nem reenvio automático da recovery.
    `FOR UPDATE` da Registration, releitura da elegibilidade e resolução do destino.
    Inelegível ou `confirmationEmailSentAt` já preenchido: commit vazio, `false`,
    sem INSERT e sem POST.
-2. Se já existir qualquer `DELIVERY_INTENT`, `DELIVERY_ACCEPTED` ou
-   `DELIVERY_UNCERTAIN` daquela Registration: `false`, sem POST.
-3. Caso contrário, INSERT de `DELIVERY_INTENT` e COMMIT antes do POST. A
+2. `DELIVERY_ACCEPTED` ou `DELIVERY_UNCERTAIN` já presentes: `false`, sem POST.
+   Um `DELIVERY_INTENT` aberto e ainda elegível é consumido: não insere outro
+   INTENT e segue para o POST com a mesma chave do adapter.
+3. Sem eventos, INSERT de `DELIVERY_INTENT` e COMMIT antes do POST. A
    unicidade `(churchId, eventId, registrationId, stage)` e o lock dão um único dono.
 4. O POST fica fora da transação e fora do retry de banco. O adapter continua
    `(input) => Promise<boolean>`, com a chave `event-registration/${registrationId}`.
@@ -23,12 +24,13 @@ política UNCERTAIN da recovery, nem reenvio automático da recovery.
    existente não é sobrescrito. Status, pagamento, `checkInToken` e o financeiro
    não mudam.
 6. `false`, exceção ou timeout: grava `DELIVERY_UNCERTAIN` se o último estágio ainda
-   for INTENT. Não grava marker e não faz segundo POST. O replay seguinte vê
-   INTENT ou UNCERTAIN e não chama o provider.
+   for INTENT. Não grava marker. Replay com UNCERTAIN não chama o provider.
+   Replay com INTENT aberto e elegível processa o INTENT.
 7. ACCEPTED não é rebaixado para UNCERTAIN. Se o ACCEPTED já commitou, o UNCERTAIN
    não é inserido.
-8. Se o commit de ACCEPTED falhar, o POST não se repete. INTENT permanece ou vira
-   UNCERTAIN; o marker continua nulo; o próximo caller não envia de novo.
+8. Se o commit de ACCEPTED falhar e o UNCERTAIN commitou, o próximo caller não
+   envia de novo. Se ambos falharem, o INTENT aberto permanece e o próximo caller
+   elegível processa esse INTENT.
 9. Depois do handoff, erro do provider não volta ao caller. O retorno é `true`
    somente quando esta chamada gravou o marker junto do ACCEPTED.
 10. Não há PREPARED, DELIVERY_RECONCILED_ACCEPTED, inspect, reconcile, GET Resend,
@@ -67,6 +69,6 @@ houver evento.
 ## Limites
 
 UNCERTAIN não dispara reenvio automático nem reconciliação com Resend ou Asaas.
-Não há prova de entrega real do provider. O marker nulo com INTENT ou UNCERTAIN
-significa que outro caller não deve enviar de novo, mesmo que o POST tenha sido
-aceito e o commit de ACCEPTED tenha falhado.
+Não há prova de entrega real do provider. O marker nulo com UNCERTAIN significa
+que outro caller não deve enviar de novo. O marker nulo com INTENT aberto ainda
+elegível é processado no próximo caller, com a chave estável do adapter.

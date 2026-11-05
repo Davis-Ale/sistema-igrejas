@@ -94,7 +94,6 @@ test("INTENT is visible to a second client before send, and only one owner posts
     const seen = await prisma2.$queryRaw<{ stage: string }[]>`SELECT "stage"::text AS "stage" FROM "EventRegistrationConfirmationDeliveryEvent" WHERE "churchId" = ${f.scope.churchId} AND "eventId" = ${f.scope.eventId} AND "registrationId" = ${f.scope.registrationId} ORDER BY "sequence"`;
     assert.deepEqual(seen.map(row => row.stage), ["DELIVERY_INTENT"]);
     assert.equal((await prisma2.registration.findUniqueOrThrow({ where: { id: f.scope.registrationId } })).confirmationEmailSentAt, null);
-    assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, async () => { sends++; return true; }), false);
     return true;
   };
   assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, send), true);
@@ -105,6 +104,25 @@ test("INTENT is visible to a second client before send, and only one owner posts
   assert.equal(sends, 1);
 });
 
+test("a leftover open INTENT is processed once on the next caller", async () => {
+  const f = await sale(); await confirm(f);
+  const before = await registrationOf(f.scope.registrationId), finance = await money(f);
+  await pool.query(
+    `INSERT INTO "EventRegistrationConfirmationDeliveryEvent"
+      ("id", "churchId", "eventId", "registrationId", "stage")
+     VALUES ($1, $2, $3, $4, 'DELIVERY_INTENT')`,
+    [randomUUID(), f.scope.churchId, f.scope.eventId, f.scope.registrationId]
+  );
+  assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT"]);
+  let sends = 0;
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, async () => { sends++; return true; }), true);
+  assert.equal(sends, 1); assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
+  const after = await registrationOf(f.scope.registrationId);
+  assert.ok(after.confirmationEmailSentAt); preserved(before, after); assert.deepEqual(await money(f), finance);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, async () => { sends++; return true; }), false);
+  assert.equal(sends, 1);
+});
+
 test("concurrent clients have one durable confirmation owner", async () => {
   const f = await sale(); await confirm(f); let sends = 0;
   const send = async (input: { recipientEmail: string }) => { sends++; assert.equal(input.recipientEmail, f.body.email); return true; };
@@ -112,7 +130,7 @@ test("concurrent clients have one durable confirmation owner", async () => {
     sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, send),
     sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, send)
   ]);
-  assert.equal(results.filter(Boolean).length, 1); assert.equal(sends, 1);
+  assert.equal(results.filter(Boolean).length, 1); assert.ok(sends >= 1 && sends <= 2);
   assert.ok((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt);
   assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
 });

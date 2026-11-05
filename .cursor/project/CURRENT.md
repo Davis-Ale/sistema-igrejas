@@ -768,3 +768,7 @@ Caminho `sendPendingRegistrationConfirmationEmail` depois de CONFIRMED + PAID. N
 - Validação: 18 testes isolados passaram, 0 falharam. `tsc --noEmit` passou em `packages/events`, `apps/events-api` e `apps/api-br`. `git diff --check` passou. PostgreSQL 17 em `127.0.0.1:55437`, runner `--confirmation-delivery-only`: 6 testes passaram, 0 falharam; container descartável removido.
 - Fora deste corte: worker, reenvio automático de UNCERTAIN, prova real Resend/Asaas, alteração do schema público de e-mail opcional, commit e push.
 - O teste integrado `both secured dormant APIs...` continua esperando um segundo POST de confirmação após rejeição simulada. Esse arquivo não foi reescrito fora dos dois pontos autorizados.
+
+## CONFIRMAÇÃO PAGA — PROCESSAR INTENT PERSISTIDO (2026-11-05)
+
+O consumidor reutiliza um `DELIVERY_INTENT` aberto ainda elegível: não insere outro INTENT e faz o POST com a chave já existente. `DELIVERY_ACCEPTED` e `DELIVERY_UNCERTAIN` continuam terminais. Sem worker, sem GET Resend, sem reenvio de UNCERTAIN, sem mudança de callers/adapter/migration.

@@ -24,7 +24,8 @@ export async function sendPendingRegistrationConfirmationEmail(
   const store = createPostgresRegistrationConfirmationDeliveryStore(prisma);
   const claim = await store.claim(scope, tx => resolveEligibleDelivery(tx, scope));
   if (!claim.claimed) return false;
-  // The provider call is outside the claim transaction and outside its retry.
+  // Open INTENT (fresh or leftover) is processed here. The POST stays outside
+  // the claim transaction. ACCEPTED/UNCERTAIN remain terminal in claim().
   // A late result after the deadline must not write ACCEPTED or send again.
   const outcome = await observeDelivery(sendEmail, claim.payload, timeoutMs);
   if (outcome === "accepted") {

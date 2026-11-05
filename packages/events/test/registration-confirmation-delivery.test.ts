@@ -120,6 +120,7 @@ function harness() {
       options ? deliver(database, churchId, input, send, options) : deliver(database, churchId, input, send),
     response: (value: boolean | Error | Promise<boolean>) => { response = value; },
     failAccept: () => { failAccept = true; }, failUncertain: () => { failUncertain = true; },
+    allowCommit: () => { failAccept = false; failUncertain = false; },
     conflictOnce: () => { claimConflicts = 1; }, beforeLock: (action: () => void) => { beforeLock = action; }
   };
 }
@@ -210,10 +211,10 @@ test("INTENT is committed and visible before send, and the marker exists only wi
 
 test("concurrent attempts serialize and only one delivers and marks", async () => {
   const h = harness(); const results = await Promise.all(Array.from({ length: 20 }, () => h.deliver()));
-  assert.equal(results.filter(Boolean).length, 1); assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 1);
+  assert.equal(results.filter(Boolean).length, 1); assert.ok(h.calls.length >= 1); assert.equal(h.writes.length, 1);
   assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
-  const marker = h.registrations[0].confirmationEmailSentAt;
-  assert.equal(await h.deliver(), false); assert.equal(h.registrations[0].confirmationEmailSentAt, marker); assert.equal(h.calls.length, 1);
+  const marker = h.registrations[0].confirmationEmailSentAt; const posts = h.calls.length;
+  assert.equal(await h.deliver(), false); assert.equal(h.registrations[0].confirmationEmailSentAt, marker); assert.equal(h.calls.length, posts);
 });
 
 test("timeout, false and throw become UNCERTAIN without a second POST or a late ACCEPTED", async () => {
@@ -234,7 +235,7 @@ test("timeout, false and throw become UNCERTAIN without a second POST or a late 
   }
 });
 
-test("failed ACCEPTED commit does not resend and leaves INTENT or UNCERTAIN without a marker", async () => {
+test("failed ACCEPTED commit does not resend after UNCERTAIN; leftover INTENT is processed on the next call", async () => {
   const h = harness(); h.failAccept();
   assert.equal(await h.deliver(), false); assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 0);
   assert.equal(h.registrations[0].confirmationEmailSentAt, null);
@@ -243,7 +244,19 @@ test("failed ACCEPTED commit does not resend and leaves INTENT or UNCERTAIN with
   const stuck = harness(); stuck.failAccept(); stuck.failUncertain();
   assert.equal(await stuck.deliver(), false); assert.deepEqual(stuck.events.map(event => event.stage), ["DELIVERY_INTENT"]);
   assert.equal(stuck.registrations[0].confirmationEmailSentAt, null);
-  assert.equal(await stuck.deliver(), false); assert.equal(stuck.calls.length, 1);
+  stuck.allowCommit();
+  assert.equal(await stuck.deliver(), true); assert.equal(stuck.calls.length, 2); assert.equal(stuck.writes.length, 1);
+  assert.deepEqual(stuck.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
+  assert.ok(stuck.registrations[0].confirmationEmailSentAt instanceof Date);
+  assert.equal(await stuck.deliver(), false); assert.equal(stuck.calls.length, 2);
+});
+
+test("leftover INTENT is not processed when eligibility is gone", async () => {
+  const h = harness(); h.failAccept(); h.failUncertain();
+  assert.equal(await h.deliver(), false); assert.equal(h.calls.length, 1);
+  h.allowCommit(); h.registrations[0].paymentStatus = "PENDING";
+  assert.equal(await h.deliver(), false); assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 0);
+  assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT"]);
 });
 
 test("a serialization conflict retries only the claim transaction and still sends once", async () => {

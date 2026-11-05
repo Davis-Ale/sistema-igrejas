@@ -69,9 +69,17 @@ export function createPostgresRegistrationConfirmationDeliveryStore(database: Da
         const decision = await decide(tx);
         if (!decision.proceed) return { claimed: false as const };
         const rows = await history(tx, parsed);
-        if (rows.length) return { claimed: false as const };
-        await insert(tx, parsed, "DELIVERY_INTENT", new Date());
-        return { claimed: true as const, payload: decision.payload };
+        const last = rows.at(-1);
+        // An open INTENT is the unfinished handoff: consume it, do not insert another.
+        // ACCEPTED and UNCERTAIN stay terminal and never POST again.
+        if (!last) {
+          await insert(tx, parsed, "DELIVERY_INTENT", new Date());
+          return { claimed: true as const, payload: decision.payload };
+        }
+        if (last.stage === "DELIVERY_INTENT" && rows.length === 1) {
+          return { claimed: true as const, payload: decision.payload };
+        }
+        return { claimed: false as const };
       });
     },
     async accept(scope: ConfirmationDeliveryScope, at: Date) {
