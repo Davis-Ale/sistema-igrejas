@@ -16,7 +16,10 @@ política UNCERTAIN da recovery, nem reenvio automático da recovery.
    INTENT e segue para o POST com a mesma chave do adapter.
 3. Sem eventos, INSERT de `DELIVERY_INTENT` e COMMIT antes do POST. A
    unicidade `(churchId, eventId, registrationId, stage)` e o lock dão um único dono.
-4. O POST fica fora da transação e fora do retry de banco. O adapter continua
+4. O POST fica fora da transação de claim e fora do retry de banco. Dois webhooks
+   concorrentes no mesmo INTENT aberto serializam num lock de handoff
+   `registration-confirmation-handoff:${churchId}:${eventId}:${registrationId}`,
+   distinto do lock de claim, até o POST e o resultado. O adapter continua
    `(input) => Promise<boolean>`, com a chave `event-registration/${registrationId}`.
    Não há AbortSignal.
 5. `true` observado antes do deadline: outra transação grava `DELIVERY_ACCEPTED` e

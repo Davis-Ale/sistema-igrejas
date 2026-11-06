@@ -776,3 +776,7 @@ O consumidor reutiliza um `DELIVERY_INTENT` aberto ainda elegível: não insere 
 ## CONFIRMAÇÃO PAGA — REJEIÇÃO CONHECIDA DEIXA INTENT (2026-11-05)
 
 `false` do adapter (rejeição conhecida, ex. 503) não grava `DELIVERY_UNCERTAIN`. O INTENT permanece aberto e o webhook/replay elegível processa com a mesma chave. Timeout e exceção continuam UNCERTAIN e terminais. Sem worker, GET Resend, nova migration ou mudança de callers.
+
+## CONFIRMAÇÃO PAGA — LOCK DE HANDOFF DO WEBHOOK (2026-11-06)
+
+Replay concorrente de webhook PAID serializa o POST de confirmação com `pg_advisory_xact_lock` na chave `registration-confirmation-handoff:...`, distinta da chave de claim, até o resultado. INTENT continua commitado antes do POST. Sem worker, sem GET Resend, sem nova migration.

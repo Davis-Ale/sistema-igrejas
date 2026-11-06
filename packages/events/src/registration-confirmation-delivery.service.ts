@@ -21,26 +21,33 @@ export async function sendPendingRegistrationConfirmationEmail(
   const scope = checkoutScopeSchema.parse({
     churchId, eventId: input.eventId, registrationId: input.registrationId
   });
-  const store = createPostgresRegistrationConfirmationDeliveryStore(prisma);
-  const claim = await store.claim(scope, tx => resolveEligibleDelivery(tx, scope));
-  if (!claim.claimed) return false;
-  // Open INTENT (fresh or leftover) is processed here. The POST stays outside
-  // the claim transaction. ACCEPTED/UNCERTAIN remain terminal in claim().
-  // A late result after the deadline must not write ACCEPTED or send again.
-  const outcome = await observeDelivery(sendEmail, claim.payload, timeoutMs);
-  if (outcome === "accepted") {
-    try {
-      return await store.accept(scope, new Date());
-    } catch {
-      try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
-      return false;
+  const handoffKey = `registration-confirmation-handoff:${scope.churchId}:${scope.eventId}:${scope.registrationId}`;
+  // Pin an advisory lock on this connection until POST/outcome finish so two
+  // webhook replays cannot both consume the same open INTENT. Distinct from the
+  // claim key so the inner Serializable transaction can still commit INTENT first.
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${handoffKey}, 0))::text`;
+    const store = createPostgresRegistrationConfirmationDeliveryStore(prisma);
+    const claim = await store.claim(scope, inner => resolveEligibleDelivery(inner, scope));
+    if (!claim.claimed) return false;
+    // Open INTENT (fresh or leftover) is processed here. The POST stays outside
+    // the claim transaction. ACCEPTED/UNCERTAIN remain terminal in claim().
+    // A late result after the deadline must not write ACCEPTED or send again.
+    const outcome = await observeDelivery(sendEmail, claim.payload, timeoutMs);
+    if (outcome === "accepted") {
+      try {
+        return await store.accept(scope, new Date());
+      } catch {
+        try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
+        return false;
+      }
     }
-  }
-  // Known provider rejection (false) leaves the INTENT open for webhook replay.
-  // Timeout and throw stay UNCERTAIN: the POST may already have been accepted.
-  if (outcome === "rejected") return false;
-  try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
-  return false;
+    // Known provider rejection (false) leaves the INTENT open for webhook replay.
+    // Timeout and throw stay UNCERTAIN: the POST may already have been accepted.
+    if (outcome === "rejected") return false;
+    try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
+    return false;
+  }, { timeout: timeoutMs + 5_000 });
 }
 
 async function resolveEligibleDelivery(

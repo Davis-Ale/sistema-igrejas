@@ -22,15 +22,17 @@ function harness() {
   }));
   const events: DeliveryRow[] = [];
   const calls: any[] = [], queries: any[] = [], writes: any[] = [], trace: string[] = [];
-  let sequence = 0, claimConflicts = 0, tail = Promise.resolve();
+  let sequence = 0, claimConflicts = 0, tail = Promise.resolve(), depth = 0;
   let response: boolean | Error | Promise<boolean> = true, failAccept = false, failUncertain = false;
   let beforeLock: (() => void) | undefined;
   const database = { async $transaction(action: (tx: any) => Promise<unknown>, options: any) {
-    assert.equal(options.isolationLevel, "Serializable");
-    assert.equal(options.timeout, 5000);
-    assert.notEqual(options.timeout, 30000);
-    const previous = tail; let release!: () => void; tail = new Promise(resolve => { release = resolve; });
-    await previous;
+    if (options.isolationLevel === "Serializable") {
+      assert.equal(options.timeout, 5000);
+      assert.notEqual(options.timeout, 30000);
+    } else {
+      assert.ok(options.timeout > 5000);
+    }
+    const run = async () => {
     const markers = registrations.map(row => row.confirmationEmailSentAt);
     const staged: DeliveryRow[] = [];
     let locked: any;
@@ -40,8 +42,15 @@ function harness() {
           const sql = strings.join("?"); queries.push({ sql, values });
           if (sql.includes("pg_advisory_xact_lock")) {
             assert.match(sql, /::text/); assert.equal(values.length, 1);
-            assert.match(String(values[0]), /^registration-confirmation:[^:]+:[^:]+:[^:]+$/);
-            trace.push("advisory"); return [{ pg_advisory_xact_lock: "" }];
+            const key = String(values[0]);
+            if (key.startsWith("registration-confirmation-handoff:")) {
+              assert.match(key, /^registration-confirmation-handoff:[^:]+:[^:]+:[^:]+$/);
+              trace.push("handoff");
+            } else {
+              assert.match(key, /^registration-confirmation:[^:]+:[^:]+:[^:]+$/);
+              trace.push("advisory");
+            }
+            return [{ pg_advisory_xact_lock: "" }];
           }
           if (sql.includes("to_jsonb")) {
             beforeLock?.(); beforeLock = undefined; trace.push("lock");
@@ -105,7 +114,14 @@ function harness() {
     } catch (error) {
       registrations.forEach((row, index) => { row.confirmationEmailSentAt = markers[index]; });
       trace.push("rollback"); throw error;
-    } finally { release(); }
+    }
+    };
+    if (depth > 0) return run();
+    const previous = tail; let release!: () => void; tail = new Promise(resolve => { release = resolve; });
+    await previous;
+    depth++;
+    try { return await run(); }
+    finally { depth--; release(); }
   } } as unknown as PrismaClient;
   const send = async (input: any, ...extra: unknown[]) => {
     assert.equal(extra.length, 0);
@@ -125,7 +141,7 @@ function harness() {
   };
 }
 
-const successTrace = ["advisory", "lock", "history", "insert:DELIVERY_INTENT", "commit", "send", "advisory", "marker-lock", "history", "insert:DELIVERY_ACCEPTED", "marker", "commit"];
+const successTrace = ["handoff", "advisory", "lock", "history", "insert:DELIVERY_INTENT", "commit", "send", "advisory", "marker-lock", "history", "insert:DELIVERY_ACCEPTED", "marker", "commit", "commit"];
 
 test("local recipient overrides shared Visitor and Person without mutating contacts or other registrations", async () => {
   for (const person of [false, true]) {
@@ -138,6 +154,7 @@ test("local recipient overrides shared Visitor and Person without mutating conta
     assert.deepEqual(h.trace, successTrace);
     assert.ok(h.queries.some(query => query.sql.includes("pg_advisory_xact_lock") && query.sql.includes("::text") &&
       query.values[0] === "registration-confirmation:church-a:event-a:registration-a"));
+    assert.ok(h.queries.some(query => query.values[0] === "registration-confirmation-handoff:church-a:event-a:registration-a"));
   }
 });
 
@@ -211,10 +228,10 @@ test("INTENT is committed and visible before send, and the marker exists only wi
 
 test("concurrent attempts serialize and only one delivers and marks", async () => {
   const h = harness(); const results = await Promise.all(Array.from({ length: 20 }, () => h.deliver()));
-  assert.equal(results.filter(Boolean).length, 1); assert.ok(h.calls.length >= 1); assert.equal(h.writes.length, 1);
+  assert.equal(results.filter(Boolean).length, 1); assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 1);
   assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
-  const marker = h.registrations[0].confirmationEmailSentAt; const posts = h.calls.length;
-  assert.equal(await h.deliver(), false); assert.equal(h.registrations[0].confirmationEmailSentAt, marker); assert.equal(h.calls.length, posts);
+  const marker = h.registrations[0].confirmationEmailSentAt;
+  assert.equal(await h.deliver(), false); assert.equal(h.registrations[0].confirmationEmailSentAt, marker); assert.equal(h.calls.length, 1);
 });
 
 test("timeout and throw become UNCERTAIN without a second POST or a late ACCEPTED", async () => {

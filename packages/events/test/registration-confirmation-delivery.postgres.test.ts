@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { generateCheckoutCredential } from "../src/checkout-access.service.ts";
-import { createCheckoutRegistrationFactory } from "../src/event.service.ts";
+import { applyEventPaymentProviderStatus, createCheckoutRegistrationFactory } from "../src/event.service.ts";
 import { sendPendingRegistrationConfirmationEmail } from "../src/registration-confirmation-delivery.service.ts";
 
 // No dotenv, buildApp, seed, real provider, or implicit Prisma datasource here.
@@ -123,6 +123,43 @@ test("a leftover open INTENT is processed once on the next caller", async () => 
   assert.equal(sends, 1);
 });
 
+test("concurrent PAID webhook replays post confirmation email once", async () => {
+  const f = await sale();
+  const providerPaymentId = "synthetic-webhook";
+  await prisma.eventPayment.update({ where: { id: f.payment.id }, data: { status: "PAID", providerPaymentId } });
+  await prisma.eventOrder.update({ where: { id: f.payment.orderId }, data: { status: "PAID" } });
+  await confirm(f);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, async () => false), false);
+  assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT"]);
+  const savedKey = process.env.RESEND_API_KEY, savedFrom = process.env.EVENTS_EMAIL_FROM, savedFetch = globalThis.fetch;
+  let emails = 0;
+  process.env.RESEND_API_KEY = "re_synthetic_webhook";
+  process.env.EVENTS_EMAIL_FROM = "Synthetic <test@example.invalid>";
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "https://api.resend.com/emails") {
+      emails++;
+      return new Response(JSON.stringify({ id: "synthetic-email" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error("EXTERNAL_NETWORK_FORBIDDEN");
+  };
+  try {
+    const input = { eventPaymentId: f.payment.id, providerPaymentId, paymentStatus: "PAID" as const };
+    const results = await Promise.all([
+      applyEventPaymentProviderStatus(prisma, f.scope.churchId, input),
+      applyEventPaymentProviderStatus(prisma2, f.scope.churchId, input)
+    ]);
+    assert.deepEqual(results, [true, true]);
+    assert.equal(emails, 1);
+    assert.ok((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt);
+    assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = savedKey;
+    if (savedFrom === undefined) delete process.env.EVENTS_EMAIL_FROM; else process.env.EVENTS_EMAIL_FROM = savedFrom;
+  }
+});
+
 test("concurrent clients have one durable confirmation owner", async () => {
   const f = await sale(); await confirm(f); let sends = 0;
   const send = async (input: { recipientEmail: string }) => { sends++; assert.equal(input.recipientEmail, f.body.email); return true; };
@@ -130,7 +167,7 @@ test("concurrent clients have one durable confirmation owner", async () => {
     sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, send),
     sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, send)
   ]);
-  assert.equal(results.filter(Boolean).length, 1); assert.ok(sends >= 1 && sends <= 2);
+  assert.equal(results.filter(Boolean).length, 1); assert.equal(sends, 1);
   assert.ok((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt);
   assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
 });
