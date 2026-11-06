@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CheckoutSnapshot, CheckoutTarget, PublicCheckoutV2Client, PublicCheckoutV2Factory } from "./public-checkout-v2.client";
 
-// The optional factory is supplied exclusively by the unconnected prepared wrapper.
+// The public page supplies the factory. Preview does not. Polling is status only.
 export function usePreparedCheckoutV2(factory: PublicCheckoutV2Factory | undefined, target: CheckoutTarget | null, preview: boolean) {
   const client = useRef<PublicCheckoutV2Client | null>(null);
   const boundTarget = useRef<CheckoutTarget | null>(null);

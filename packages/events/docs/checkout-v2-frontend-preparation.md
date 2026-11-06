@@ -6,16 +6,17 @@ flag de ativação, página nova, alteração de rota ativa, banco ou migration.
 
 ## Composição
 
-`PreparedPublicEventV2` é um wrapper sem consumidor em páginas. Ele fornece a
-factory opcional `prepareCheckoutV2` ao mesmo `PublicEventView`. O componente
-compartilhado mantém o JSX, estilos, ingresso/lote, desconto, formulário, QR PIX,
-Copia e Cola e redirecionamento de crédito/débito existentes. Somente a composição
-preparada recebe controles de consulta/retomada e mensagens de segurança.
+`PreparedPublicEventV2` fornece a factory `prepareCheckoutV2` ao mesmo
+`PublicEventView`. A página pública `/eventos/[eventId]` já usa esse wrapper:
+chave `ec2_`, retry do payload original, reload/polling só com `status`, e
+`resume` explícito. O componente compartilhado mantém o JSX, estilos,
+ingresso/lote, desconto, formulário, QR PIX, Copia e Cola e redirecionamento
+de crédito/débito existentes.
 
-As páginas atuais continuam chamando `PublicEventView` sem a factory: envio,
-armazenamento, polling e token legados seguem o caminho anterior. O efeito de
-polling legado é explicitamente ignorado quando a factory v2 existe. Preview não
-cria cliente, chave ou requisição de checkout. Nenhum módulo de API foi alterado.
+Preview continua chamando `PublicEventView` sem a factory: não cria cliente,
+chave ou requisição de checkout. O efeito de polling legado é ignorado quando
+a factory v2 existe. Nenhum módulo de API, rota legado ou ativação coordenada
+foi alterado neste recorte.
 
 No wrapper preparado, o componente não injeta os SDKs de tracking da página. Isso
 evita introduzir esses scripts no fluxo que retém a chave privada. Não remove

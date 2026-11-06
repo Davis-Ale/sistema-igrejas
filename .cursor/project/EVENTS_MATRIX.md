@@ -948,10 +948,10 @@ Origem: decisão explícita do usuário, contrato v2 e código real em cc31472.
 
 | Capacidade | Classe | Evidência / limite |
 | --- | --- | --- |
-| Cliente público v2 register/status/resume | `PARTIAL` | Implementado e testado, sem consumidor em páginas ativas; Web Crypto/header privado/escopo/DTO seguro. |
+| Cliente público v2 register/status/resume | `IMPLEMENTED` | Página `/eventos/[eventId]` usa `PreparedPublicEventV2`. Chave `ec2_` no header, retry do payload original, reload/polling só `status`, `resume` explícito. Preview sem cliente. |
 | Expiração, revogação e reconciliação | `PARTIAL` | Teto absoluto e bloqueios sem chave nova/reenvio automático; servidor autoriza cada request. Não há público de reconciliação/recuperação. |
-| PIX, crédito e débito / apresentação atual | `PARTIAL` | Reuso de PublicEventView com factory opcional; legado padrão preservado. Runtime/visual preparado não homologado. |
+| PIX, crédito e débito / apresentação atual | `PARTIAL` | Reuso de PublicEventView com factory no público; preview sem factory. Runtime/visual e homologação externa continuam gates. |
 | Prova isolada do corte 3 | `IMPLEMENTED` | 19/19 novos e 156/156 totais; TypeScript frontend/domínio/ambos servidores. Sem browser, banco ou pagamentos reais. |
-| Ativação coordenada | `MISSING` | Nenhuma página/rota ativa conectada; depende de autorização, migrations/hardening/homologação em corte próprio. |
+| Ativação coordenada | `PARTIAL` | Frontend público ligado ao protocolo preparado. Rotas/backend exclusivos já no bundle v2. Gate Redis/migration no principal e homologação externa continuam em corte próprio. |
 
 Documentação: packages/events/docs/checkout-v2-frontend-preparation.md. Resultados 33/33 PostgreSQL dos cortes anteriores preservados, sem nova execução de banco.

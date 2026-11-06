@@ -1,5 +1,6 @@
-// Browser-only protocol preparation. No page imports/creates this client today.
-// Never import server services/Prisma or read legacy checkout/session tokens here.
+// Browser-only v2 protocol. The public page creates this client through
+// PreparedPublicEventV2. Preview does not. Never import server services/Prisma
+// or read legacy checkout/session tokens here.
 export type CheckoutMethod = "PIX" | "CREDIT_CARD" | "DEBIT_CARD";
 export type CheckoutTarget = { eventId: string; churchSlug: string; eventSlug: string };
 export type CheckoutRegistrationInput = {

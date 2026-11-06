@@ -788,3 +788,7 @@ O resume preparado das duas APIs já cria a primeira cobrança pelo guard (`crea
 ## CHECKOUT — RECUPERAÇÃO SUPER_ADMIN NO V2 PREPARADO (2026-11-06)
 
 `buildApp` omite o segundo argumento: as duas APIs injetam `tryCreateAssistedCheckoutRecoveryFromEnv` (retenção 15 min, POST 15s, Resend GET de reconciliação). Sem chave/remetente nu, a rota permanece 503. Sem frontend, sem chave do chamador, sem worker.
+
+## CHECKOUT — FRONTEND PÚBLICO NO PROTOCOLO V2 (2026-11-06)
+
+A página pública já consome `PreparedPublicEventV2`: chave `ec2_`, retry do payload original, reload/polling só `status`, `resume` explícito. Preview permanece sem cliente. Sem alteração de rotas legadas, backend ou ativação coordenada.
