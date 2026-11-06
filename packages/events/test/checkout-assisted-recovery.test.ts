@@ -323,6 +323,10 @@ test("no active builder or package entrypoint imports assisted recovery or the e
     const source = await readFile(new URL(p, import.meta.url), "utf8");
     assert.equal(source.includes("checkout-assisted-recovery"), false); assert.equal(source.includes("checkout-recovery-email"), false);
   }
+  for (const server of ["api-br", "events-api"]) {
+    const staged = await readFile(new URL(`../../../apps/${server}/src/checkout-v2.prepared.ts`, import.meta.url), "utf8");
+    assert.equal(staged.includes("tryCreateAssistedCheckoutRecoveryFromEnv"), true);
+  }
 });
 
 test("both dormant server compositions accept explicit assisted delivery while the default stays blocked", async () => {
@@ -339,6 +343,43 @@ test("both dormant server compositions accept explicit assisted delivery while t
       assert.equal(o.sent.length, configured ? 1 : 0);
       assert.equal(result.body.includes("ec2_"), false); assert.equal(result.body.includes("verified@example.invalid"), false);
     } finally { await app.close(); o.service.dispose(); }
+  }
+});
+
+test("omitted coordinator uses configured Resend recovery; caller key stays rejected", async t => {
+  const savedKey = process.env.RESEND_API_KEY, savedFrom = process.env.EVENTS_EMAIL_FROM;
+  process.env.RESEND_API_KEY = "re_synthetic_recovery";
+  process.env.EVENTS_EMAIL_FROM = "events@example.invalid";
+  const receipt = randomUUID();
+  const mock = t.mock.method(globalThis, "fetch", async (url: unknown, init?: RequestInit) => {
+    assert.equal(String(url), "https://api.resend.com/emails");
+    assert.equal(init?.method, "POST");
+    return new Response(JSON.stringify({ id: receipt }), { status: 200 });
+  });
+  try {
+    for (const prepare of [prepareEventsApiCheckoutV2, prepareApiBrCheckoutV2]) {
+      const o = operation(), h = o.h, app = Fastify();
+      (h.database as any).userAccount = { async findUnique() { return { ...h.state.accounts[0], person: null }; } };
+      await app.register(jwt, { secret: "isolated-assisted-recovery-test-secret" });
+      for (const route of prepare(h.database as PrismaClient)) app.route(route);
+      try {
+        const token = app.jwt.sign({ userId: actor.userId, churchId: actor.churchId, role: "SUPER_ADMIN" });
+        const forged = await app.inject({ method: "POST", url: "/api/events/event-a/registrations/registration-a/checkout/recovery",
+          headers: { authorization: `Bearer ${token}`, "x-event-checkout-key": "forged" }, payload: request() });
+        assert.equal(forged.statusCode, 400);
+        const result = await app.inject({ method: "POST", url: "/api/events/event-a/registrations/registration-a/checkout/recovery",
+          headers: { authorization: `Bearer ${token}` }, payload: request() });
+        assert.equal(result.statusCode, 200, result.body);
+        assert.equal(result.json().delivery, "ACCEPTED");
+        assert.equal(result.body.includes("ec2_"), false);
+        assert.equal(result.body.includes("verified@example.invalid"), false);
+        assert.equal(result.body.includes("re_synthetic_recovery"), false);
+      } finally { await app.close(); o.service.dispose(); }
+    }
+  } finally {
+    mock.mock.restore();
+    if (savedKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = savedKey;
+    if (savedFrom === undefined) delete process.env.EVENTS_EMAIL_FROM; else process.env.EVENTS_EMAIL_FROM = savedFrom;
   }
 });
 

@@ -59,9 +59,11 @@ uma chave não reconcilia nem autoriza uma nova cobrança.
 
 ## Configuração pendente antes de homologação/ativação
 
-- Injetar explicitamente `createAssistedCheckoutRecovery` no quarto argumento dos
-  descritores preparados. Sem coordenador, recuperação retorna 503; não há fallback
-  para a antiga operação que aceitava chave do chamador. Nada foi ligado aos builders.
+- Os descritores preparados injetam `tryCreateAssistedCheckoutRecoveryFromEnv` quando
+  o segundo argumento é omitido (`buildApp`). Sem `RESEND_API_KEY` e remetente nu em
+  `EVENTS_EMAIL_FROM`, recuperação permanece 503. Não há fallback para a antiga
+  operação que aceitava chave do chamador. Argumento explícito `undefined` nos testes
+  continua bloqueado.
 - Configurar o adapter Resend com secret e remetente verificado, sem defaults de teste.
 - Escolher prazo de retenção e deadline de envio dentro dos limites técnicos.
 - Aprovar critérios/evidências operacionais de atendimento. A persistência de entrega

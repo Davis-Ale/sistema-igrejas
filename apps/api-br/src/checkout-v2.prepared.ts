@@ -3,6 +3,7 @@ import { getAsaasPayment, getAsaasPixQrCode } from "@sistema-igrejas/financial";
 import { prepareCheckoutV2Routes } from "../../../packages/events/src/checkout-v2.routes.js";
 import { createAsaasCheckoutChargeProvider } from "../../../packages/financial/src/asaas-checkout-charge.provider.js";
 import type { AssistedCheckoutRecovery } from "../../../packages/events/src/checkout-assisted-recovery.service.js";
+import { tryCreateAssistedCheckoutRecoveryFromEnv } from "../../../packages/events/src/checkout-recovery-email.service.js";
 
 // Exclusive registrar used by buildApp through registerExclusiveCheckoutV2. No environment switch.
 export function prepareApiBrCheckoutV2(prisma: PrismaClient, assistedRecovery?: AssistedCheckoutRecovery) {
@@ -13,5 +14,6 @@ export function prepareApiBrCheckoutV2(prisma: PrismaClient, assistedRecovery?: 
       return { id: payment.id, method: payment.billingType === "PIX" ? "PIX" : "CARD", amount: payment.value,
         status: payment.status, redirectUrl: payment.invoiceUrl ?? null };
     }, pix: getAsaasPixQrCode
-  }, createAsaasCheckoutChargeProvider(), assistedRecovery);
+  }, createAsaasCheckoutChargeProvider(),
+    arguments.length > 1 ? assistedRecovery : tryCreateAssistedCheckoutRecoveryFromEnv(prisma));
 }

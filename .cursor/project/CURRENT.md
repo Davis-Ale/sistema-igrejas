@@ -780,3 +780,11 @@ O consumidor reutiliza um `DELIVERY_INTENT` aberto ainda elegível: não insere 
 ## CONFIRMAÇÃO PAGA — LOCK DE HANDOFF DO WEBHOOK (2026-11-06)
 
 Replay concorrente de webhook PAID serializa o POST de confirmação com `pg_advisory_xact_lock` na chave `registration-confirmation-handoff:...`, distinta da chave de claim, até o resultado. INTENT continua commitado antes do POST. Sem worker, sem GET Resend, sem nova migration.
+
+## CHECKOUT — GUARD NO V2 PREPARADO (2026-11-06)
+
+O resume preparado das duas APIs já cria a primeira cobrança pelo guard (`createFirstCheckoutCharge` + `createAsaasCheckoutChargeProvider`). STARTED/UNCERTAIN exigem reconciliação GET-only com ID conhecido de evidência backend; sem rota pública, sem POST extra, sem frontend nem rotas legadas. A prova isolada das duas composições fixa `ASAAS_API_KEY`/`ASAAS_ENVIRONMENT` sandbox antes de construir o adapter.
+
+## CHECKOUT — RECUPERAÇÃO SUPER_ADMIN NO V2 PREPARADO (2026-11-06)
+
+`buildApp` omite o segundo argumento: as duas APIs injetam `tryCreateAssistedCheckoutRecoveryFromEnv` (retenção 15 min, POST 15s, Resend GET de reconciliação). Sem chave/remetente nu, a rota permanece 503. Sem frontend, sem chave do chamador, sem worker.

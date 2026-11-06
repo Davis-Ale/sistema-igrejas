@@ -1,12 +1,32 @@
 import { z } from "zod";
+import type { PrismaClient } from "@prisma/client";
 import { checkoutRecoveryDeliveryId } from "./checkout-recovery-delivery.identity.js";
 import { checkoutCredentialSchema } from "./checkout-access.schema.js";
-import type { CheckoutRecoveryEmailSender } from "./checkout-assisted-recovery.service.js";
+import {
+  createAssistedCheckoutRecovery, type AssistedCheckoutRecovery, type CheckoutRecoveryEmailSender
+} from "./checkout-assisted-recovery.service.js";
 
-/** Explicit configuration only; never imported/created by an active builder.
- * Direct Resend transport avoids the installed SDK's development error-body logs.
- * An abort/late response never proves absence of delivery or authorizes a resend.
+/** Explicit configuration only. Direct Resend transport avoids the installed SDK's
+ * development error-body logs. An abort/late response never proves absence of
+ * delivery or authorizes a resend. Bare EVENTS_EMAIL_FROM only; no display-name default.
  */
+export function tryCreateAssistedCheckoutRecoveryFromEnv(
+  prisma: Pick<PrismaClient, "$transaction">
+): AssistedCheckoutRecovery | undefined {
+  const apiKey = process.env.RESEND_API_KEY ?? "";
+  const from = process.env.EVENTS_EMAIL_FROM ?? "";
+  try {
+    return createAssistedCheckoutRecovery(prisma, {
+      retentionMs: 15 * 60_000,
+      deliveryTimeoutMs: 15_000,
+      sendEmail: createCheckoutRecoveryResendSender({ apiKey, from }),
+      readEmail: createCheckoutRecoveryResendReader({ apiKey })
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "CHECKOUT_RECOVERY_DELIVERY_NOT_CONFIGURED") return undefined;
+    throw error;
+  }
+}
 export function createCheckoutRecoveryResendSender(config: { apiKey: string; from: string }): CheckoutRecoveryEmailSender {
   if (!config.apiKey?.trim() || !z.string().email().safeParse(config.from).success) {
     throw new Error("CHECKOUT_RECOVERY_DELIVERY_NOT_CONFIGURED");

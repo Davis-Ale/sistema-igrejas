@@ -234,7 +234,7 @@ Schema/migration/diffs anteriores preservados. Sem dados reais, migration aplica
 | --- | --- | --- |
 | Integração das duas rotas públicas/status/resume/admin | `PARTIAL` | Oito descritores Fastify v2 estritos, header privado, JWT/current SUPER_ADMIN, DTO seguro, adapters preparados nos dois servidores. Nenhum buildApp importa/registra o bundle. |
 | Factory transacional de nova venda | `PARTIAL` | Domínio existente reutilizado na mesma tx do acesso; sem dedup por contatos/auto-confirmação no v2; Order/Payment/Transaction e snapshots únicos. Wrapper legado preservado. |
-| Retomada conhecida e proteção do handler preparado | `PARTIAL` | GET/QR somente após autorização e conferência de grafo/valor/método/referências; revalidação pós-provider. Nova cobrança recusada até guard durável; STARTED/UNCERTAIN ou CARD legado sem semântica exigem reconciliação. |
+| Retomada conhecida e proteção do handler preparado | `PARTIAL` | GET/QR somente após autorização e conferência de grafo/valor/método/referências; revalidação pós-provider. Resume elegível sem referências usa o guard durável. STARTED/UNCERTAIN ou CARD legado sem semântica exigem reconciliação GET-only; sem rota pública. |
 | Exclusividade de ativação e bloqueios reais | `PARTIAL` | Gate de inventário/protocolo dos dois servidores documentados. Sem flag ou contenção atual. Guard de criação, consumidor checkoutEmail, evidência/canal humano e prova PostgreSQL/externa ainda pendentes. |
 | Prova isolada | `PARTIAL` | 56 testes: 41 anteriores + 15 integração. Prisma/provider simulados; TypeScript fonte/testes. Não prova runtime real, PostgreSQL ou provider. |
 
@@ -247,7 +247,7 @@ Regras/diff real/servidores auditados antes da edição. Schema/migration e alte
 | Intent antes do POST e single owner | `PARTIAL` | EventCheckoutChargeAttempt STARTED commitado antes do adapter; autorização v2, grafo/método/totais/destino scoped, locks/uniquidade/retries DB limitados. Nenhum POST em tx/retry; módulo não conectado. |
 | Timeout/resultado incerto/crash | `PARTIAL` | UNCERTAIN ou STARTED durável bloqueiam novos POSTs; commit ambíguo e resposta tardia não reemitem/resetam; AbortSignal/deadline e chave estável em adapter isolado. Sem prova externa. |
 | Integridade/reconciliação | `PARTIAL` | Referências e SUCCEEDED atômicos; nenhum ledger/status/valor/snapshot substituído. Reconciliação explícita GET-only verifica referência/escopo/valor/método e conclui o mesmo intent. Sem reset/reinício por ausência. |
-| Prova e gates remanescentes | `PARTIAL` | 80 testes: 56 anteriores + 24 guard/adapter; TypeScript events/fonte/testes, financial e ambos servidores; diff check. Double/fetch simulado não provam PostgreSQL, processos reais ou idempotência Asaas. Integração preparada continua inativa e sem ligar o guard. |
+| Prova e gates remanescentes | `PARTIAL` | Guard ligado ao resume preparado das duas APIs; reconciliação interna GET-only. Double/fetch simulado não provam PostgreSQL, processos reais ou idempotência Asaas. CARD legado sem semântica, evidência humana e homologação externa continuam gates. |
 
 Schema/migration, builders, serviços anteriores e integração preparados preservados; nenhum dado/provider real, rota conectada/ativada, worker, teste destrutivo, commit/push ou avanço de corte. Sem ID externo conhecido validável, a intenção continua bloqueada até reconciliação segura; demais gates de ativação seguem documentados.
 
@@ -938,7 +938,7 @@ Origem: decisão explícita do usuário + diagnóstico + código real. Código p
 | Serialização, idempotência e consulta após perda de memória | `IMPLEMENTED` no código/ambiente isolado | Locks por igreja/operação, fingerprint e unicidade; recibo durável sem recriar chave. INTENT sem desfecho bloqueia envio. |
 | Reconciliação sem reenvio | `IMPLEMENTED` no código/ambiente isolado | GET por recibo conhecido; confere ID/destino/tags; evento com ator/data/evidência. Sem recibo/correlação não conclui. |
 | Prova técnica | `IMPLEMENTED` | 137/137 isolados; PostgreSQL 17 descartável 33/33 completos + 9/9 focados finais; Prisma/TypeScript/checks aprovados. Reinício por novo coordenador/cliente, sem kill do processo. |
-| Atendimento humano, envio Resend e ativação reais | `PARTIAL` | Nenhuma rota ativa modificada. Exigem critérios/evidências operacionais, remetente/secret, prazos, homologação e ativação coordenada. |
+| Atendimento humano, envio Resend e ativação reais | `PARTIAL` | Rota SUPER_ADMIN do bundle exclusivo usa o coordenador quando `RESEND_API_KEY` e `EVENTS_EMAIL_FROM` nu existem; senão 503. Critérios de atendimento, remetente verificado e homologação externa continuam gates. |
 
 Detalhe e arquivos: `packages/events/docs/checkout-recovery-delivery-persistence.md`. Diffs locais anteriores preservados; sem banco 5433, envio real, frontend, commit ou push.
 

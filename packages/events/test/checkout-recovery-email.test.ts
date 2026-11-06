@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash, randomUUID } from "node:crypto";
-import { createCheckoutRecoveryResendReader, createCheckoutRecoveryResendSender } from "../src/checkout-recovery-email.service.ts";
+import { createCheckoutRecoveryResendReader, createCheckoutRecoveryResendSender, tryCreateAssistedCheckoutRecoveryFromEnv } from "../src/checkout-recovery-email.service.ts";
 import { generateCheckoutCredential } from "../src/checkout-access.service.ts";
 
 globalThis.fetch = async () => { throw new Error("NETWORK_FORBIDDEN_IN_RECOVERY_TEST"); };
@@ -49,6 +49,23 @@ test("Resend failures, absent receipt, pre-abort and late response never expose 
 test("configuration has no fallback sender or real credentials", () => {
   assert.throws(() => createCheckoutRecoveryResendSender({ apiKey: "", from: "events@example.invalid" }), /NOT_CONFIGURED/);
   assert.throws(() => createCheckoutRecoveryResendSender({ apiKey: "test", from: "" }), /NOT_CONFIGURED/);
+});
+
+test("env coordinator stays closed without a bare Resend sender and does not invent a from address", () => {
+  const savedKey = process.env.RESEND_API_KEY, savedFrom = process.env.EVENTS_EMAIL_FROM;
+  const prisma = { async $transaction() { throw new Error("unused"); } };
+  try {
+    delete process.env.RESEND_API_KEY; delete process.env.EVENTS_EMAIL_FROM;
+    assert.equal(tryCreateAssistedCheckoutRecoveryFromEnv(prisma), undefined);
+    process.env.RESEND_API_KEY = "re_synthetic_recovery";
+    process.env.EVENTS_EMAIL_FROM = "Synthetic <events@example.invalid>";
+    assert.equal(tryCreateAssistedCheckoutRecoveryFromEnv(prisma), undefined);
+    process.env.EVENTS_EMAIL_FROM = "events@example.invalid";
+    assert.equal(typeof tryCreateAssistedCheckoutRecoveryFromEnv(prisma)?.execute, "function");
+  } finally {
+    if (savedKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = savedKey;
+    if (savedFrom === undefined) delete process.env.EVENTS_EMAIL_FROM; else process.env.EVENTS_EMAIL_FROM = savedFrom;
+  }
 });
 
 
