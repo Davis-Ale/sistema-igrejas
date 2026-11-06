@@ -217,7 +217,7 @@ test("concurrent attempts serialize and only one delivers and marks", async () =
   assert.equal(await h.deliver(), false); assert.equal(h.registrations[0].confirmationEmailSentAt, marker); assert.equal(h.calls.length, posts);
 });
 
-test("timeout, false and throw become UNCERTAIN without a second POST or a late ACCEPTED", async () => {
+test("timeout and throw become UNCERTAIN without a second POST or a late ACCEPTED", async () => {
   const h = harness(); let resolveLate!: (value: boolean) => void;
   h.response(new Promise<boolean>(resolve => { resolveLate = resolve; }));
   assert.equal(await h.deliver(undefined, scope.churchId, { deliveryTimeoutMs: 20 }), false);
@@ -226,13 +226,23 @@ test("timeout, false and throw become UNCERTAIN without a second POST or a late 
   resolveLate(true); await new Promise(resolve => setTimeout(resolve, 30));
   assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
   assert.equal(await h.deliver(), false); assert.equal(h.calls.length, 1);
-  for (const failure of [false, new Error("MOCK_PROVIDER_FAILURE")] as const) {
-    const next = harness(); next.response(failure);
-    assert.equal(await next.deliver(), false);
-    assert.equal(next.calls.length, 1); assert.equal(next.writes.length, 0); assert.equal(next.registrations[0].confirmationEmailSentAt, null);
-    assert.deepEqual(next.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
-    assert.equal(await next.deliver(), false); assert.equal(next.calls.length, 1);
-  }
+  const next = harness(); next.response(new Error("MOCK_PROVIDER_FAILURE"));
+  assert.equal(await next.deliver(), false);
+  assert.equal(next.calls.length, 1); assert.equal(next.writes.length, 0); assert.equal(next.registrations[0].confirmationEmailSentAt, null);
+  assert.deepEqual(next.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
+  assert.equal(await next.deliver(), false); assert.equal(next.calls.length, 1);
+});
+
+test("known provider rejection leaves INTENT open for the next eligible caller", async () => {
+  const h = harness(); h.response(false);
+  assert.equal(await h.deliver(), false);
+  assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 0); assert.equal(h.registrations[0].confirmationEmailSentAt, null);
+  assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT"]);
+  h.response(true);
+  assert.equal(await h.deliver(), true); assert.equal(h.calls.length, 2); assert.equal(h.writes.length, 1);
+  assert.deepEqual(h.events.map(event => event.stage), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
+  assert.ok(h.registrations[0].confirmationEmailSentAt instanceof Date);
+  assert.equal(await h.deliver(), false); assert.equal(h.calls.length, 2);
 });
 
 test("failed ACCEPTED commit does not resend after UNCERTAIN; leftover INTENT is processed on the next call", async () => {

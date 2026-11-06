@@ -23,9 +23,10 @@ política UNCERTAIN da recovery, nem reenvio automático da recovery.
    `confirmationEmailSentAt` juntos. O marker só existe junto de ACCEPTED. Marker
    existente não é sobrescrito. Status, pagamento, `checkInToken` e o financeiro
    não mudam.
-6. `false`, exceção ou timeout: grava `DELIVERY_UNCERTAIN` se o último estágio ainda
-   for INTENT. Não grava marker. Replay com UNCERTAIN não chama o provider.
-   Replay com INTENT aberto e elegível processa o INTENT.
+6. Timeout ou exceção: grava `DELIVERY_UNCERTAIN` se o último estágio ainda for
+   INTENT. Não grava marker. Replay com UNCERTAIN não chama o provider.
+   Rejeição conhecida do provider (`false`, por exemplo 503) deixa o INTENT
+   aberto; o webhook/replay elegível processa esse INTENT com a mesma chave.
 7. ACCEPTED não é rebaixado para UNCERTAIN. Se o ACCEPTED já commitou, o UNCERTAIN
    não é inserido.
 8. Se o commit de ACCEPTED falhar e o UNCERTAIN commitou, o próximo caller não
@@ -68,7 +69,7 @@ houver evento.
 
 ## Limites
 
-UNCERTAIN não dispara reenvio automático nem reconciliação com Resend ou Asaas.
-Não há prova de entrega real do provider. O marker nulo com UNCERTAIN significa
-que outro caller não deve enviar de novo. O marker nulo com INTENT aberto ainda
-elegível é processado no próximo caller, com a chave estável do adapter.
+UNCERTAIN (timeout/exceção) não dispara reenvio automático nem reconciliação com
+Resend ou Asaas. Rejeição conhecida (`false`) não vira UNCERTAIN: o INTENT
+permanece e o próximo caller elegível, inclusive webhook repetido, processa com
+a chave estável do adapter. Não há prova de entrega real do provider.

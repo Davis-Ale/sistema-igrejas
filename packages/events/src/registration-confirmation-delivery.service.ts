@@ -36,6 +36,9 @@ export async function sendPendingRegistrationConfirmationEmail(
       return false;
     }
   }
+  // Known provider rejection (false) leaves the INTENT open for webhook replay.
+  // Timeout and throw stay UNCERTAIN: the POST may already have been accepted.
+  if (outcome === "rejected") return false;
   try { await store.uncertain(scope, new Date()); } catch { /* INTENT remains; do not POST again. */ }
   return false;
 }
@@ -105,7 +108,7 @@ async function resolveEligibleDelivery(
 async function observeDelivery(sendEmail: SendEmail, payload: DeliveryPayload, timeoutMs: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const attempt = Promise.resolve().then(() => sendEmail(payload)).then(
-    value => (value === true ? "accepted" as const : "uncertain" as const),
+    value => (value === true ? "accepted" as const : "rejected" as const),
     () => "uncertain" as const
   );
   const deadline = new Promise<"uncertain">(resolve => {

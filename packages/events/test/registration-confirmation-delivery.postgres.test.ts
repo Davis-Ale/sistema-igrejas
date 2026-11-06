@@ -135,7 +135,7 @@ test("concurrent clients have one durable confirmation owner", async () => {
   assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
 });
 
-test("timeout, false and throw become UNCERTAIN without a second POST or a late ACCEPTED", { timeout: 10_000 }, async () => {
+test("timeout and throw become UNCERTAIN without a second POST or a late ACCEPTED", { timeout: 10_000 }, async () => {
   const timed = await sale(); await confirm(timed);
   const before = await registrationOf(timed.scope.registrationId), finance = await money(timed);
   let sends = 0; let releaseLate!: (value: boolean) => void;
@@ -149,17 +149,30 @@ test("timeout, false and throw become UNCERTAIN without a second POST or a late 
   assert.deepEqual(await stages(timed.scope), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
   assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, timed.scope.churchId, timed.scope, async () => { sends++; return true; }), false);
   assert.equal(sends, 1); preserved(before, await registrationOf(timed.scope.registrationId)); assert.deepEqual(await money(timed), finance);
-  for (const failure of [false, new Error("SIMULATED_EMAIL_EXCEPTION")] as const) {
-    const f = await sale(); await confirm(f); const token = (await registrationOf(f.scope.registrationId)).checkInToken; let posts = 0;
-    const send = async () => { posts++; if (failure instanceof Error) throw failure; return failure; };
-    assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, send), false);
-    assert.equal(posts, 1); assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
-    assert.equal((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt, null);
-    assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, send), false);
-    assert.equal(posts, 1);
-    const after = await registrationOf(f.scope.registrationId);
-    assert.equal(after.checkInToken, token); assert.equal(after.status, "CONFIRMED"); assert.equal(after.paymentStatus, "PAID");
-  }
+  const f = await sale(); await confirm(f); const token = (await registrationOf(f.scope.registrationId)).checkInToken; let posts = 0;
+  const send = async () => { posts++; throw new Error("SIMULATED_EMAIL_EXCEPTION"); };
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, send), false);
+  assert.equal(posts, 1); assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_UNCERTAIN"]);
+  assert.equal((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt, null);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, send), false);
+  assert.equal(posts, 1);
+  const after = await registrationOf(f.scope.registrationId);
+  assert.equal(after.checkInToken, token); assert.equal(after.status, "CONFIRMED"); assert.equal(after.paymentStatus, "PAID");
+});
+
+test("known provider rejection leaves INTENT open for webhook replay", async () => {
+  const f = await sale(); await confirm(f);
+  const before = await registrationOf(f.scope.registrationId), finance = await money(f);
+  let posts = 0;
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, async () => { posts++; return false; }), false);
+  assert.equal(posts, 1); assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT"]);
+  assert.equal((await registrationOf(f.scope.registrationId)).confirmationEmailSentAt, null);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma2, f.scope.churchId, f.scope, async () => { posts++; return true; }), true);
+  assert.equal(posts, 2); assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT", "DELIVERY_ACCEPTED"]);
+  const after = await registrationOf(f.scope.registrationId);
+  assert.ok(after.confirmationEmailSentAt); preserved(before, after); assert.deepEqual(await money(f), finance);
+  assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, async () => { posts++; return true; }), false);
+  assert.equal(posts, 2);
 });
 
 test("PENDING registration does not send or record a delivery event", async () => {

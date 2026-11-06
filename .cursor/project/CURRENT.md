@@ -772,3 +772,7 @@ Caminho `sendPendingRegistrationConfirmationEmail` depois de CONFIRMED + PAID. N
 ## CONFIRMAÇÃO PAGA — PROCESSAR INTENT PERSISTIDO (2026-11-05)
 
 O consumidor reutiliza um `DELIVERY_INTENT` aberto ainda elegível: não insere outro INTENT e faz o POST com a chave já existente. `DELIVERY_ACCEPTED` e `DELIVERY_UNCERTAIN` continuam terminais. Sem worker, sem GET Resend, sem reenvio de UNCERTAIN, sem mudança de callers/adapter/migration.
+
+## CONFIRMAÇÃO PAGA — REJEIÇÃO CONHECIDA DEIXA INTENT (2026-11-05)
+
+`false` do adapter (rejeição conhecida, ex. 503) não grava `DELIVERY_UNCERTAIN`. O INTENT permanece aberto e o webhook/replay elegível processa com a mesma chave. Timeout e exceção continuam UNCERTAIN e terminais. Sem worker, GET Resend, nova migration ou mudança de callers.
