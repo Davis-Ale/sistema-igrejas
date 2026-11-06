@@ -290,6 +290,10 @@ test("both public identities map guard/provider errors safely and reject public 
 });
 
 test("both dormant server compositions use the actual Asaas adapter through the guard with mocked transport only", async t => {
+  const savedKey = process.env.ASAAS_API_KEY, savedEnvironment = process.env.ASAAS_ENVIRONMENT;
+  process.env.ASAAS_API_KEY = "isolated-checkout-test-key";
+  process.env.ASAAS_ENVIRONMENT = "sandbox";
+  try {
   for (const prepare of [prepareEventsApiCheckoutV2, prepareApiBrCheckoutV2]) for (const method of ["PIX", "CREDIT_CARD", "DEBIT_CARD"] as const) {
     const h = harness(method), app = Fastify(); const calls: { url: string; init: RequestInit | undefined }[] = [];
     const billingType = method === "PIX" ? "PIX" : "CREDIT_CARD";
@@ -324,5 +328,9 @@ test("both dormant server compositions use the actual Asaas adapter through the 
       assert.equal(headers[0]!["Asaas-Idempotency-Key"], `${headers[1]!["Asaas-Idempotency-Key"]}:customer`);
       assert.equal(h.state.attempts[0].requestedMethod, method);
     } finally { mock.mock.restore(); await app.close(); }
+  }
+  } finally {
+    if (savedKey === undefined) delete process.env.ASAAS_API_KEY; else process.env.ASAAS_API_KEY = savedKey;
+    if (savedEnvironment === undefined) delete process.env.ASAAS_ENVIRONMENT; else process.env.ASAAS_ENVIRONMENT = savedEnvironment;
   }
 });
