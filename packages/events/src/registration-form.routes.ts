@@ -1,4 +1,4 @@
-import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
 import type { PrismaClient } from "@prisma/client";
 import type {
   FastifyInstance,
@@ -116,6 +116,7 @@ export async function registerRegistrationFormRoutes(
 
   app.post(
     "/events/:eventId/form-fields",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -141,6 +142,7 @@ export async function registerRegistrationFormRoutes(
 
   app.patch(
     "/events/:eventId/form-fields/:fieldId",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);
@@ -167,6 +169,7 @@ export async function registerRegistrationFormRoutes(
 
   app.patch(
     "/events/:eventId/form-fields-order",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId = getChurchId(request);

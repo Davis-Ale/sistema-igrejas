@@ -187,20 +187,25 @@ export async function registerEventRoutes(
     }
   });
 
-  app.post("/events", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const input = createEventSchema.parse(request.body);
-      const event = await createEvent(prisma, churchId, input);
+  app.post(
+    "/events",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const input = createEventSchema.parse(request.body);
+        const event = await createEvent(prisma, churchId, input);
 
-      await reply.code(201).send(event);
-    } catch (error) {
-      await sendRouteError(error, reply);
+        await reply.code(201).send(event);
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 
   app.post(
     "/events/:eventId/duplicate",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
     async (request, reply) => {
       try {
         const churchId =
@@ -236,49 +241,53 @@ export async function registerEventRoutes(
     }
   );
 
-  app.get("/events/:eventId/registrations/export", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const params = eventIdParamsSchema.parse(request.params);
-      const query = exportEventRegistrationsQuerySchema.parse(
-        request.query
-      );
-      const csvExport = await createEventRegistrationsCsvExport(
-        prisma,
-        churchId,
-        params.eventId,
-        query
-      );
-      const origin = request.headers.origin;
+  app.get(
+    "/events/:eventId/registrations/export",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const params = eventIdParamsSchema.parse(request.params);
+        const query = exportEventRegistrationsQuerySchema.parse(
+          request.query
+        );
+        const csvExport = await createEventRegistrationsCsvExport(
+          prisma,
+          churchId,
+          params.eventId,
+          query
+        );
+        const origin = request.headers.origin;
 
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${csvExport.filename}"`,
-        "Cache-Control": "no-store",
-        "Access-Control-Expose-Headers": "Content-Disposition",
-        ...(origin
-          ? {
-              "Access-Control-Allow-Origin": origin,
-              Vary: "Origin"
-            }
-          : {})
-      });
+        reply.hijack();
+        reply.raw.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${csvExport.filename}"`,
+          "Cache-Control": "no-store",
+          "Access-Control-Expose-Headers": "Content-Disposition",
+          ...(origin
+            ? {
+                "Access-Control-Allow-Origin": origin,
+                Vary: "Origin"
+              }
+            : {})
+        });
 
-      await csvExport.stream((chunk) => {
-        reply.raw.write(chunk);
-      });
+        await csvExport.stream((chunk) => {
+          reply.raw.write(chunk);
+        });
 
-      reply.raw.end();
-    } catch (error) {
-      if (reply.raw.headersSent) {
         reply.raw.end();
-        return;
-      }
+      } catch (error) {
+        if (reply.raw.headersSent) {
+          reply.raw.end();
+          return;
+        }
 
-      await sendRouteError(error, reply);
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 
   app.get("/events/:eventId/registrations", async (request, reply) => {
     try {
@@ -342,23 +351,27 @@ export async function registerEventRoutes(
     }
   });
 
-  app.patch("/events/:eventId", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const params = request.params as { eventId: string };
-      const input = updateEventSchema.parse(request.body);
-      const event = await updateEvent(
-        prisma,
-        churchId,
-        params.eventId,
-        input
-      );
+  app.patch(
+    "/events/:eventId",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const params = request.params as { eventId: string };
+        const input = updateEventSchema.parse(request.body);
+        const event = await updateEvent(
+          prisma,
+          churchId,
+          params.eventId,
+          input
+        );
 
-      await reply.code(200).send(event);
-    } catch (error) {
-      await sendRouteError(error, reply);
+        await reply.code(200).send(event);
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 
   app.delete(
     "/events/:eventId",
@@ -377,39 +390,51 @@ export async function registerEventRoutes(
     }
   );
 
-  app.post("/events/registrations", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const input = createRegistrationSchema.parse(request.body);
-      const registration = await createRegistration(prisma, churchId, input);
+  app.post(
+    "/events/registrations",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const input = createRegistrationSchema.parse(request.body);
+        const registration = await createRegistration(prisma, churchId, input);
 
-      await reply.code(201).send(registration);
-    } catch (error) {
-      await sendRouteError(error, reply);
+        await reply.code(201).send(registration);
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 
-  app.post("/events/registrations/status", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const input = updateRegistrationStatusSchema.parse(request.body);
-      const registration = await updateRegistrationStatus(prisma, churchId, input);
+  app.post(
+    "/events/registrations/status",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const input = updateRegistrationStatusSchema.parse(request.body);
+        const registration = await updateRegistrationStatus(prisma, churchId, input);
 
-      await reply.code(200).send(registration);
-    } catch (error) {
-      await sendRouteError(error, reply);
+        await reply.code(200).send(registration);
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 
-  app.post("/events/registrations/check-in-token", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
-      const input = checkInByTokenSchema.parse(request.body);
-      const registration = await checkInRegistrationByToken(prisma, churchId, input);
+  app.post(
+    "/events/registrations/check-in-token",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
+        const input = checkInByTokenSchema.parse(request.body);
+        const registration = await checkInRegistrationByToken(prisma, churchId, input);
 
-      await reply.code(200).send(registration);
-    } catch (error) {
-      await sendRouteError(error, reply);
+        await reply.code(200).send(registration);
+      } catch (error) {
+        await sendRouteError(error, reply);
+      }
     }
-  });
+  );
 }
