@@ -1,12 +1,10 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
-
-type LoginSession = {
-  token: string;
-};
 
 type AssistantResponse = {
   answer: string;
@@ -28,24 +26,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
+const API_BASE_URL = churchApiBaseUrl();
 
 export default function AssistentePage() {
   const [message, setMessage] = useState("");
@@ -56,25 +37,18 @@ export default function AssistentePage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setError(null);
     setAnswer(null);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/assistant/messages`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/assistant/messages`, {
         body: JSON.stringify({
           message
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });

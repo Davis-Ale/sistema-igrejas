@@ -3,6 +3,7 @@
 import { Building2, ChevronDown, ListOrdered, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { credentialedFetch, eventsApiBaseUrl } from "../../../lib/session-client";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
@@ -10,9 +11,6 @@ import {
   resolveAuthorizedSelectedEventId
 } from "../event-module-chrome";
 
-type LoginSession = {
-  token: string;
-};
 
 type EventListItem = {
   id: string;
@@ -141,8 +139,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const PAGE_LIMIT = 50;
 
@@ -174,23 +171,6 @@ function getLoadErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
-}
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
 }
 
 function formatMoney(value: string | number) {
@@ -524,11 +504,8 @@ export function EventFinancialManagementClient({
     return params;
   }
 
-  async function loadEvents(token: string, signal: AbortSignal) {
-    const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
+  async function loadEvents(signal: AbortSignal) {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events?limit=100`, {
       signal
     });
 
@@ -552,7 +529,6 @@ export function EventFinancialManagementClient({
   }
 
   async function loadFinancial(
-    token: string,
     currentPage: number,
     signal: AbortSignal
   ) {
@@ -562,21 +538,15 @@ export function EventFinancialManagementClient({
     listParams.set("limit", String(PAGE_LIMIT));
 
     const [summaryResponse, listResponse] = await Promise.all([
-      fetch(
+      credentialedFetch(
         `${API_BASE_URL}/api/events/financial/summary?${summaryParams.toString()}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           signal
         }
       ),
-      fetch(
+      credentialedFetch(
         `${API_BASE_URL}/api/events/financial/transactions?${listParams.toString()}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           signal
         }
       )
@@ -606,13 +576,10 @@ export function EventFinancialManagementClient({
     setPage(listData.pagination.currentPage);
   }
 
-  async function loadReceivingAccount(token: string, signal: AbortSignal) {
-    const response = await fetch(
+  async function loadReceivingAccount(signal: AbortSignal) {
+    const response = await credentialedFetch(
       `${API_BASE_URL}/api/events/financial/receiving-account`,
       {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         signal
       }
     );
@@ -646,7 +613,6 @@ export function EventFinancialManagementClient({
   }
 
   async function loadOperations(
-    token: string,
     currentPage: number,
     signal: AbortSignal
   ) {
@@ -659,12 +625,9 @@ export function EventFinancialManagementClient({
       params.set("eventId", eventId);
     }
 
-    const response = await fetch(
+    const response = await credentialedFetch(
       `${API_BASE_URL}/api/events/financial/operations?${params.toString()}`,
       {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         signal
       }
     );
@@ -685,7 +648,6 @@ export function EventFinancialManagementClient({
   }
 
   async function loadRefundable(
-    token: string,
     currentPage: number,
     signal: AbortSignal
   ) {
@@ -697,12 +659,9 @@ export function EventFinancialManagementClient({
       params.set("eventId", eventId);
     }
 
-    const response = await fetch(
+    const response = await credentialedFetch(
       `${API_BASE_URL}/api/events/financial/operations/refundable?${params.toString()}`,
       {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         signal
       }
     );
@@ -723,13 +682,6 @@ export function EventFinancialManagementClient({
   }
 
   async function refresh(currentPage = page) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     refreshAbortRef.current?.abort();
     const controller = new AbortController();
@@ -743,12 +695,12 @@ export function EventFinancialManagementClient({
     try {
       const results = await Promise.allSettled([
         events.length === 0
-          ? loadEvents(token, controller.signal)
+          ? loadEvents(controller.signal)
           : Promise.resolve(),
-        loadFinancial(token, currentPage, controller.signal),
-        loadReceivingAccount(token, controller.signal),
-        loadOperations(token, 1, controller.signal),
-        loadRefundable(token, 1, controller.signal)
+        loadFinancial(currentPage, controller.signal),
+        loadReceivingAccount(controller.signal),
+        loadOperations(1, controller.signal),
+        loadRefundable(1, controller.signal)
       ]);
 
       if (generation !== refreshGenerationRef.current) {
@@ -787,18 +739,10 @@ export function EventFinancialManagementClient({
   }, [eventId, from, to, paymentStatus, method, search]);
 
   useEffect(() => {
-    const token = getSessionToken();
-
-    if (!token) {
-      return;
-    }
 
     const controller = new AbortController();
 
-    void fetch(`${API_BASE_URL}/api/events/financial/institutions`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
+    void credentialedFetch(`${API_BASE_URL}/api/events/financial/institutions`, {
       signal: controller.signal
     })
       .then(async (response) => {
@@ -838,24 +782,15 @@ export function EventFinancialManagementClient({
   }
 
   async function handleExport() {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setIsExporting(true);
     setError(null);
 
     try {
       const params = buildFilterParams(true);
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/financial/export?${params.toString()}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
         }
       );
 
@@ -885,12 +820,6 @@ export function EventFinancialManagementClient({
   async function handleSaveReceivingAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     if (
       !financialInstitutions.some(
@@ -906,13 +835,12 @@ export function EventFinancialManagementClient({
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/financial/receiving-account`,
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
+                        "Content-Type": "application/json"
           },
           body: JSON.stringify(receivingAccountForm)
         }
@@ -944,24 +872,17 @@ export function EventFinancialManagementClient({
   }
 
   async function handleRefund(transactionId: string) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setIsRefunding(true);
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/financial/operations/refunds`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
+                        "Content-Type": "application/json"
           },
           body: JSON.stringify({
             transactionId
@@ -1780,14 +1701,10 @@ export function EventFinancialManagementClient({
                       onClick={() => {
                         const nextPage = Math.max(1, refundablePage - 1);
                         setRefundablePage(nextPage);
-                        const token = getSessionToken();
-                        if (token) {
-                          void loadRefundable(
-                            token,
-                            nextPage,
-                            new AbortController().signal
-                          );
-                        }
+                        void loadRefundable(
+                          nextPage,
+                          new AbortController().signal
+                        );
                       }}
                       style={{
                         background: "transparent",
@@ -1810,14 +1727,10 @@ export function EventFinancialManagementClient({
                       onClick={() => {
                         const nextPage = refundablePage + 1;
                         setRefundablePage(nextPage);
-                        const token = getSessionToken();
-                        if (token) {
-                          void loadRefundable(
-                            token,
-                            nextPage,
-                            new AbortController().signal
-                          );
-                        }
+                        void loadRefundable(
+                          nextPage,
+                          new AbortController().signal
+                        );
                       }}
                       style={{
                         background: "transparent",
@@ -1886,14 +1799,10 @@ export function EventFinancialManagementClient({
                     onClick={() => {
                       const nextPage = Math.max(1, operationsPage - 1);
                       setOperationsPage(nextPage);
-                      const token = getSessionToken();
-                      if (token) {
-                        void loadOperations(
-                          token,
-                          nextPage,
-                          new AbortController().signal
-                        );
-                      }
+                      void loadOperations(
+                        nextPage,
+                        new AbortController().signal
+                      );
                     }}
                     style={{
                       background: "transparent",
@@ -1916,14 +1825,10 @@ export function EventFinancialManagementClient({
                     onClick={() => {
                       const nextPage = operationsPage + 1;
                       setOperationsPage(nextPage);
-                      const token = getSessionToken();
-                      if (token) {
-                        void loadOperations(
-                          token,
-                          nextPage,
-                          new AbortController().signal
-                        );
-                      }
+                      void loadOperations(
+                        nextPage,
+                        new AbortController().signal
+                      );
                     }}
                     style={{
                       background: "transparent",

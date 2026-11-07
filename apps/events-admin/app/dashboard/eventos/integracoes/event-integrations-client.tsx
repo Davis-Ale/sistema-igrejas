@@ -4,6 +4,7 @@ import settings from "../event-settings.module.css";
 import brands from "./integration-brands.module.css";
 
 import { FormEvent, useEffect, useState } from "react";
+import { credentialedFetch, eventsApiBaseUrl, readSessionSnapshot } from "../../../lib/session-client";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
@@ -11,8 +12,7 @@ import {
   resolveAuthorizedSelectedEventId
 } from "../event-module-chrome";
 
-type LoginSession = {
-  token: string;
+type IntegrationSession = {
   user?: { role?: string };
 };
 
@@ -70,8 +70,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const PROVIDER_SLUG: Record<IntegrationProvider, string> = {
   GOOGLE_ANALYTICS: "google-analytics",
@@ -82,24 +81,7 @@ const PROVIDER_SLUG: Record<IntegrationProvider, string> = {
   RD_STATION: "rd-station"
 };
 
-function getSession() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
-
-function canManageIntegrations(session: LoginSession | null) {
+function canManageIntegrations(session: IntegrationSession | null) {
   return (
     session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "PASTOR"
   );
@@ -165,12 +147,9 @@ export function EventIntegrationsClient() {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const isEditing = connectingProvider?.status === "CONNECTED";
 
-  async function loadEvents(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  async function loadEvents() {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events?limit=100`, {
+      cache: "no-store"
     });
 
     if (!response.ok) {
@@ -191,12 +170,9 @@ export function EventIntegrationsClient() {
     });
   }
 
-  async function loadIntegrations(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events/integrations`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  async function loadIntegrations() {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events/integrations`, {
+      cache: "no-store"
     });
 
     const data = (await response.json()) as
@@ -217,10 +193,9 @@ export function EventIntegrationsClient() {
 
   useEffect(() => {
     async function load() {
-      const session = getSession();
-      const token = session?.token;
+      const session = readSessionSnapshot();
 
-      if (!token) {
+      if (!session) {
         window.location.href = "/login";
         return;
       }
@@ -230,7 +205,7 @@ export function EventIntegrationsClient() {
       setError(null);
 
       try {
-        await Promise.all([loadEvents(token), loadIntegrations(token)]);
+        await Promise.all([loadEvents(), loadIntegrations()]);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -247,7 +222,7 @@ export function EventIntegrationsClient() {
 
   function openConnectModal(item: IntegrationItem) {
     if (
-      !canManage || !canManageIntegrations(getSession()) ||
+      !canManage || !canManageIntegrations(readSessionSnapshot()) ||
       !item.connectable || isSaving
     ) {
       return;
@@ -312,10 +287,9 @@ export function EventIntegrationsClient() {
       return;
     }
 
-    const session = getSession();
-    const token = session?.token;
+    const session = readSessionSnapshot();
 
-    if (!token) {
+    if (!session) {
       window.location.href = "/login";
       return;
     }
@@ -329,13 +303,12 @@ export function EventIntegrationsClient() {
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/integrations/${PROVIDER_SLUG[connectingProvider.provider]}/connect`,
         {
           body: JSON.stringify(buildConnectBody(connectingProvider.provider)),
           headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
+                        "Content-Type": "application/json"
           },
           method: "POST"
         }
@@ -380,10 +353,9 @@ export function EventIntegrationsClient() {
       return;
     }
 
-    const session = getSession();
-    const token = session?.token;
+    const session = readSessionSnapshot();
 
-    if (!token) {
+    if (!session) {
       window.location.href = "/login";
       return;
     }
@@ -396,12 +368,9 @@ export function EventIntegrationsClient() {
     setFormError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/integrations/${PROVIDER_SLUG[disconnectingProvider.provider]}/disconnect`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           method: "POST"
         }
       );
@@ -675,7 +644,7 @@ export function EventIntegrationsClient() {
                           <button
                             disabled={isSaving}
                             onClick={() => {
-                              if (!canManageIntegrations(getSession()) || isSaving) {
+                              if (!canManageIntegrations(readSessionSnapshot()) || isSaving) {
                                 return;
                               }
                               setFormError(null);

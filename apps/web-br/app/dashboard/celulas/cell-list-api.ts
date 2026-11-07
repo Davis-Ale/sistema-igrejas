@@ -60,6 +60,8 @@ export type CellDeleteResponse = {
   deleted: true;
 };
 
+import { credentialedFetch } from "../../lib/session-client";
+
 type ApiErrorResponse = {
   message?: string;
 };
@@ -75,7 +77,6 @@ async function readApiError(
 
 export async function searchCells(
   apiBaseUrl: string,
-  token: string,
   filters: CellListFilters
 ): Promise<CellListResponse> {
   const params = new URLSearchParams({
@@ -96,13 +97,8 @@ export async function searchCells(
     params.set("leader", filters.leader.trim());
   }
 
-  const response = await fetch(
-    `${apiBaseUrl}/api/cells/search?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
+  const response = await credentialedFetch(
+    `${apiBaseUrl}/api/cells/search?${params.toString()}`
   );
 
   if (!response.ok) {
@@ -117,16 +113,12 @@ export async function searchCells(
 
 async function updateCellStatus(
   apiBaseUrl: string,
-  token: string,
   cellId: string,
   action: "archive" | "reactivate"
 ): Promise<CellStatusResponse> {
-  const response = await fetch(
+  const response = await credentialedFetch(
     `${apiBaseUrl}/api/cells/${encodeURIComponent(cellId)}/${action}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
       method: "PATCH"
     }
   );
@@ -145,31 +137,25 @@ async function updateCellStatus(
 
 export async function archiveCell(
   apiBaseUrl: string,
-  token: string,
   cellId: string
 ): Promise<CellStatusResponse> {
-  return updateCellStatus(apiBaseUrl, token, cellId, "archive");
+  return updateCellStatus(apiBaseUrl, cellId, "archive");
 }
 
 export async function reactivateCell(
   apiBaseUrl: string,
-  token: string,
   cellId: string
 ): Promise<CellStatusResponse> {
-  return updateCellStatus(apiBaseUrl, token, cellId, "reactivate");
+  return updateCellStatus(apiBaseUrl, cellId, "reactivate");
 }
 
 export async function deleteCell(
   apiBaseUrl: string,
-  token: string,
   cellId: string
 ): Promise<CellDeleteResponse> {
-  const response = await fetch(
+  const response = await credentialedFetch(
     `${apiBaseUrl}/api/cells/${encodeURIComponent(cellId)}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
       method: "DELETE"
     }
   );

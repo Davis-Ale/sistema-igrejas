@@ -2,35 +2,14 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-type LoginSession = {
-  token: string;
-};
+import { credentialedFetch, eventsApiBaseUrl } from "../../lib/session-client";
 
 type ApiErrorResponse = {
   error?: string;
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
+const API_BASE_URL = eventsApiBaseUrl();
 
 function createSlug(title: string) {
   return title
@@ -90,12 +69,6 @@ export function CreateEventModal({
   async function handleCreateEvent(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const slug = createSlug(createTitle);
 
@@ -110,7 +83,7 @@ export function CreateEventModal({
     setIsCreatingEvent(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/events`, {
         body: JSON.stringify({
           capacity: Number(createCapacity),
           date: new Date(createDate).toISOString(),
@@ -123,8 +96,7 @@ export function CreateEventModal({
           waitlistEnabled: createWaitlistEnabled
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });

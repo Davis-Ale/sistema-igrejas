@@ -6,4 +6,5 @@ export * from "./jwt.js";
 export * from "./middleware.js";
 export * from "./password.js";
 export * from "./rbac.js";
+export * from "./session-cookie.js";
 export * from "./types.js";

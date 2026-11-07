@@ -4,6 +4,7 @@ import settings from "../event-settings.module.css";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { credentialedFetch, eventsApiBaseUrl, readSessionSnapshot } from "../../../lib/session-client";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
@@ -11,8 +12,7 @@ import {
   resolveAuthorizedSelectedEventId
 } from "../event-module-chrome";
 
-type LoginSession = {
-  token: string;
+type SettingsSession = {
   user?: { role?: string };
 };
 
@@ -55,29 +55,9 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
-function getSession(): LoginSession | null {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(storedSession) as LoginSession;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
-
-function getSessionToken() {
-  return getSession()?.token ?? null;
-}
-
-function canManageChurchSettings(session: LoginSession | null) {
+function canManageChurchSettings(session: SettingsSession | null) {
   return (
     session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "PASTOR"
   );
@@ -132,12 +112,9 @@ export function EventGeneralSettingsClient() {
   const [apiKeys, setApiKeys] = useState<EventApiKeyItem[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationItem[]>([]);
 
-  async function loadEvents(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  async function loadEvents() {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events?limit=100`, {
+      cache: "no-store"
     });
 
     if (!response.ok) {
@@ -160,51 +137,44 @@ export function EventGeneralSettingsClient() {
 
   useEffect(() => {
     async function load() {
-      const session = getSession();
-      const token = session?.token ?? getSessionToken();
+      const session = readSessionSnapshot();
 
-      if (!token) {
+      if (!session) {
         window.location.href = "/login";
         return;
       }
 
-      setRole(session?.user?.role);
+      setRole(session.user.role);
       setCanManage(canManageChurchSettings(session));
       setIsLoading(true);
       setError(null);
 
       try {
-        const headers = {
-          Authorization: `Bearer ${token}`
-        };
         const [
           eventsResult,
           accountResult,
           keysResult,
           integrationsResult
         ] = await Promise.allSettled([
-          loadEvents(token),
-          fetch(`${API_BASE_URL}/api/events/financial/receiving-account`, {
-            cache: "no-store",
-            headers
+          loadEvents(),
+          credentialedFetch(`${API_BASE_URL}/api/events/financial/receiving-account`, {
+            cache: "no-store"
           }).then((response) =>
             readJson<EventsReceivingAccountView>(
               response,
               "Não foi possível carregar a conta de recebimento."
             )
           ),
-          fetch(`${API_BASE_URL}/api/events/api-keys`, {
-            cache: "no-store",
-            headers
+          credentialedFetch(`${API_BASE_URL}/api/events/api-keys`, {
+            cache: "no-store"
           }).then((response) =>
             readJson<EventApiKeyItem[]>(
               response,
               "Não foi possível carregar as chaves de API."
             )
           ),
-          fetch(`${API_BASE_URL}/api/events/integrations`, {
-            cache: "no-store",
-            headers
+          credentialedFetch(`${API_BASE_URL}/api/events/integrations`, {
+            cache: "no-store"
           }).then((response) =>
             readJson<IntegrationItem[]>(
               response,

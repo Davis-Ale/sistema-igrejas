@@ -1,3 +1,5 @@
+import { credentialedFetch } from "../../lib/session-client";
+
 export type LocationNeighborhood = {
   id: string;
   name: string;
@@ -30,14 +32,9 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getChurchBaseLocation(
-  apiBaseUrl: string,
-  token: string
+  apiBaseUrl: string
 ): Promise<ChurchBaseLocation> {
-  const response = await fetch(`${apiBaseUrl}/api/locations/base`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  const response = await credentialedFetch(`${apiBaseUrl}/api/locations/base`);
 
   return readResponse<ChurchBaseLocation>(response);
 }

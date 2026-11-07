@@ -2,6 +2,7 @@ import "@fastify/jwt";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { readSessionCookie } from "./session-cookie.js";
 import type { JWTPayload } from "./types.js";
 
 const tokenPayloadSchema = z.object({
@@ -25,6 +26,10 @@ function getBearerToken(request: FastifyRequest): string | null {
   }
 
   return token;
+}
+
+function getRequestAccessToken(request: FastifyRequest): string | null {
+  return getBearerToken(request) ?? readSessionCookie(request.headers.cookie);
 }
 
 async function sendInvalidToken(reply: FastifyReply): Promise<void> {
@@ -98,7 +103,7 @@ export function createAuthPreHandler(prisma: PrismaClient) {
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
-    const token = getBearerToken(request);
+    const token = getRequestAccessToken(request);
 
     if (!token) {
       await reply.code(401).send({

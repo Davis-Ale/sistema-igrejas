@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, checkIn, listEvents, listRegistrations, login, readSession, SESSION_KEY,
+import { ApiError, checkIn, listEvents, listRegistrations, login, logout as logoutRequest, restoreSession, SESSION_KEY,
   type CheckInResult, type EventPage, type EventSummary, type RegistrationPage, type RegistrationSummary, type Session } from "./lib/api";
 import { canCheckIn, registrationBlock, statusLabel } from "./lib/registration-status";
 import QrScanner from "./qr-scanner";
@@ -29,19 +29,28 @@ export default function Organizer({ initialEvent }: {
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   useEffect(() => {
+    let cancelled = false;
     const restore = () => {
-      try { setSession(readSession(window.localStorage)); } catch { setSession(null); }
-      setReady(true);
+      void restoreSession().then((value) => {
+        if (!cancelled) {
+          setSession(value);
+          setReady(true);
+        }
+      });
     };
     restore();
     const onStorage = (event: StorageEvent) => {
       if (event.key === SESSION_KEY || event.key === null) restore();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const logout = useCallback((message = "") => {
+    void logoutRequest();
     try { localStorage.removeItem(SESSION_KEY); } catch { /* Clear in-memory access as well. */ }
     setSession(null);
     setNotice(message);
@@ -54,7 +63,7 @@ export default function Organizer({ initialEvent }: {
       {session && <button className="text-button" onClick={() => logout()}>Sair</button>}
     </header>
     {!ready ? <p role="status">Carregando…</p> : session ?
-      <Events key={session.token} session={session} initialEvent={initialEvent} onExpired={expired} /> :
+      <Events key={session.user.email} session={session} initialEvent={initialEvent} onExpired={expired} /> :
       <Login notice={notice} onLogin={(value) => { setNotice(""); setSession(value); }} />}
   </main></div>;
 }
@@ -116,7 +125,7 @@ function Events({ session, initialEvent, onExpired }: {
   useEffect(() => {
     if (selected) return;
     const controller = new AbortController();
-    void listEvents(session.token, page, query, controller.signal).then((result) => {
+    void listEvents(page, query, controller.signal).then((result) => {
       if (!controller.signal.aborted) setData(result);
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return;
@@ -124,9 +133,9 @@ function Events({ session, initialEvent, onExpired }: {
       else setError(errorText(error));
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [session.token, page, query, reload, selected, onExpired]);
+  }, [page, query, reload, selected, onExpired]);
 
-  if (selected) return <CheckIn key={selected.id} event={selected} token={session.token}
+  if (selected) return <CheckIn key={selected.id} event={selected}
     onBack={() => { resetList(); setSelected(null); }} onExpired={onExpired} />;
 
   return <section className="stack">
@@ -145,7 +154,7 @@ function Events({ session, initialEvent, onExpired }: {
       {data.items.length === 0 ? <p className="panel">Nenhum evento encontrado.</p> :
         <ul className="events">{data.items.map((event) => <li key={event.id}>
           <button className="event" onClick={() => setSelected(event)}>
-            <EventCover eventId={event.id} title={event.title} token={session.token} onExpired={onExpired} />
+            <EventCover eventId={event.id} title={event.title} onExpired={onExpired} />
             <span className={styles.eventDetails}><strong>{event.title}</strong><time dateTime={event.date}>{new Intl.DateTimeFormat("pt-BR", {
               dateStyle: "medium", timeStyle: "short",
             }).format(new Date(event.date))}</time></span><span aria-hidden="true">→</span>
@@ -160,8 +169,8 @@ function Events({ session, initialEvent, onExpired }: {
   </section>;
 }
 
-function CheckIn({ event, token, onBack, onExpired }: {
-  event: Pick<EventSummary, "id" | "title">; token: string; onBack: () => void; onExpired: () => void;
+function CheckIn({ event, onBack, onExpired }: {
+  event: Pick<EventSummary, "id" | "title">; onBack: () => void; onExpired: () => void;
 }) {
   const [tab, setTab] = useState<"checkin" | "people">("checkin");
   const [code, setCode] = useState("");
@@ -185,7 +194,7 @@ function CheckIn({ event, token, onBack, onExpired }: {
     pending.current = true;
     setBusy(true); setCamera(false); setError(""); setResult(null);
     try {
-      const result = await checkIn(token, event.id, code);
+      const result = await checkIn(event.id, code);
       if (mounted.current) { setResult(result); setCode(""); }
     } catch (error) {
       if (!mounted.current) return;
@@ -200,7 +209,7 @@ function CheckIn({ event, token, onBack, onExpired }: {
   }
   return <section className="stack">
     <button className="text-button back" disabled={busy} onClick={onBack}>← Trocar evento</button>
-    <EventCover eventId={event.id} title={event.title} token={token} banner onExpired={onExpired} />
+    <EventCover eventId={event.id} title={event.title} banner onExpired={onExpired} />
     <div><p className="eyebrow">Recepção</p><h1>{event.title}</h1>
       <p className="muted">Leia o QR, digite o código ou localize o participante.</p></div>
     <div className="tabs" role="tablist" aria-label="Operação do evento">
@@ -215,13 +224,13 @@ function CheckIn({ event, token, onBack, onExpired }: {
       <p className="participant">{result.person?.name || result.visitor?.name || "Nome não informado"}</p>
       <p><span className="badge">Presente</span></p>
       <button onClick={() => setResult(null)}>Próximo participante</button>
-    </div> : tab === "people" ? <People eventId={event.id} token={token} busy={busy}
+    </div> : tab === "people" ? <People eventId={event.id} busy={busy}
       onExpired={onExpired} onCheckIn={async (checkInToken) => {
         if (pending.current) return;
         pending.current = true;
         setBusy(true); setError(""); setResult(null);
         try {
-          const next = await checkIn(token, event.id, checkInToken);
+          const next = await checkIn(event.id, checkInToken);
           if (mounted.current) setResult(next);
         } catch (error) {
           if (!mounted.current) return;
@@ -250,9 +259,8 @@ function CheckIn({ event, token, onBack, onExpired }: {
   </section>;
 }
 
-function People({ eventId, token, busy, onExpired, onCheckIn }: {
+function People({ eventId, busy, onExpired, onCheckIn }: {
   eventId: string;
-  token: string;
   busy: boolean;
   onExpired: () => void;
   onCheckIn: (checkInToken: string) => Promise<void>;
@@ -269,7 +277,7 @@ function People({ eventId, token, busy, onExpired, onCheckIn }: {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError("");
-    void listRegistrations(token, eventId, page, query, controller.signal).then((result) => {
+    void listRegistrations(eventId, page, query, controller.signal).then((result) => {
       if (!controller.signal.aborted) setData(result);
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return;
@@ -277,7 +285,7 @@ function People({ eventId, token, busy, onExpired, onCheckIn }: {
       else setError(errorText(error));
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [token, eventId, page, query, reload, onExpired]);
+  }, [eventId, page, query, reload, onExpired]);
 
   return <section className="stack">
     <form className="search" onSubmit={(event) => {

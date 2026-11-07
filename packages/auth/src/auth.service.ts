@@ -95,3 +95,52 @@ export async function loginWithEmailAndPassword(
     church: account.church
   };
 }
+
+export async function readAuthenticatedSession(
+  prisma: PrismaClient,
+  userId: string
+) {
+  const account = await prisma.userAccount.findUnique({
+    where: {
+      id: userId
+    },
+    include: {
+      church: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          plan: true,
+          status: true,
+          trialStartedAt: true,
+          trialEndsAt: true,
+          blockedAt: true,
+          blockReason: true
+        }
+      },
+      person: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          campusId: true
+        }
+      }
+    }
+  });
+
+  if (!account || account.status !== "ACTIVE") {
+    throw new Error("INVALID_TOKEN");
+  }
+
+  return {
+    user: {
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      status: account.status,
+      person: account.person
+    },
+    church: account.church
+  };
+}

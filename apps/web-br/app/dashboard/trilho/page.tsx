@@ -1,12 +1,10 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
-
-type LoginSession = {
-  token: string;
-};
 
 type TrailStage = {
   id: string;
@@ -27,7 +25,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const API_BASE_URL = churchApiBaseUrl();
 
 export default function TrilhoPage() {
   const [trails, setTrails] = useState<Trail[]>([]);
@@ -42,40 +40,13 @@ export default function TrilhoPage() {
   const [isSubmittingTrail, setIsSubmittingTrail] = useState(false);
   const [isSubmittingStage, setIsSubmittingStage] = useState(false);
 
-  function getSessionToken() {
-    const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-    if (!storedSession) {
-      return null;
-    }
-
-    try {
-      const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-      return parsedSession.token;
-    } catch {
-      localStorage.removeItem("sistema-igrejas.session");
-      return null;
-    }
-  }
-
   async function loadTrails() {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     setError(null);
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/trails`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await credentialedFetch(`${API_BASE_URL}/api/trails`, {
       });
 
       if (!response.ok) {
@@ -99,26 +70,19 @@ export default function TrilhoPage() {
   async function handleCreateTrail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setError(null);
     setSuccessMessage(null);
     setIsSubmittingTrail(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/trails`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/trails`, {
         body: JSON.stringify({
           isVolunteerGate,
           name: trailName
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });
@@ -144,27 +108,20 @@ export default function TrilhoPage() {
   async function handleCreateStage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setError(null);
     setSuccessMessage(null);
     setIsSubmittingStage(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/trails/stages`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/trails/stages`, {
         body: JSON.stringify({
           label: stageLabel,
           order: Number(stageOrder),
           trailId: selectedTrailId
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });

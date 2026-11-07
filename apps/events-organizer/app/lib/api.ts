@@ -2,7 +2,6 @@
 export const SESSION_KEY = "sistema-igrejas.session";
 
 export type Session = {
-  token: string;
   user: { email: string; role: string };
   church: { name: string; status: string };
 };
@@ -37,17 +36,20 @@ export type RegistrationPage = {
 export function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
   const data = value as Partial<Session>;
-  return typeof data.token === "string" && data.token.length > 0 &&
-    typeof data.user?.email === "string" && typeof data.user?.role === "string" &&
+  return typeof data.user?.email === "string" && typeof data.user?.role === "string" &&
     typeof data.church?.name === "string" && typeof data.church?.status === "string";
 }
 
-export function readSession(storage: Pick<Storage, "getItem" | "removeItem">): Session | null {
+export function readSession(storage: Pick<Storage, "getItem" | "setItem" | "removeItem">): Session | null {
   try {
     const raw = storage.getItem(SESSION_KEY);
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    if (isSession(value)) return value;
+    if (isSession(value)) {
+      const snapshot = { user: value.user, church: value.church };
+      if ("token" in value) storage.setItem(SESSION_KEY, JSON.stringify(snapshot));
+      return snapshot;
+    }
     storage.removeItem(SESSION_KEY);
   } catch {
     // Unavailable storage or a malformed session never grants access.
@@ -66,17 +68,17 @@ export class ApiError extends Error {
 }
 
 function apiBaseUrl() {
+  if (typeof window !== "undefined") return "";
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
   if (process.env.NODE_ENV === "development") return "http://localhost:3002";
   throw new Error("O endereço da API de Eventos não foi configurado.");
 }
 
-async function request<T>(path: string, init: RequestInit, token?: string): Promise<T> {
+async function request<T>(path: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body) headers.set("Content-Type", "application/json");
-  const response = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers, cache: "no-store" });
+  const response = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers, cache: "no-store", credentials: "include" });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(response.status,
@@ -93,18 +95,45 @@ export async function login(email: string, password: string) {
     method: "POST", body: JSON.stringify({ email, password }),
   });
   if (!isSession(session)) throw new Error("A API retornou uma sessão inválida.");
-  return session;
+  return {
+    user: session.user,
+    church: session.church
+  };
 }
 
-export function listEvents(token: string, page: number, search: string, signal: AbortSignal) {
+export async function logout() {
+  await fetch(`${apiBaseUrl()}/auth/logout`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "include"
+  }).catch(() => undefined);
+}
+
+export async function restoreSession(): Promise<Session | null> {
+  try {
+    const session = await request<Session>("/auth/session", {});
+    if (!isSession(session)) {
+      try { localStorage.removeItem(SESSION_KEY); } catch { /* Snapshot is not proof of access. */ }
+      return null;
+    }
+    const snapshot = { user: session.user, church: session.church };
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* Cookie remains the session. */ }
+    return snapshot;
+  } catch {
+    try { localStorage.removeItem(SESSION_KEY); } catch { /* Snapshot is not proof of access. */ }
+    return null;
+  }
+}
+
+export function listEvents(page: number, search: string, signal: AbortSignal) {
   const query = new URLSearchParams({ page: String(page), limit: "20" });
   if (search.trim()) query.set("search", search.trim());
-  return request<EventPage>(`/api/events?${query}`, { signal }, token);
+  return request<EventPage>(`/api/events?${query}`, { signal });
 }
 
-export async function loadEventCover(token: string, eventId: string, signal: AbortSignal) {
+export async function loadEventCover(eventId: string, signal: AbortSignal) {
   const response = await fetch(`${apiBaseUrl()}/api/events/${encodeURIComponent(eventId)}/cover`, {
-    headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal
+    cache: "no-store", credentials: "include", signal
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiError(response.status, "EVENT_COVER_UNAVAILABLE", "Capa indisponível.");
@@ -112,7 +141,6 @@ export async function loadEventCover(token: string, eventId: string, signal: Abo
 }
 
 export function listRegistrations(
-  token: string,
   eventId: string,
   page: number,
   search: string,
@@ -122,15 +150,14 @@ export function listRegistrations(
   if (search.trim()) query.set("search", search.trim());
   return request<RegistrationPage>(
     `/api/events/${encodeURIComponent(eventId)}/registrations?${query}`,
-    { signal },
-    token
+    { signal }
   );
 }
 
-export async function checkIn(token: string, eventId: string, code: string) {
+export async function checkIn(eventId: string, code: string) {
   const result = await request<CheckInResult>("/api/events/registrations/check-in-token", {
     method: "POST", body: JSON.stringify({ eventId, checkInToken: code.trim() }),
-  }, token);
+  });
   if (result.status !== "CHECKED_IN" || result.event?.id !== eventId || !result.id) {
     throw new Error("Não foi possível confirmar o check-in. Confira a inscrição antes de tentar novamente.");
   }

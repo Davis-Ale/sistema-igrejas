@@ -1,5 +1,7 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
@@ -7,10 +9,6 @@ import { CellEditList } from "./cell-edit-list";
 import type { CellListItem } from "./cell-list-api";
 import { CellLocationFields } from "./cell-location-fields";
 import { useCellLocation } from "./use-cell-location";
-
-type LoginSession = {
-  token: string;
-};
 
 type MemberRole = "PASTOR" | "LEADER" | "VOLUNTEER" | "MEMBER";
 
@@ -62,7 +60,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const API_BASE_URL = churchApiBaseUrl();
 
 function formatBrazilPhone(phone?: string | null): string {
   const digits = phone?.replace(/\D/g, "") ?? "";
@@ -86,23 +84,6 @@ function formatBrazilPhone(phone?: string | null): string {
   }
 
   return phone?.trim() || "Não informado";
-}
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
 }
 
 export default function CelulasPage() {
@@ -130,35 +111,22 @@ export default function CelulasPage() {
     resetLocation,
     setNeighborhood,
     stateCode
-  } = useCellLocation(API_BASE_URL, getSessionToken, setError);
+  } = useCellLocation(API_BASE_URL, setError);
 
   const selectedCellForLeaderChange = cells.find(
     (cell) => cell.id === selectedCellId
   );
 
   async function loadData() {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     setError(null);
     setIsLoading(true);
 
     try {
       const [cellsResponse, membersResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/cells`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        credentialedFetch(`${API_BASE_URL}/api/cells`, {
         }),
-        fetch(`${API_BASE_URL}/api/members`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        credentialedFetch(`${API_BASE_URL}/api/members`, {
         })
       ]);
 
@@ -197,12 +165,6 @@ export default function CelulasPage() {
   async function handleSaveCell(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     const isEditing = editingCellId !== null;
     const endpoint = isEditing
@@ -214,7 +176,7 @@ export default function CelulasPage() {
     setIsCreating(true);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await credentialedFetch(endpoint, {
         body: JSON.stringify({
           city,
           leaderId,
@@ -226,8 +188,7 @@ export default function CelulasPage() {
           state: stateCode
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: isEditing ? "PUT" : "POST"
       });
@@ -297,15 +258,9 @@ export default function CelulasPage() {
   ) {
     event.preventDefault();
 
-    const token = getSessionToken();
     const selectedCell = cells.find(
       (cell) => cell.id === selectedCellId
     );
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     if (!selectedCell || !selectedLeaderId) {
       setError("Selecione a célula e o novo líder.");
@@ -317,7 +272,7 @@ export default function CelulasPage() {
     setIsUpdatingLeader(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/cells/${selectedCell.id}`,
         {
           body: JSON.stringify({
@@ -332,8 +287,7 @@ export default function CelulasPage() {
             state: selectedCell.state
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
+                        "Content-Type": "application/json"
           },
           method: "PUT"
         }
@@ -738,7 +692,6 @@ export default function CelulasPage() {
 
           <CellEditList
             apiBaseUrl={API_BASE_URL}
-            getToken={getSessionToken}
             isOpen={showCellList}
             onStatusChange={loadData}
             onSelectCell={handleEditCell}

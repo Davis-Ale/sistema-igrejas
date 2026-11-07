@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { credentialedFetch } from "../../../lib/session-client";
 import styles from "../event-settings.module.css";
 
-export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
-  eventId: string; apiBaseUrl: string; getToken: () => string | null;
+export function EventCoverEditor({ eventId, apiBaseUrl }: {
+  eventId: string; apiBaseUrl: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [saved, setSaved] = useState<Blob | null>(null);
@@ -20,7 +21,7 @@ export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetch(url, { headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+    void credentialedFetch(url, {
       cache: "no-store", signal: controller.signal }).then(async (response) => {
       if (response.status === 404) return;
       if (!response.ok) throw new Error("Não foi possível carregar a capa salva.");
@@ -30,7 +31,7 @@ export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
       if (!controller.signal.aborted) setError("Não foi possível carregar a capa salva.");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => { controller.abort(); upload.current?.abort(); };
-  }, [url, getToken]);
+  }, [url]);
 
   useEffect(() => {
     const image = file ?? saved;
@@ -54,8 +55,8 @@ export function EventCoverEditor({ eventId, apiBaseUrl, getToken }: {
         reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
         reader.readAsDataURL(file);
       });
-      const response = await fetch(url, { method: "PUT", signal: controller.signal,
-        headers: { Authorization: `Bearer ${getToken() ?? ""}`, "Content-Type": "application/json" },
+      const response = await credentialedFetch(url, { method: "PUT", signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mimeType: file.type, dataBase64 }) });
       if (!response.ok) {
         const data = await response.json().catch(() => null);

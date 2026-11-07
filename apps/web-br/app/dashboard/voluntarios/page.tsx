@@ -1,12 +1,10 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
-
-type LoginSession = {
-  token: string;
-};
 
 type VolunteerStatus = "IN_FORMATION" | "ELIGIBLE" | "ACTIVE" | "SUSPENDED";
 
@@ -38,7 +36,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const API_BASE_URL = churchApiBaseUrl();
 
 const volunteerStatusLabels: Record<VolunteerStatus, string> = {
   IN_FORMATION: "Em formação",
@@ -57,40 +55,13 @@ export default function VoluntariosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function getSessionToken() {
-    const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-    if (!storedSession) {
-      return null;
-    }
-
-    try {
-      const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-      return parsedSession.token;
-    } catch {
-      localStorage.removeItem("sistema-igrejas.session");
-      return null;
-    }
-  }
-
   async function loadVolunteers() {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     setError(null);
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/volunteers`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await credentialedFetch(`${API_BASE_URL}/api/volunteers`, {
       });
 
       if (!response.ok) {
@@ -114,27 +85,20 @@ export default function VoluntariosPage() {
   async function handleUpdateStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setError(null);
     setSuccessMessage(null);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/volunteers/status`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/volunteers/status`, {
         body: JSON.stringify({
           personId: selectedPersonId,
           reason: reason || undefined,
           status
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });

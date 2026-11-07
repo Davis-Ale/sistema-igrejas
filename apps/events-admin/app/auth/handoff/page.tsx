@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  isSessionSnapshot,
+  writeSessionSnapshot
+} from "../../lib/session-client";
 
 export default function EventsAuthHandoff() {
   useEffect(() => {
@@ -11,13 +15,13 @@ export default function EventsAuthHandoff() {
       if (event.origin !== allowedOrigin || event.source !== window.parent) return;
 
       const data = event.data as { type?: string; key?: string; value?: string };
-      if (data.type !== "events-auth-session" || !data.key || !data.value) return;
+      if (data.type !== "events-auth-session" || !data.value) return;
 
       try {
-        const parsed = JSON.parse(data.value) as { state?: { token?: unknown; user?: { churchId?: unknown } } };
-        if (typeof parsed.state?.token !== "string" || typeof parsed.state.user?.churchId !== "string") return;
+        const parsed = JSON.parse(data.value) as unknown;
+        if (!isSessionSnapshot(parsed)) return;
 
-        localStorage.setItem(data.key, data.value);
+        writeSessionSnapshot(parsed);
         window.parent.postMessage({ type: "events-auth-complete" }, allowedOrigin);
       } catch {}
     }

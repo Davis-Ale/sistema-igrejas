@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { credentialedFetch, eventsApiBaseUrl } from "../../lib/session-client";
 import { CreateEventModal } from "./create-event-modal";
 import {
   EventModuleChrome,
@@ -9,10 +10,6 @@ import {
   resolveAuthorizedSelectedEventId,
   type EventModuleEventOption
 } from "./event-module-chrome";
-
-type LoginSession = {
-  token: string;
-};
 
 type EventListItem = {
   id: string;
@@ -40,27 +37,9 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const PAGE_LIMIT = 50;
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
 
 function formatDateTimeCompact(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -99,13 +78,6 @@ export function EventsDashboardClient({
   }, [openCreateEvent]);
 
   async function loadEvents(currentPage: number, currentSearch = search) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     setError(null);
     setIsLoading(true);
@@ -119,12 +91,9 @@ export function EventsDashboardClient({
         params.set("search", currentSearch);
       }
 
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events?${params.toString()}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
         }
       );
 
@@ -154,17 +123,9 @@ export function EventsDashboardClient({
 
   useEffect(() => {
     async function loadNavEvents() {
-      const token = getSessionToken();
-
-      if (!token) {
-        return;
-      }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        const response = await credentialedFetch(`${API_BASE_URL}/api/events?limit=100`, {
         });
 
         if (!response.ok) {

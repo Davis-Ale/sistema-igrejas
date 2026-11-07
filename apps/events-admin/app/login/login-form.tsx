@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import {
+  credentialedFetch,
+  writeSessionSnapshot
+} from "../lib/session-client";
 
 type LoginSession = {
   token: string;
@@ -36,8 +40,9 @@ type ApiErrorResponse = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:3002";
+  typeof window === "undefined"
+    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002")
+    : "";
 
 export function LoginForm() {
   const router = useRouter();
@@ -55,7 +60,7 @@ export function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/auth/login`,
         {
           body: JSON.stringify({
@@ -83,10 +88,7 @@ export function LoginForm() {
       const loginSession =
         (await response.json()) as LoginSession;
 
-      localStorage.setItem(
-        "sistema-igrejas.session",
-        JSON.stringify(loginSession)
-      );
+      writeSessionSnapshot(loginSession);
 
       router.replace("/dashboard/eventos");
       router.refresh();

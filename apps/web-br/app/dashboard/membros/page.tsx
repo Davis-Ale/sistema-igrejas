@@ -1,5 +1,7 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
@@ -14,12 +16,6 @@ type Member = {
   campusId: string | null;
   createdAt: string;
   updatedAt: string;
-};
-
-type StoredSession = {
-  token?: string;
-  accessToken?: string;
-  jwt?: string;
 };
 
 function formatPhoneInput(value: string): string {
@@ -47,27 +43,7 @@ function formatPhoneInput(value: string): string {
 }
 
 function getApiUrl() {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3333/api";
-}
-
-function getAuthToken() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const rawSession = window.localStorage.getItem("sistema-igrejas.session");
-
-  if (!rawSession) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(rawSession) as StoredSession;
-
-    return session.token ?? session.accessToken ?? session.jwt ?? null;
-  } catch {
-    return null;
-  }
+  return `${churchApiBaseUrl()}/api`;
 }
 
 export default function MembrosPage() {
@@ -81,22 +57,10 @@ export default function MembrosPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const loadMembers = useCallback(async () => {
-    const token = getAuthToken();
-
-    if (!token) {
-      setFeedback("Sessão sem token de acesso. Faça login novamente.");
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${apiUrl}/members`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await credentialedFetch(`${apiUrl}/members`);
 
       if (!response.ok) {
         throw new Error("MEMBERS_LOAD_FAILED");
@@ -120,22 +84,14 @@ export default function MembrosPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getAuthToken();
-
-    if (!token) {
-      setFeedback("Sessão sem token de acesso. Faça login novamente.");
-      return;
-    }
-
     setIsSaving(true);
     setFeedback("");
 
     try {
-      const response = await fetch(`${apiUrl}/members`, {
+      const response = await credentialedFetch(`${apiUrl}/members`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         body: JSON.stringify({
           name,

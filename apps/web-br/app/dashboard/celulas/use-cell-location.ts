@@ -6,12 +6,10 @@ import {
   type ChurchBaseCity
 } from "./cell-location-api";
 
-type GetToken = () => string | null;
 type SetError = (message: string | null) => void;
 
 export function useCellLocation(
   apiBaseUrl: string,
-  getToken: GetToken,
   setError: SetError
 ) {
   const [baseCity, setBaseCity] = useState<ChurchBaseCity | null>(null);
@@ -19,17 +17,11 @@ export function useCellLocation(
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   useEffect(() => {
-    const token = getToken();
-
-    if (!token) {
-      return;
-    }
-
     let cancelled = false;
 
     setIsLoadingLocation(true);
 
-    void getChurchBaseLocation(apiBaseUrl, token)
+    void getChurchBaseLocation(apiBaseUrl)
       .then((data) => {
         if (!cancelled) {
           setBaseCity(data.city);
@@ -53,7 +45,7 @@ export function useCellLocation(
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, getToken, setError]);
+  }, [apiBaseUrl, setError]);
 
   function resetLocation() {
     setNeighborhood("");

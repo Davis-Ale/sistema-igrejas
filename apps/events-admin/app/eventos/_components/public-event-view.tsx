@@ -9,6 +9,7 @@ import {
   useRef,
   useState
 } from "react";
+import { credentialedFetch, eventsApiBaseUrl } from "../../lib/session-client";
 import { PublicEventTracking } from "./public-event-tracking";
 import type { PublicCheckoutV2Factory } from "./public-checkout-v2.client";
 import { usePreparedCheckoutV2 } from "./use-prepared-checkout-v2";
@@ -128,9 +129,7 @@ type PublicRegistration = {
   };
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ??
@@ -138,30 +137,6 @@ const EVENTS_APP_BASE_URL =
 
 type PublicEventViewMode = "public" | "preview";
 
-type LoginSession = {
-  token: string;
-};
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem(
-    "sistema-igrejas.session"
-  );
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(
-      storedSession
-    ) as LoginSession;
-
-    return parsedSession.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -370,24 +345,14 @@ export function PublicEventView({
     setIsLoading(true);
 
     try {
-      const headers: HeadersInit = {};
       let url = `${API_BASE_URL}/public/events/${eventId}`;
 
       if (isPreview) {
-        const token = getSessionToken();
-
-        if (!token) {
-          router.replace("/login");
-          return;
-        }
-
         url = `${API_BASE_URL}/api/events/${eventId}/preview`;
-        headers.Authorization = `Bearer ${token}`;
       }
 
-      const response = await fetch(url, {
-        cache: "no-store",
-        headers
+      const response = await (isPreview ? credentialedFetch : fetch)(url, {
+        cache: "no-store"
       });
 
       if (!response.ok) {
@@ -584,21 +549,11 @@ export function PublicEventView({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setCoverUrl(null);
-      return;
-    }
-
     const controller = new AbortController();
     let objectUrl: string | null = null;
 
-    void fetch(`${API_BASE_URL}/api/events/${event.id}/cover`, {
+    void credentialedFetch(`${API_BASE_URL}/api/events/${event.id}/cover`, {
       cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
       signal: controller.signal
     }).then(async (response) => {
       if (!response.ok) {

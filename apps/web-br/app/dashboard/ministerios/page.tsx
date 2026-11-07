@@ -1,5 +1,7 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch, readSessionSnapshot } from "../../lib/session-client";
+
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
@@ -11,8 +13,8 @@ type Ministry = {
   leaderId: string; leader: Person;
   members: { personId: string; person: Person }[];
 };
-type Session = { token?: string; accessToken?: string; jwt?: string; user?: { role?: string } };
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333"}/api`).replace(/\/$/, "");
+type Session = { user?: { role?: string } };
+const API_URL = `${churchApiBaseUrl()}/api`;
 const emptyForm = { name: "", description: "", status: "ACTIVE" as Ministry["status"], leaderId: "" };
 const roleLabels: Record<string, string> = { SUPER_ADMIN: "Administrador", PASTOR: "Pastor", LEADER: "Líder", MEMBER: "Membro", VOLUNTEER: "Voluntário", VISITOR: "Visitante" };
 
@@ -32,27 +34,24 @@ function Ministries() {
   const role = session?.user?.role ?? "";
   const canRead = ["SUPER_ADMIN", "PASTOR", "LEADER"].includes(role);
   const canManage = ["SUPER_ADMIN", "PASTOR"].includes(role);
-  const token = session?.token ?? session?.accessToken ?? session?.jwt;
   const selected = ministries.find(ministry => ministry.id === selectedId);
   const availablePeople = people.filter(person => ["MEMBER", "VOLUNTEER"].includes(person.role) && !selected?.members.some(member => member.personId === person.id));
 
   useEffect(() => {
-    try { setSession(JSON.parse(localStorage.getItem("sistema-igrejas.session") ?? "null") as Session | null); }
-    catch { setSession(null); }
+    setSession(readSessionSnapshot());
     setLoading(false);
   }, []);
 
   const request = useCallback(async <T,>(path: string, method = "GET", body?: unknown): Promise<T> => {
-    if (!token) throw new Error("Sessão inválida. Entre novamente no sistema.");
-    const response = await fetch(`${API_URL}/ministries${path}`, {
+    const response = await credentialedFetch(`${API_URL}/ministries${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      headers: body === undefined ? {} : { "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message ?? "Não foi possível concluir a operação.");
     return data as T;
-  }, [token]);
+  }, []);
 
   const refresh = useCallback(async () => {
     const [rows, persons] = await Promise.all([request<Ministry[]>(""), request<Person[]>("/people")]);

@@ -2,39 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  logoutSession,
+  restoreAuthenticatedSession
+} from "../lib/session-client";
 import { DashboardShell } from "./dashboard-shell";
 import type { DashboardSession } from "./dashboard-types";
-
-function parseDashboardSession() {
-  const storedSession = localStorage.getItem(
-    "sistema-igrejas.session"
-  );
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const parsedSession = JSON.parse(
-      storedSession
-    ) as DashboardSession;
-
-    if (
-      !parsedSession.church?.name ||
-      !parsedSession.church?.status ||
-      !parsedSession.user?.email ||
-      !parsedSession.user?.role
-    ) {
-      localStorage.removeItem("sistema-igrejas.session");
-      return null;
-    }
-
-    return parsedSession;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
 
 export function DashboardClient() {
   const router = useRouter();
@@ -42,18 +15,28 @@ export function DashboardClient() {
     useState<DashboardSession | null>(null);
 
   useEffect(() => {
-    const parsedSession = parseDashboardSession();
+    void restoreAuthenticatedSession().then((parsedSession) => {
+      if (!parsedSession) {
+        router.replace("/login");
+        return;
+      }
 
-    if (!parsedSession) {
-      router.replace("/login");
-      return;
-    }
-
-    setSession(parsedSession);
+      setSession({
+        user: {
+          email: parsedSession.user.email,
+          role: parsedSession.user.role
+        },
+        church: {
+          name: parsedSession.church.name,
+          status: parsedSession.church.status,
+          trialEndsAt: parsedSession.church.trialEndsAt ?? null
+        }
+      });
+    });
   }, [router]);
 
-  function handleLogout() {
-    localStorage.removeItem("sistema-igrejas.session");
+  async function handleLogout() {
+    await logoutSession();
     setSession(null);
     router.replace("/login");
     router.refresh();

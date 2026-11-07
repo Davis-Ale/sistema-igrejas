@@ -2,25 +2,11 @@
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
-
-function getAuthSession() {
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-    if (!key) continue;
-
-    const value = localStorage.getItem(key);
-    if (!value) continue;
-
-    try {
-      const parsed = JSON.parse(value) as { state?: { token?: unknown; user?: { churchId?: unknown } } };
-      if (typeof parsed.state?.token === "string" && typeof parsed.state.user?.churchId === "string") {
-        return { key, value };
-      }
-    } catch {}
-  }
-
-  return null;
-}
+import {
+  readSessionSnapshot,
+  restoreAuthenticatedSession,
+  SESSION_STORAGE_KEY
+} from "../../../lib/session-client";
 
 export default function EventsRedirect() {
   const params = useParams<{ path?: string[] }>();
@@ -30,28 +16,21 @@ export default function EventsRedirect() {
     const targetOrigin = new URL(eventsAppUrl).origin;
     const path = Array.isArray(params.path) ? params.path : [];
     const suffix = path.length ? `/${path.join("/")}` : "";
-    const auth = getAuthSession();
-
-    if (!auth) {
-      window.location.replace(`${eventsAppUrl}/login`);
-      return;
-    }
-
-    const frame = document.createElement("iframe");
-    frame.src = `${eventsAppUrl}/auth/handoff`;
-    frame.style.display = "none";
-    document.body.appendChild(frame);
+    let cancelled = false;
+    let frame: HTMLIFrameElement | null = null;
 
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== targetOrigin || event.source !== frame.contentWindow) return;
+      if (!frame || event.origin !== targetOrigin || event.source !== frame.contentWindow) return;
 
       const data = event.data as { type?: string };
 
       if (data.type === "events-auth-ready") {
+        const snapshot = readSessionSnapshot();
+        if (!snapshot) return;
         frame.contentWindow?.postMessage({
           type: "events-auth-session",
-          key: auth!.key,
-          value: auth!.value
+          key: SESSION_STORAGE_KEY,
+          value: JSON.stringify({ user: snapshot.user, church: snapshot.church })
         }, targetOrigin);
       }
 
@@ -62,9 +41,25 @@ export default function EventsRedirect() {
 
     window.addEventListener("message", handleMessage);
 
+    void (async () => {
+      const snapshot = readSessionSnapshot() ?? await restoreAuthenticatedSession();
+      if (cancelled) return;
+
+      if (!snapshot) {
+        window.location.replace(`${eventsAppUrl}/login`);
+        return;
+      }
+
+      frame = document.createElement("iframe");
+      frame.src = `${eventsAppUrl}/auth/handoff`;
+      frame.style.display = "none";
+      document.body.appendChild(frame);
+    })();
+
     return () => {
+      cancelled = true;
       window.removeEventListener("message", handleMessage);
-      frame.remove();
+      frame?.remove();
     };
   }, [params.path]);
 

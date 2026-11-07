@@ -15,6 +15,7 @@ import {
   useRef,
   useState
 } from "react";
+import { credentialedFetch, eventsApiBaseUrl } from "../../../lib/session-client";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleBackLink,
@@ -23,10 +24,6 @@ import {
   readStoredSelectedEventId,
   type EventWorkspaceSection
 } from "../event-module-chrome";
-
-type LoginSession = {
-  token: string;
-};
 
 type EventSummaryOption = {
   id: string;
@@ -307,8 +304,7 @@ type EventParticipantAppAdminResponse = {
   registrations: EventAppRegistrationOption[];
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const EVENTS_APP_BASE_URL =
   process.env.NEXT_PUBLIC_EVENTS_APP_BASE_URL ?? "http://localhost:3003";
@@ -430,23 +426,6 @@ async function streamResponseBodyToWritable(
     throw error;
   } finally {
     reader.releaseLock();
-  }
-}
-
-function getSessionToken() {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(storedSession) as LoginSession;
-
-    return session.token;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
   }
 }
 
@@ -1064,24 +1043,15 @@ export function EventWorkspaceClient({
 
   useEffect(() => {
     async function loadEvent() {
-      const token = getSessionToken();
-
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
 
       setError(null);
       setIsLoading(true);
 
       try {
-        const response = await fetch(
+        const response = await credentialedFetch(
           `${API_BASE_URL}/api/events/${eventId}`,
           {
-            cache: "no-store",
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            cache: "no-store"
           }
         );
 
@@ -1124,20 +1094,12 @@ export function EventWorkspaceClient({
 
   useEffect(() => {
     async function loadEventsList() {
-      const token = getSessionToken();
-
-      if (!token) {
-        return;
-      }
 
       try {
-        const response = await fetch(
+        const response = await credentialedFetch(
           `${API_BASE_URL}/api/events?limit=100`,
           {
-            cache: "no-store",
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            cache: "no-store"
           }
         );
 
@@ -1158,24 +1120,15 @@ export function EventWorkspaceClient({
   }, []);
 
   async function loadEventParticipantApp() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsLoadingEventApp(true);
     setEventAppError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/participant-app`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
       const data = await response.json() as
@@ -1253,19 +1206,13 @@ export function EventWorkspaceClient({
     formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsSavingEventApp(true);
     setEventAppError(null);
     setEventAppMessage(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         editingEventAppSessionId
           ? `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions/${editingEventAppSessionId}`
           : `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions`,
@@ -1282,7 +1229,6 @@ export function EventWorkspaceClient({
             registrationIds: eventAppSessionRegistrationIds
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: editingEventAppSessionId
@@ -1314,23 +1260,14 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsSavingEventApp(true);
     setEventAppError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/participant-app/sessions/${sessionId}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           method: "DELETE"
         }
       );
@@ -1360,12 +1297,6 @@ export function EventWorkspaceClient({
     formEvent: FormEvent<HTMLFormElement>
   ) {
     formEvent.preventDefault();
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsSavingEventApp(true);
     setEventAppError(null);
@@ -1381,7 +1312,7 @@ export function EventWorkspaceClient({
           reader.readAsDataURL(eventAppMapFile);
         })
       } : undefined;
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/participant-app/map`,
         {
           body: JSON.stringify({
@@ -1394,7 +1325,6 @@ export function EventWorkspaceClient({
             }))
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PUT"
@@ -1429,23 +1359,14 @@ export function EventWorkspaceClient({
   }
 
   async function loadTickets() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsLoadingTickets(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/tickets`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
 
@@ -1514,24 +1435,15 @@ export function EventWorkspaceClient({
   }
 
   async function loadDiscounts() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsLoadingDiscounts(true);
     setDiscountError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/discounts`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
 
@@ -1563,12 +1475,6 @@ export function EventWorkspaceClient({
   ) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsSavingDiscount(true);
     setDiscountError(null);
@@ -1582,14 +1488,13 @@ export function EventWorkspaceClient({
         isActive: discountIsActive
       };
 
-      const response = await fetch(
+      const response = await credentialedFetch(
         editingDiscountId
           ? `${API_BASE_URL}/api/events/${eventId}/discounts/${editingDiscountId}`
           : `${API_BASE_URL}/api/events/${eventId}/discounts`,
         {
           body: JSON.stringify(payload),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: editingDiscountId ? "PATCH" : "POST"
@@ -1637,12 +1542,6 @@ export function EventWorkspaceClient({
     }
 
     async function loadParticipants() {
-      const token = getSessionToken();
-
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
 
       setError(null);
       setIsLoadingParticipants(true);
@@ -1668,13 +1567,10 @@ export function EventWorkspaceClient({
           params.set("ticketId", participantTicket);
         }
 
-        const response = await fetch(
+        const response = await credentialedFetch(
           `${API_BASE_URL}/api/events/${eventId}/registrations?${params.toString()}`,
           {
-            cache: "no-store",
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            cache: "no-store"
           }
         );
 
@@ -1724,12 +1620,6 @@ export function EventWorkspaceClient({
   ]);
 
   async function handleExportParticipants() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsExportingParticipants(true);
     setError(null);
@@ -1775,15 +1665,12 @@ export function EventWorkspaceClient({
       }
 
       const query = params.toString();
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/registrations/export${
           query ? `?${query}` : ""
         }`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
 
@@ -1829,23 +1716,14 @@ export function EventWorkspaceClient({
   }
 
   async function loadFormFields() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setIsLoadingFormFields(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/form-fields`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
 
@@ -1904,12 +1782,6 @@ export function EventWorkspaceClient({
   ) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const form = formEvent.currentTarget;
     const formData = new FormData(form);
@@ -1940,7 +1812,7 @@ export function EventWorkspaceClient({
     setIsCreatingTicket(true);
 
     try {
-      const ticketResponse = await fetch(
+      const ticketResponse = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/tickets`,
         {
           body: JSON.stringify({
@@ -1955,7 +1827,6 @@ export function EventWorkspaceClient({
             isVisible
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -1979,7 +1850,7 @@ export function EventWorkspaceClient({
 
       setSelectedTicketId(createdTicket.id);
 
-      const batchResponse = await fetch(
+      const batchResponse = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/ticket-batches`,
         {
           body: JSON.stringify({
@@ -1998,7 +1869,6 @@ export function EventWorkspaceClient({
             isVisible
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -2041,12 +1911,6 @@ export function EventWorkspaceClient({
   ) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const form = formEvent.currentTarget;
     const formData = new FormData(form);
@@ -2082,7 +1946,7 @@ export function EventWorkspaceClient({
     setIsCreatingBatch(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/ticket-batches`,
         {
           body: JSON.stringify({
@@ -2102,7 +1966,6 @@ export function EventWorkspaceClient({
               formData.get("batchVisible") === "on"
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -2136,12 +1999,6 @@ export function EventWorkspaceClient({
   }
 
   async function handleUpdateTicket() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return false;
-    }
 
     if (!editingTicketId) {
       return false;
@@ -2152,7 +2009,7 @@ export function EventWorkspaceClient({
     setIsSavingTicket(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/tickets/${editingTicketId}`,
         {
           body: JSON.stringify({
@@ -2163,7 +2020,6 @@ export function EventWorkspaceClient({
             isVisible: editingTicketIsVisible
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -2195,12 +2051,6 @@ export function EventWorkspaceClient({
   }
 
   async function handleUpdateBatch() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return false;
-    }
 
     if (!editingBatchId) {
       return false;
@@ -2211,7 +2061,7 @@ export function EventWorkspaceClient({
     setIsSavingBatch(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/ticket-batches/${editingBatchId}`,
         {
           body: JSON.stringify({
@@ -2225,7 +2075,6 @@ export function EventWorkspaceClient({
             isVisible: editingBatchIsVisible
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -2261,12 +2110,6 @@ export function EventWorkspaceClient({
     key: string;
     ticket: EventTicket;
   }) {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const nextVisible = !(
       row.batch ? row.batch.isVisible : row.ticket.isVisible
@@ -2277,7 +2120,7 @@ export function EventWorkspaceClient({
     setTogglingVisibilityKey(row.key);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         row.batch
           ? `${API_BASE_URL}/api/events/${eventId}/ticket-batches/${row.batch.id}`
           : `${API_BASE_URL}/api/events/${eventId}/tickets/${row.ticket.id}`,
@@ -2286,7 +2129,6 @@ export function EventWorkspaceClient({
             isVisible: nextVisible
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -2475,12 +2317,6 @@ export function EventWorkspaceClient({
   ) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const options = overlayFieldOptions
       .split("\n")
@@ -2523,14 +2359,13 @@ export function EventWorkspaceClient({
         type: overlayFormFieldType
       };
       const requestPayload = payload;
-      const response = await fetch(
+      const response = await credentialedFetch(
         isEditing
           ? `${API_BASE_URL}/api/events/${eventId}/form-fields/${editingFormFieldId}`
           : `${API_BASE_URL}/api/events/${eventId}/form-fields`,
         {
           body: JSON.stringify(requestPayload),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: isEditing ? "PATCH" : "POST"
@@ -2583,25 +2418,18 @@ export function EventWorkspaceClient({
   async function handleToggleFormField(
     field: EventFormField
   ) {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setError(null);
     setFormFieldMessage(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/form-fields/${field.id}`,
         {
           body: JSON.stringify({
             isActive: !field.isActive
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -2661,15 +2489,9 @@ export function EventWorkspaceClient({
 
     reordered.splice(targetIndex, 0, field);
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/form-fields-order`,
         {
           body: JSON.stringify({
@@ -2678,7 +2500,6 @@ export function EventWorkspaceClient({
             )
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -2905,12 +2726,6 @@ export function EventWorkspaceClient({
   async function loadCheckInSearch(
     search: string
   ) {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setError(null);
     setCheckInSuccess(null);
@@ -2927,13 +2742,10 @@ export function EventWorkspaceClient({
         params.set("search", search.trim());
       }
 
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${eventId}/registrations?${params.toString()}`,
         {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          cache: "no-store"
         }
       );
 
@@ -3015,13 +2827,7 @@ export function EventWorkspaceClient({
   ) {
     formEvent.preventDefault();
 
-    const token = getSessionToken();
     const code = checkInCode.trim();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     if (!code) {
       setError("Informe o código de check-in.");
@@ -3033,7 +2839,7 @@ export function EventWorkspaceClient({
     setIsCheckingIn(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/registrations/check-in-token`,
         {
           body: JSON.stringify({
@@ -3041,7 +2847,6 @@ export function EventWorkspaceClient({
             checkInToken: code
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -3105,19 +2910,13 @@ export function EventWorkspaceClient({
   async function handleParticipantCheckIn(
     registrationId: string
   ) {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setError(null);
     setCheckInSuccess(null);
     setIsCheckingIn(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/registrations/status`,
         {
           body: JSON.stringify({
@@ -3126,7 +2925,6 @@ export function EventWorkspaceClient({
             status: "CHECKED_IN"
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -3280,12 +3078,6 @@ export function EventWorkspaceClient({
   }
 
   async function loadEventFinancial() {
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setFinancialError(null);
     setIsLoadingFinancial(true);
@@ -3317,22 +3109,16 @@ export function EventWorkspaceClient({
 
       const [summaryResponse, transactionsResponse] =
         await Promise.all([
-          fetch(
+          credentialedFetch(
             `${API_BASE_URL}/api/events/financial/summary?${summaryQuery}`,
             {
-              cache: "no-store",
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
+              cache: "no-store"
             }
           ),
-          fetch(
+          credentialedFetch(
             `${API_BASE_URL}/api/events/financial/transactions?${transactionsQuery.toString()}`,
             {
-              cache: "no-store",
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
+              cache: "no-store"
             }
           )
         ]);
@@ -3416,12 +3202,6 @@ export function EventWorkspaceClient({
     }
 
     async function loadEventAnalytics() {
-      const token = getSessionToken();
-
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
 
       const params = new URLSearchParams();
 
@@ -3463,15 +3243,12 @@ export function EventWorkspaceClient({
 
       try {
         const query = params.toString();
-        const response = await fetch(
+        const response = await credentialedFetch(
           `${API_BASE_URL}/api/events/${eventId}/analytics${
             query ? `?${query}` : ""
           }`,
           {
-            cache: "no-store",
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            cache: "no-store"
           }
         );
 
@@ -3596,23 +3373,14 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setDeleteError(null);
     setIsDeletingEvent(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${event.id}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           method: "DELETE"
         }
       );
@@ -3651,12 +3419,6 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const title = duplicateTitle.trim();
     const slug = duplicateSlug.trim();
@@ -3672,7 +3434,7 @@ export function EventWorkspaceClient({
     setIsDuplicatingEvent(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${event.id}/duplicate`,
         {
           body: JSON.stringify({
@@ -3681,7 +3443,6 @@ export function EventWorkspaceClient({
             title
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "POST"
@@ -3728,12 +3489,6 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     const formData = new FormData(formEvent.currentTarget);
     const title = String(formData.get("title") ?? "").trim();
@@ -3749,7 +3504,7 @@ export function EventWorkspaceClient({
     setIsSavingInformation(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${event.id}`,
         {
           body: JSON.stringify({
@@ -3765,7 +3520,6 @@ export function EventWorkspaceClient({
               formData.get("waitlistEnabled") === "on"
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -3820,24 +3574,17 @@ export function EventWorkspaceClient({
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
     setError(null);
     setInformationMessage(null);
     setIsUpdatingPublicationState(true);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/${event.id}`,
         {
           body: JSON.stringify(payload),
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           method: "PATCH"
@@ -5429,7 +5176,7 @@ export function EventWorkspaceClient({
                 ) : null}
               </header>
 
-              <EventCoverEditor key={event.id} eventId={event.id} apiBaseUrl={API_BASE_URL} getToken={getSessionToken} />
+              <EventCoverEditor key={event.id} eventId={event.id} apiBaseUrl={API_BASE_URL}  />
 
               {informationMessage ? (
                 <p

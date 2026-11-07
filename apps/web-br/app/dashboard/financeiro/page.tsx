@@ -1,12 +1,10 @@
 "use client";
 
+import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
-
-type LoginSession = {
-  token: string;
-};
 
 type TransactionType = "TITHE" | "OFFERING" | "EVENT" | "EXPENSE" | "OTHER";
 type TransactionDirection = "IN" | "OUT";
@@ -54,7 +52,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3333";
+const API_BASE_URL = churchApiBaseUrl();
 
 const transactionTypeLabels: Record<TransactionType, string> = {
   TITHE: "Dízimo",
@@ -148,23 +146,6 @@ export default function FinanceiroPage() {
   const [processingTransactionId, setProcessingTransactionId] = useState<string | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
 
-  function getSessionToken() {
-    const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-    if (!storedSession) {
-      return null;
-    }
-
-    try {
-      const parsedSession = JSON.parse(storedSession) as LoginSession;
-
-      return parsedSession.token;
-    } catch {
-      localStorage.removeItem("sistema-igrejas.session");
-      return null;
-    }
-  }
-
   function buildFinancialQuery() {
     const params = new URLSearchParams();
 
@@ -202,13 +183,6 @@ export default function FinanceiroPage() {
   }
 
   async function loadFinancialData(queryOverride?: string) {
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      setIsLoading(false);
-      return;
-    }
 
     setError(null);
     setIsLoading(true);
@@ -217,15 +191,9 @@ export default function FinanceiroPage() {
       const financialQuery = queryOverride ?? buildFinancialQuery();
 
       const [transactionsResponse, summaryResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/financial/transactions${financialQuery}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        credentialedFetch(`${API_BASE_URL}/api/financial/transactions${financialQuery}`, {
         }),
-        fetch(`${API_BASE_URL}/api/financial/summary${financialQuery}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        credentialedFetch(`${API_BASE_URL}/api/financial/summary${financialQuery}`, {
         })
       ]);
 
@@ -275,12 +243,6 @@ export default function FinanceiroPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     setError(null);
     setSuccessMessage(null);
@@ -291,7 +253,7 @@ export default function FinanceiroPage() {
         ? `${API_BASE_URL}/api/financial/transactions/${editingTransactionId}`
         : `${API_BASE_URL}/api/financial/transactions`;
 
-      const response = await fetch(requestUrl, {
+      const response = await credentialedFetch(requestUrl, {
         body: JSON.stringify({
           amount: Number(amount),
           at: at ? new Date(`${at}T00:00:00.000Z`).toISOString() : undefined,
@@ -301,8 +263,7 @@ export default function FinanceiroPage() {
           type
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: editingTransactionId ? "PATCH" : "POST"
       });
@@ -333,12 +294,6 @@ export default function FinanceiroPage() {
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
 
     const actionLabel = action === "cancel" ? "cancelamento" : "estorno";
     const reason = window.prompt(`Informe o motivo do ${actionLabel}:`);
@@ -353,15 +308,14 @@ export default function FinanceiroPage() {
     setProcessingTransactionId(transaction.id);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/financial/transactions/${transaction.id}/${action}`,
         {
           body: JSON.stringify({
             reason: reason.trim()
           }),
           headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
+                        "Content-Type": "application/json"
           },
           method: "POST"
         }

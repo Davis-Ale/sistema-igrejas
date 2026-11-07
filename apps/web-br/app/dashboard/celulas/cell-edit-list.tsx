@@ -13,7 +13,6 @@ import {
 
 type CellEditListProps = {
   apiBaseUrl: string;
-  getToken: () => string | null;
   isOpen: boolean;
   onSelectCell: (cell: CellListItem) => void;
   onStatusChange: () => void | Promise<void>;
@@ -58,7 +57,6 @@ function getSessionRole(): string | null {
 
 export function CellEditList({
   apiBaseUrl,
-  getToken,
   isOpen,
   onSelectCell,
   onStatusChange
@@ -101,19 +99,12 @@ export function CellEditList({
       return;
     }
 
-    const token = getToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
     let cancelled = false;
 
     setIsLoading(true);
     setError(null);
 
-    void searchCells(apiBaseUrl, token, {
+    void searchCells(apiBaseUrl, {
       page: pagination.page,
       pageSize: pagination.pageSize,
       status,
@@ -147,7 +138,6 @@ export function CellEditList({
     };
   }, [
     apiBaseUrl,
-    getToken,
     isOpen,
     leader,
     neighborhood,
@@ -170,23 +160,16 @@ export function CellEditList({
   }
 
   async function handleStatusChange(cell: CellListItem) {
-    const token = getToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
     setChangingStatusCellId(cell.id);
     setError(null);
     setSuccessMessage(null);
 
     try {
       if (cell.status === "ACTIVE") {
-        await archiveCell(apiBaseUrl, token, cell.id);
+        await archiveCell(apiBaseUrl, cell.id);
         setSuccessMessage("Célula arquivada com sucesso.");
       } else {
-        await reactivateCell(apiBaseUrl, token, cell.id);
+        await reactivateCell(apiBaseUrl, cell.id);
         setSuccessMessage("Célula reativada com sucesso.");
       }
 
@@ -212,19 +195,12 @@ export function CellEditList({
       return;
     }
 
-    const token = getToken();
-
-    if (!token) {
-      setError("Sessão inválida. Entre novamente no sistema.");
-      return;
-    }
-
     setDeletingCellId(cell.id);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      await deleteCell(apiBaseUrl, token, cell.id);
+      await deleteCell(apiBaseUrl, cell.id);
 
       setSuccessMessage("Célula excluída com sucesso.");
       setPagination((current) => ({

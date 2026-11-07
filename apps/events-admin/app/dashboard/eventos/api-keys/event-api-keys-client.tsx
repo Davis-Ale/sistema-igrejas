@@ -3,6 +3,7 @@
 import settings from "../event-settings.module.css";
 
 import { FormEvent, useEffect, useState } from "react";
+import { credentialedFetch, eventsApiBaseUrl, readSessionSnapshot } from "../../../lib/session-client";
 import { CreateEventModal } from "../create-event-modal";
 import {
   EventModuleChrome,
@@ -10,8 +11,7 @@ import {
   resolveAuthorizedSelectedEventId
 } from "../event-module-chrome";
 
-type LoginSession = {
-  token: string;
+type ApiKeySession = {
   user?: { role?: string };
 };
 
@@ -45,8 +45,7 @@ type ApiErrorResponse = {
   message?: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002";
+const API_BASE_URL = eventsApiBaseUrl();
 
 const SCOPE_OPTIONS: Array<{
   value: EventApiKeyScope;
@@ -57,26 +56,7 @@ const SCOPE_OPTIONS: Array<{
   { value: "participants:read", label: "participants:read" }
 ];
 
-function getSession(): LoginSession | null {
-  const storedSession = localStorage.getItem("sistema-igrejas.session");
-
-  if (!storedSession) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(storedSession) as LoginSession;
-  } catch {
-    localStorage.removeItem("sistema-igrejas.session");
-    return null;
-  }
-}
-
-function getSessionToken() {
-  return getSession()?.token ?? null;
-}
-
-function canManageApiKeys(session: LoginSession | null) {
+function canManageApiKeys(session: ApiKeySession | null) {
   return (
     session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "PASTOR"
   );
@@ -113,12 +93,9 @@ export function EventApiKeysClient() {
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [canManage, setCanManage] = useState(false);
 
-  async function loadEvents(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events?limit=100`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  async function loadEvents() {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events?limit=100`, {
+      cache: "no-store"
     });
 
     if (!response.ok) {
@@ -139,12 +116,9 @@ export function EventApiKeysClient() {
     });
   }
 
-  async function loadApiKeys(token: string) {
-    const response = await fetch(`${API_BASE_URL}/api/events/api-keys`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  async function loadApiKeys() {
+    const response = await credentialedFetch(`${API_BASE_URL}/api/events/api-keys`, {
+      cache: "no-store"
     });
 
     const data = (await response.json()) as EventApiKeyItem[] | ApiErrorResponse;
@@ -162,19 +136,13 @@ export function EventApiKeysClient() {
 
   useEffect(() => {
     async function load() {
-      const token = getSessionToken();
 
-      if (!token) {
-        window.location.href = "/login";
-        return;
-      }
-
-      setCanManage(canManageApiKeys(getSession()));
+      setCanManage(canManageApiKeys(readSessionSnapshot()));
       setIsLoading(true);
       setError(null);
 
       try {
-        await Promise.all([loadEvents(token), loadApiKeys(token)]);
+        await Promise.all([loadEvents(), loadApiKeys()]);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -202,16 +170,10 @@ export function EventApiKeysClient() {
   async function handleCreateKey(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
 
-    if (!canManage || !canManageApiKeys(getSession())) {
+    if (!canManage || !canManageApiKeys(readSessionSnapshot())) {
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
 
     const trimmedName = name.trim();
 
@@ -225,15 +187,14 @@ export function EventApiKeysClient() {
     setCopyMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events/api-keys`, {
+      const response = await credentialedFetch(`${API_BASE_URL}/api/events/api-keys`, {
         body: JSON.stringify({
           name: trimmedName,
           description: description.trim() || undefined,
           scopes: selectedScopes
         }),
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+                    "Content-Type": "application/json"
         },
         method: "POST"
       });
@@ -292,27 +253,18 @@ export function EventApiKeysClient() {
       return;
     }
 
-    if (!canManage || !canManageApiKeys(getSession())) {
+    if (!canManage || !canManageApiKeys(readSessionSnapshot())) {
       return;
     }
 
-    const token = getSessionToken();
-
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
 
     setIsRevoking(true);
     setRevokeError(null);
 
     try {
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${API_BASE_URL}/api/events/api-keys/${revokingKey.id}/revoke`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
           method: "POST"
         }
       );
