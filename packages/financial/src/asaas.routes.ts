@@ -1,5 +1,8 @@
 import { ensureCanAccessFinancial } from "./financial.authorization.js";
-import type {} from "@sistema-igrejas/auth";
+import {
+  ASAAS_WEBHOOK_IP_RATE_LIMIT,
+  createFixedWindowIpRateLimit
+} from "@sistema-igrejas/auth";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AsaasClientError } from "./asaas.client.js";
@@ -205,70 +208,76 @@ export async function registerAsaasWebhookRoutes(
   prisma: PrismaClient,
   onPaymentStatusUpdate?: PaymentProviderStatusHandler
 ): Promise<void> {
-  app.post("/webhooks/asaas", async (request, reply) => {
-    const expectedWebhookToken =
-      process.env.ASAAS_WEBHOOK_TOKEN;
+  app.post(
+    "/webhooks/asaas",
+    {
+      preHandler: createFixedWindowIpRateLimit(ASAAS_WEBHOOK_IP_RATE_LIMIT)
+    },
+    async (request, reply) => {
+      const expectedWebhookToken =
+        process.env.ASAAS_WEBHOOK_TOKEN;
 
-    if (!expectedWebhookToken) {
-      await reply.code(500).send();
-      return;
-    }
+      if (!expectedWebhookToken) {
+        await reply.code(500).send();
+        return;
+      }
 
-    const receivedWebhookToken =
-      getAsaasWebhookToken(request);
+      const receivedWebhookToken =
+        getAsaasWebhookToken(request);
 
-    if (
-      !receivedWebhookToken ||
-      receivedWebhookToken !== expectedWebhookToken
-    ) {
-      await reply.code(401).send();
-      return;
-    }
+      if (
+        !receivedWebhookToken ||
+        receivedWebhookToken !== expectedWebhookToken
+      ) {
+        await reply.code(401).send();
+        return;
+      }
 
-    const body =
-      request.body as AsaasWebhookBody;
+      const body =
+        request.body as AsaasWebhookBody;
 
-    const payment =
-      body.payment ?? {};
+      const payment =
+        body.payment ?? {};
 
-    const paymentId =
-      typeof payment.id === "string"
-        ? payment.id
-        : null;
+      const paymentId =
+        typeof payment.id === "string"
+          ? payment.id
+          : null;
 
-    const paymentStatus =
-      mapAsaasPaymentStatus(
-        payment.status,
-        body.event
-      );
+      const paymentStatus =
+        mapAsaasPaymentStatus(
+          payment.status,
+          body.event
+        );
 
-    const reference =
-      parseAsaasExternalReference(
-        payment.externalReference
-      );
+      const reference =
+        parseAsaasExternalReference(
+          payment.externalReference
+        );
 
-    if (
-      paymentId &&
-      paymentStatus &&
-      reference &&
-      onPaymentStatusUpdate
-    ) {
-      await onPaymentStatusUpdate({
-        churchId: reference.churchId,
-        paymentId,
-        providerEvent:
-          typeof body.event === "string"
-            ? body.event
-            : null,
-        referenceId: reference.referenceId,
-        status: paymentStatus
+      if (
+        paymentId &&
+        paymentStatus &&
+        reference &&
+        onPaymentStatusUpdate
+      ) {
+        await onPaymentStatusUpdate({
+          churchId: reference.churchId,
+          paymentId,
+          providerEvent:
+            typeof body.event === "string"
+              ? body.event
+              : null,
+          referenceId: reference.referenceId,
+          status: paymentStatus
+        });
+      }
+
+      await reply.send({
+        received: true
       });
     }
-
-    await reply.send({
-      received: true
-    });
-  });
+  );
 }
 
 export async function registerAsaasRoutes(app: FastifyInstance, prisma: PrismaClient): Promise<void> {

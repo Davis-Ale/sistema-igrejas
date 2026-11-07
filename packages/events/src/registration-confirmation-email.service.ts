@@ -85,11 +85,17 @@ export async function sendRegistrationConfirmationEmail(
     return false;
   }
 
-  const resend = new Resend(apiKey);
+  const appBaseUrl = process.env.EVENTS_APP_BASE_URL?.trim();
 
-  const appBaseUrl =
-    process.env.EVENTS_APP_BASE_URL ??
-    "http://localhost:3003";
+  if (!appBaseUrl) {
+    console.error(
+      "EVENTS_APP_BASE_URL não configurada. E-mail de inscrição não enviado."
+    );
+
+    return false;
+  }
+
+  const resend = new Resend(apiKey);
 
   const appPath = input.event.publicSlug
     ? `/${encodeURIComponent(input.event.publicSlug)}#aplicativo?checkInToken=${encodeURIComponent(input.checkInToken)}`

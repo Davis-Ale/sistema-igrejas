@@ -86,15 +86,19 @@ export async function registerEventApiKeyRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.get("/events/api-keys", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
+  app.get(
+    "/events/api-keys",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
 
-      return await listEventApiKeys(prisma, churchId);
-    } catch (error) {
-      await sendApiKeyError(error, reply);
+        return await listEventApiKeys(prisma, churchId);
+      } catch (error) {
+        await sendApiKeyError(error, reply);
+      }
     }
-  });
+  );
 
   app.post(
     "/events/api-keys",

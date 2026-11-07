@@ -3,6 +3,10 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { ZodError } from "zod";
 import { loginSchema } from "./auth.schema.js";
 import { loginWithEmailAndPassword } from "./auth.service.js";
+import {
+  AUTH_LOGIN_IP_RATE_LIMIT,
+  createFixedWindowIpRateLimit
+} from "./ip-rate-limit.js";
 
 async function sendAuthError(error: unknown, reply: FastifyReply): Promise<void> {
   if (error instanceof ZodError) {
@@ -48,14 +52,20 @@ export async function registerAuthRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.post("/auth/login", async (request, reply) => {
-    try {
-      const input = loginSchema.parse(request.body);
-      const session = await loginWithEmailAndPassword(app, prisma, input);
+  app.post(
+    "/auth/login",
+    {
+      preHandler: createFixedWindowIpRateLimit(AUTH_LOGIN_IP_RATE_LIMIT)
+    },
+    async (request, reply) => {
+      try {
+        const input = loginSchema.parse(request.body);
+        const session = await loginWithEmailAndPassword(app, prisma, input);
 
-      await reply.code(200).send(session);
-    } catch (error) {
-      await sendAuthError(error, reply);
+        await reply.code(200).send(session);
+      } catch (error) {
+        await sendAuthError(error, reply);
+      }
     }
-  });
+  );
 }

@@ -113,15 +113,19 @@ export async function registerEventIntegrationRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
-  app.get("/events/integrations", async (request, reply) => {
-    try {
-      const churchId = getChurchId(request);
+  app.get(
+    "/events/integrations",
+    { preHandler: requireRole(["SUPER_ADMIN", "PASTOR"]) },
+    async (request, reply) => {
+      try {
+        const churchId = getChurchId(request);
 
-      return await listEventIntegrations(prisma, churchId);
-    } catch (error) {
-      await sendIntegrationError(error, reply);
+        return await listEventIntegrations(prisma, churchId);
+      } catch (error) {
+        await sendIntegrationError(error, reply);
+      }
     }
-  });
+  );
 
   app.post(
     "/events/integrations/:provider/connect",
