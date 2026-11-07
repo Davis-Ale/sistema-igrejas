@@ -1,18 +1,20 @@
+# Local PostgreSQL 17. Loopback only. Credentials from env; no Git defaults.
+# docker compose up -d
 services:
   postgres:
     image: postgres:17-alpine
     container_name: sistema_igrejas_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: sistema_igrejas
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - sistema_igrejas_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sistema_igrejas"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d sistema_igrejas"]
       interval: 10s
       timeout: 5s
       retries: 5
