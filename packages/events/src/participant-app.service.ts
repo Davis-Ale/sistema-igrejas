@@ -479,14 +479,54 @@ export async function getParticipantAppMapImage(prisma: PrismaClient, publicSlug
   return image;
 }
 
+async function resolveStoredCheckInToken(
+  prisma: PrismaClient,
+  publicSlug: string,
+  presentedToken: string
+) {
+  if (process.env.NODE_ENV === "production") {
+    return presentedToken;
+  }
+
+  const pin = process.env.LOCAL_PARTICIPANT_TEST_PIN?.trim();
+  const testSlug = process.env.LOCAL_PARTICIPANT_TEST_PUBLIC_SLUG?.trim();
+  const testEventId = process.env.LOCAL_PARTICIPANT_TEST_EVENT_ID?.trim();
+
+  if (!pin || !testSlug || !testEventId || presentedToken !== pin || publicSlug !== testSlug) {
+    return presentedToken;
+  }
+
+  const eligible = await prisma.registration.findFirst({
+    where: {
+      eventId: testEventId,
+      waitlistedAt: null,
+      status: { in: ["CONFIRMED", "CHECKED_IN"] },
+      paymentStatus: { in: ["PAID", "NOT_REQUIRED"] },
+      event: {
+        publicSlug,
+        isPublic: true,
+        deletedAt: null
+      }
+    },
+    select: { checkInToken: true }
+  });
+
+  return eligible?.checkInToken ?? presentedToken;
+}
+
 export async function getParticipantAppAccessByPublicSlug(
   prisma: PrismaClient,
   publicSlug: string,
   checkInToken: string
 ) {
+  const storedCheckInToken = await resolveStoredCheckInToken(
+    prisma,
+    publicSlug,
+    checkInToken
+  );
   const registration = await prisma.registration.findFirst({
     where: {
-      checkInToken,
+      checkInToken: storedCheckInToken,
       event: {
         publicSlug,
         isPublic: true,
@@ -560,7 +600,7 @@ export async function getParticipantAppAccessByPublicSlug(
               registrations: {
                 where: {
                   registration: {
-                    checkInToken
+                    checkInToken: storedCheckInToken
                   }
                 },
                 select: {

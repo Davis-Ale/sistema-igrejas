@@ -26,7 +26,9 @@ import {
 } from "./participant-app.service.js";
 
 const participantAppAccessSchema = z.object({
-  checkInToken: z.string().trim().min(10).max(200)
+  checkInToken: z.string().trim()
+    .min(process.env.NODE_ENV === "production" ? 10 : 6)
+    .max(200)
 });
 
 const publicSlugParamsSchema = z.object({
