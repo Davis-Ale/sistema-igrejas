@@ -139,11 +139,20 @@ export async function registerTicketRoutes(
           eventId: string;
         };
 
-        return await listEventTickets(
+        const listed = await listEventTickets(
           prisma,
           churchId,
           eventId
         );
+        const query = request.query as {
+          occupancy?: string;
+        };
+
+        if (query.occupancy === "1") {
+          return listed;
+        }
+
+        return listed.tickets;
       } catch (error) {
         await sendTicketError(error, reply);
       }

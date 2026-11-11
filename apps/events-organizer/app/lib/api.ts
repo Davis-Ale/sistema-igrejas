@@ -32,6 +32,46 @@ export type RegistrationPage = {
   items: RegistrationSummary[];
   pagination: { page: number; totalPages: number; total: number };
 };
+export type TicketOccupancy = {
+  registered: number;
+  sold: number;
+  pending: number;
+  total: number | null;
+  remaining: number | null;
+};
+export type EventTicketOccupancy = {
+  id: string;
+  name: string;
+  occupancy: TicketOccupancy;
+};
+export type EventTicketOccupancyPage = {
+  tickets: EventTicketOccupancy[];
+  occupancy: TicketOccupancy;
+};
+
+function isTicketOccupancy(value: unknown): value is TicketOccupancy {
+  if (!value || typeof value !== "object") return false;
+  const occupancy = value as TicketOccupancy;
+  return typeof occupancy.registered === "number" &&
+    typeof occupancy.sold === "number" &&
+    typeof occupancy.pending === "number" &&
+    (occupancy.total === null || typeof occupancy.total === "number") &&
+    (occupancy.remaining === null || typeof occupancy.remaining === "number");
+}
+
+function isEventTicketOccupancy(value: unknown): value is EventTicketOccupancy {
+  if (!value || typeof value !== "object") return false;
+  const ticket = value as EventTicketOccupancy;
+  return typeof ticket.id === "string" && typeof ticket.name === "string" &&
+    isTicketOccupancy(ticket.occupancy);
+}
+
+function isEventTicketOccupancyPage(value: unknown): value is EventTicketOccupancyPage {
+  if (!value || typeof value !== "object") return false;
+  const page = value as EventTicketOccupancyPage;
+  return Array.isArray(page.tickets) && page.tickets.every(isEventTicketOccupancy) &&
+    isTicketOccupancy(page.occupancy);
+}
 
 export function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
@@ -138,6 +178,24 @@ export async function loadEventCover(eventId: string, signal: AbortSignal) {
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiError(response.status, "EVENT_COVER_UNAVAILABLE", "Capa indisponível.");
   return response.blob();
+}
+
+export async function listEventTickets(eventId: string, signal: AbortSignal) {
+  const data = await request<unknown>(
+    `/api/events/${encodeURIComponent(eventId)}/tickets?occupancy=1`,
+    { signal }
+  );
+  if (!isEventTicketOccupancyPage(data)) {
+    throw new Error("A API retornou uma resposta inválida.");
+  }
+  return {
+    occupancy: data.occupancy,
+    tickets: data.tickets.map((ticket) => ({
+      id: ticket.id,
+      name: ticket.name,
+      occupancy: ticket.occupancy
+    }))
+  };
 }
 
 export function listRegistrations(

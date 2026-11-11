@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { ApiError, checkIn, listEvents, listRegistrations, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
+import { ApiError, checkIn, listEvents, listEventTickets, listRegistrations, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
 
 const originalFetch = globalThis.fetch;
 const originalBase = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -46,6 +46,32 @@ test("event listing forwards pagination, search, cookie credentials and cancella
   assert.equal(request.headers.get("Authorization"), null);
   assert.equal(request.signal, signal);
   assert.equal(request.cache, "no-store");
+});
+
+test("event tickets occupancy uses the existing tickets contract without churchId or pagination", async () => {
+  const occupancy = { registered: 6, sold: 3, pending: 2, total: 10, remaining: 6 };
+  const requests = respond({
+    tickets: [{
+      id: "ticket-vip",
+      name: "VIP",
+      occupancy: { registered: 4, sold: 2, pending: 1, total: 10, remaining: 6 }
+    }],
+    occupancy
+  });
+  const signal = new AbortController().signal;
+  assert.deepEqual(await listEventTickets("event-test", signal), {
+    occupancy,
+    tickets: [{
+      id: "ticket-vip",
+      name: "VIP",
+      occupancy: { registered: 4, sold: 2, pending: 1, total: 10, remaining: 6 }
+    }]
+  });
+  const url = new URL(requests[0].url);
+  assert.equal(url.pathname, "/api/events/event-test/tickets");
+  assert.equal(url.searchParams.get("occupancy"), "1");
+  assert.equal(requests[0].credentials, "include");
+  assert.doesNotMatch(requests[0].url, /churchId/);
 });
 
 test("participant lookup uses the existing registrations contract without churchId", async () => {

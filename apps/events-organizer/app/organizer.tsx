@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, checkIn, listEvents, listRegistrations, login, logout as logoutRequest, restoreSession, SESSION_KEY,
-  type CheckInResult, type EventPage, type EventSummary, type RegistrationPage, type RegistrationSummary, type Session } from "./lib/api";
+import { ApiError, checkIn, listEvents, listEventTickets, listRegistrations, login, logout as logoutRequest, restoreSession, SESSION_KEY,
+  type CheckInResult, type EventPage, type EventSummary, type EventTicketOccupancy, type EventTicketOccupancyPage, type RegistrationPage, type RegistrationSummary, type Session, type TicketOccupancy } from "./lib/api";
 import { canCheckIn, registrationBlock, statusLabel } from "./lib/registration-status";
 import QrScanner from "./qr-scanner";
 import { EventCover } from "./event-cover";
@@ -20,6 +20,10 @@ function participantName(item: Pick<RegistrationSummary, "person" | "visitor">) 
 function participantContact(item: Pick<RegistrationSummary, "person" | "visitor">) {
   const contact = item.person ?? item.visitor;
   return [contact?.email, contact?.phone].filter(Boolean).join(" · ");
+}
+
+function formatCount(value: number | null) {
+  return value === null ? "—" : new Intl.NumberFormat("pt-BR").format(value);
 }
 
 export default function Organizer({ initialEvent }: {
@@ -172,16 +176,33 @@ function Events({ session, initialEvent, onExpired }: {
 function CheckIn({ event, onBack, onExpired }: {
   event: Pick<EventSummary, "id" | "title">; onBack: () => void; onExpired: () => void;
 }) {
-  const [tab, setTab] = useState<"checkin" | "people">("checkin");
+  const [tab, setTab] = useState<"dashboard" | "tickets" | "checkin" | "people">("dashboard");
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<CheckInResult | null>(null);
+  const [tickets, setTickets] = useState<EventTicketOccupancyPage | null>(null);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
+  const [ticketsError, setTicketsError] = useState("");
+  const [ticketsReload, setTicketsReload] = useState(0);
   const pending = useRef(false);
   const mounted = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void listEventTickets(event.id, controller.signal).then((page) => {
+      if (controller.signal.aborted) return;
+      setTickets(page);
+      setTicketsError("");
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return;
+      if (error instanceof ApiError && error.status === 401) onExpired();
+      else setTicketsError(errorText(error));
+    }).finally(() => { if (!controller.signal.aborted) setTicketsLoading(false); });
+    return () => controller.abort();
+  }, [event.id, ticketsReload, onExpired]);
   const closeCamera = useCallback(() => setCamera(false), []);
   const readCode = useCallback((value: string) => {
     setCamera(false); setCode(value); setResult(null); setError("");
@@ -210,9 +231,15 @@ function CheckIn({ event, onBack, onExpired }: {
   return <section className="stack">
     <button className="text-button back" disabled={busy} onClick={onBack}>← Trocar evento</button>
     <EventCover eventId={event.id} title={event.title} banner onExpired={onExpired} />
-    <div><p className="eyebrow">Recepção</p><h1>{event.title}</h1>
-      <p className="muted">Leia o QR, digite o código ou localize o participante.</p></div>
+    <div><p className="eyebrow">{tab === "checkin" || tab === "people" ? "Recepção" : "Dashboard"}</p><h1>{event.title}</h1>
+      <p className="muted">{tab === "tickets" ? "Inscritos e vendidos por tipo de ingresso." :
+        tab === "checkin" || tab === "people" ? "Leia o QR, digite o código ou localize o participante." :
+        "Vagas, vendidos confirmados, restantes e pendentes."}</p></div>
     <div className="tabs" role="tablist" aria-label="Operação do evento">
+      <button type="button" role="tab" aria-selected={tab === "dashboard"} className={tab === "dashboard" ? "tab active" : "tab"}
+        disabled={busy} onClick={() => { setTab("dashboard"); setCamera(false); }}>Dashboard</button>
+      <button type="button" role="tab" aria-selected={tab === "tickets"} className={tab === "tickets" ? "tab active" : "tab"}
+        disabled={busy} onClick={() => { setTab("tickets"); setCamera(false); }}>Por ingresso</button>
       <button type="button" role="tab" aria-selected={tab === "checkin"} className={tab === "checkin" ? "tab active" : "tab"}
         disabled={busy} onClick={() => { setTab("checkin"); setCamera(false); }}>Check-in</button>
       <button type="button" role="tab" aria-selected={tab === "people"} className={tab === "people" ? "tab active" : "tab"}
@@ -224,7 +251,11 @@ function CheckIn({ event, onBack, onExpired }: {
       <p className="participant">{result.person?.name || result.visitor?.name || "Nome não informado"}</p>
       <p><span className="badge">Presente</span></p>
       <button onClick={() => setResult(null)}>Próximo participante</button>
-    </div> : tab === "people" ? <People eventId={event.id} busy={busy}
+    </div> : tab === "dashboard" ? <EventDashboard occupancy={tickets?.occupancy ?? null} loading={ticketsLoading} error={ticketsError}
+      onRetry={() => { setTicketsLoading(true); setTicketsError(""); setTicketsReload((value) => value + 1); }} />
+    : tab === "tickets" ? <TicketOccupancyList tickets={tickets?.tickets ?? null} loading={ticketsLoading} error={ticketsError}
+      onRetry={() => { setTicketsLoading(true); setTicketsError(""); setTicketsReload((value) => value + 1); }} />
+    : tab === "people" ? <People eventId={event.id} busy={busy}
       onExpired={onExpired} onCheckIn={async (checkInToken) => {
         if (pending.current) return;
         pending.current = true;
@@ -256,6 +287,53 @@ function CheckIn({ event, onBack, onExpired }: {
       </form>
     </>}
     {tab === "people" && error && !result ? <p className="error" role="alert">{error}</p> : null}
+  </section>;
+}
+
+function OccupancyStatus({ loading, error, onRetry }: {
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  if (loading) return <p role="status">Carregando…</p>;
+  if (!error) return null;
+  return <div className="error" role="alert"><p>{error}</p>
+    <button className="secondary" onClick={onRetry}>Tentar novamente</button></div>;
+}
+
+function EventDashboard({ occupancy, loading, error, onRetry }: {
+  occupancy: TicketOccupancy | null;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  return <section className="stack">
+    <OccupancyStatus loading={loading} error={error} onRetry={onRetry} />
+    {!loading && !error && occupancy ? <div className="stats">
+      <article className="stat"><span>Total de vagas</span><strong>{formatCount(occupancy.total)}</strong></article>
+      <article className="stat"><span>Vendidos</span><strong>{formatCount(occupancy.sold)}</strong></article>
+      <article className="stat"><span>Restantes</span><strong>{formatCount(occupancy.remaining)}</strong></article>
+      <article className="stat"><span>Pendentes</span><strong>{formatCount(occupancy.pending)}</strong></article>
+    </div> : null}
+  </section>;
+}
+
+function TicketOccupancyList({ tickets, loading, error, onRetry }: {
+  tickets: EventTicketOccupancy[] | null;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  return <section className="stack">
+    <OccupancyStatus loading={loading} error={error} onRetry={onRetry} />
+    {!loading && !error && tickets ? (
+      tickets.length === 0 ? <p className="panel">Nenhum ingresso cadastrado.</p> :
+        <ul className="ticket-stats">{tickets.map((ticket) => <li key={ticket.id} className="ticket-stat">
+          <strong>{ticket.name}</strong>
+          <span>Inscritos {formatCount(ticket.occupancy.registered)}</span>
+          <span>Vendidos {formatCount(ticket.occupancy.sold)}</span>
+        </li>)}</ul>
+    ) : null}
   </section>;
 }
 

@@ -25,3 +25,20 @@ test("organizer keeps login, event selection, QR check-in and participant lookup
   assert.doesNotMatch(app, /participant-event-app/);
   assert.doesNotMatch(app, /ADR Solutions/);
 });
+
+test("organizer opens the event dashboard without summing participant pages", () => {
+  assert.match(app, /useState<"dashboard" \| "tickets" \| "checkin" \| "people">\("dashboard"\)/);
+  assert.match(app, />Dashboard</);
+  assert.match(app, />Por ingresso</);
+  assert.match(app, />Check-in</);
+  assert.match(app, />Participantes</);
+  assert.match(app, /listEventTickets/);
+  assert.match(app, /Total de vagas/);
+  assert.match(app, /Vendidos/);
+  assert.match(app, /Restantes/);
+  assert.match(app, /Pendentes/);
+  assert.match(app, /Inscritos /);
+  assert.match(app, /occupancy=\{tickets\?\.occupancy/);
+  assert.doesNotMatch(app, /summarizeEventTicketOccupancy/);
+  assert.doesNotMatch(app, /listRegistrations\([\s\S]*occupancy=/);
+});

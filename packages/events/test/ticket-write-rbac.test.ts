@@ -139,6 +139,11 @@ async function harness() {
         };
       }
     },
+    registration: {
+      async groupBy() {
+        return [];
+      }
+    },
     ticketBatch: {
       async findFirst({
         where
@@ -239,6 +244,17 @@ test("LEADER is denied ticket writes and cannot mutate another church", async ()
       headers: { authorization: `Bearer ${h.token(accounts.leader)}` }
     });
     assert.equal(list.statusCode, 200);
+    assert.equal(Array.isArray(list.json()), true);
+
+    const occupancy = await h.app.inject({
+      method: "GET",
+      url: `/api/events/${eventA}/tickets?occupancy=1`,
+      headers: { authorization: `Bearer ${h.token(accounts.leader)}` }
+    });
+    assert.equal(occupancy.statusCode, 200);
+    assert.equal(Array.isArray(occupancy.json()), false);
+    assert.equal(Array.isArray(occupancy.json().tickets), true);
+    assert.equal(occupancy.json().occupancy.sold, 0);
 
     for (const route of writeRoutes) {
       const denied = await h.app.inject({
