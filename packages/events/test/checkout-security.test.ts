@@ -281,6 +281,25 @@ test("real Fastify logs omit private/legacy tokens, PII, query/path secrets and 
   }
 });
 
+test("checkout origin denial does not block organizer login or other product routes", async () => {
+  for (const factory of factories) {
+    const h = await harness(factory);
+    h.app.post("/auth/login", async () => ({ ok: true }));
+    h.app.get("/health", async () => ({ ok: true }));
+    h.app.post(route, async () => ({ ok: true }));
+    try {
+      const lan = { origin: "http://192.168.1.7:3004" };
+      assert.equal((await h.app.inject({ method: "POST", url: "/auth/login", headers: lan, payload: {} })).statusCode, 200);
+      assert.equal((await h.app.inject({ method: "GET", url: "/health", headers: lan })).statusCode, 200);
+      const denied = await h.app.inject({ method: "POST", url: path, headers: lan, payload: {} });
+      assert.equal(denied.statusCode, 403);
+      assert.equal(denied.json().error, "ORIGIN_DENIED");
+      assert.equal((await h.app.inject({ method: "POST", url: path, headers: { origin: "https://evil.invalid" }, payload: {} })).statusCode, 403);
+      assert.equal((await h.app.inject({ method: "POST", url: path, headers: { origin: config().origins[0]! }, payload: {} })).statusCode, 200);
+    } finally { await h.app.close(); }
+  }
+});
+
 test("administrative checkout still requires JWT and is limited before authorization or business work", async () => {
   for (const factory of factories) {
     const h = await harness(factory, { ...config(), ipLimit: 2 });
@@ -390,7 +409,8 @@ test("builders install exclusive v2 with operational security and no activation 
     assert.equal(app.includes("registerExclusiveCheckoutV2"), true);
     assert.equal(app.includes("checkout-v2.prepared"), true);
     assert.equal(app.includes("registerPublicEventRoutes("), false);
-    assert.equal(app.includes("deleteAsaasPayment("), true);
+    assert.equal(app.includes("finalizeProviderTransactionCancellation("), true);
+    assert.equal(app.includes("deleteAsaasPayment("), server === "api-br");
     for (const marker of ["checkout-closure.prepared", "registerClosedPublicCheckout", "CHECKOUT_V2_ENABLED", "origin: true"]) {
       assert.equal(app.includes(marker), false);
     }

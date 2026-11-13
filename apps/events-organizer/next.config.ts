@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const apiOrigin = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3002").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["192.168.1.7"],
   poweredByHeader: false,
   async rewrites() {
     return [

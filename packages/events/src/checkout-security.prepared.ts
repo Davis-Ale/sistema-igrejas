@@ -162,7 +162,7 @@ export function prepareCheckoutSecurity(config: CheckoutSecurityConfig, store: C
       app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "NOT_FOUND" }));
       app.addHook("onRequest", async (request, reply) => {
         const origin = request.headers.origin;
-        if (origin !== undefined && !origins.has(origin)) return reply.code(403).send({ error: "ORIGIN_DENIED" });
+        if (critical(request) && origin !== undefined && !origins.has(origin)) return reply.code(403).send({ error: "ORIGIN_DENIED" });
         if (!critical(request) || request.method === "OPTIONS") return;
         // The existing backend remains responsible for JWT/RBAC and capability
         // validation. CORS, quotas and this gate never authorize a registration.

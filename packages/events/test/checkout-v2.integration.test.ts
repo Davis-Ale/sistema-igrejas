@@ -273,7 +273,8 @@ test("both production builders import the exclusive v2 bundle without a flag or 
     assert.equal(text.includes("prepareCheckoutV2") || text.includes("checkout-v2.prepared"), true);
     assert.equal(text.includes("registerPublicEventRoutes("), false);
     assert.equal(text.includes("CHECKOUT_V2_ENABLED"), false);
-    assert.equal(text.includes("deleteAsaasPayment("), true);
+    assert.equal(text.includes("finalizeProviderTransactionCancellation("), true);
+    assert.equal(text.includes("deleteAsaasPayment("), server === "api-br");
     const staged = await readFile(new URL(`../../../apps/${server}/src/checkout-v2.prepared.ts`, import.meta.url), "utf8");
     assert.equal(staged.includes("prepareCheckoutV2Routes(prisma"), true);
     assert.equal(staged.includes("createAsaasChargeForExistingTransaction"), false);
