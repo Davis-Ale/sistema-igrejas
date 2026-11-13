@@ -1,0 +1,28 @@
+# Loopback checkout Redis for remote SSH development.
+# docker compose -f docker-compose.yml -f docker-compose.remote-dev.yml up -d
+# Do not publish app ports. Do not start docker-compose.cloud.yml.
+services:
+  checkout-redis:
+    image: redis:7-alpine
+    container_name: sistema_igrejas_checkout_redis
+    restart: unless-stopped
+    environment:
+      CHECKOUT_REDIS_PASSWORD: ${CHECKOUT_REDIS_PASSWORD:?CHECKOUT_REDIS_PASSWORD is required}
+      CHECKOUT_REDIS_RUNTIME_PASSWORD: ${CHECKOUT_REDIS_RUNTIME_PASSWORD:?CHECKOUT_REDIS_RUNTIME_PASSWORD is required}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - sistema_igrejas_checkout_redis_data:/data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        umask 077
+        test -n "$$CHECKOUT_REDIS_PASSWORD"
+        test -n "$$CHECKOUT_REDIS_RUNTIME_PASSWORD"
+        printf 'user default on >%s ~* &* +@all\nuser checkout_runtime on >%s ~events:checkout-security:{checkout}:* +ping +get +incr +pexpire +pttl +eval\n' \
+          "$$CHECKOUT_REDIS_PASSWORD" "$$CHECKOUT_REDIS_RUNTIME_PASSWORD" > /data/users.acl
+        exec redis-server --bind 0.0.0.0 --protected-mode yes --requirepass "$$CHECKOUT_REDIS_PASSWORD" \
+          --aclfile /data/users.acl --dir /data --appendonly yes --appendfsync always --save ""
+
+volumes:
+  sistema_igrejas_checkout_redis_data:
