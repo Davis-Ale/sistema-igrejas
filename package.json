@@ -13,5 +13,17 @@
   "engines": {
     "node": ">=24.0.0",
     "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.30.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "msgpackr-extract",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

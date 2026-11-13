@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@prisma/client": "latest",
+    "@sistema-igrejas/auth": "workspace:*",
+    "@sistema-igrejas/events": "workspace:*",
     "fastify": "latest",
     "zod": "latest"
   },

@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@prisma/client": "latest",
+    "@sistema-igrejas/auth": "workspace:*",
+    "@sistema-igrejas/database": "workspace:*",
     "fastify": "latest",
     "qrcode": "^1.5.4",
     "resend": "^6.18.1",

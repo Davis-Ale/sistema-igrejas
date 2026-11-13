@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "lint": "tsc -p tsconfig.json --noEmit" },
+  "scripts": {
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
   "dependencies": {
     "@prisma/client": "latest",
+    "@sistema-igrejas/auth": "workspace:*",
     "fastify": "latest",
     "zod": "latest"
   },
-  "devDependencies": { "typescript": "latest" }
+  "devDependencies": {
+    "typescript": "latest"
+  }
 }
