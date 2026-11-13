@@ -374,6 +374,10 @@ importers:
       typescript:
         specifier: latest
         version: 6.0.3
+    optionalDependencies:
+      '@img/sharp-wasm32':
+        specifier: 0.34.5
+        version: 0.34.5
 
   packages/financial:
     dependencies:
@@ -5271,7 +5275,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.34.5':
     dependencies:
-      '@emnapi/runtime': 1.10.0
+      '@emnapi/runtime': 1.11.3
     optional: true
 
   '@img/sharp-wasm32@0.35.4':
