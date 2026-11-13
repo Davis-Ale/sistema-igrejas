@@ -14,11 +14,8 @@
     "fastify": "latest",
     "qrcode": "^1.5.4",
     "resend": "^6.18.1",
-    "sharp": "0.34.5",
+    "sharp": "0.33.5",
     "zod": "latest"
-  },
-  "optionalDependencies": {
-    "@img/sharp-wasm32": "0.34.5"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
