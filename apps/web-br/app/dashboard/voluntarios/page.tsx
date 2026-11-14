@@ -5,6 +5,7 @@ import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
+import { VolunteerSchedulePanel } from "./volunteer-schedule-panel";
 
 type VolunteerStatus = "IN_FORMATION" | "ELIGIBLE" | "ACTIVE" | "SUSPENDED";
 
@@ -246,6 +247,8 @@ export default function VoluntariosPage() {
               {isSubmitting ? "Salvando..." : "Atualizar status"}
             </button>
           </form>
+
+          <VolunteerSchedulePanel apiBaseUrl={API_BASE_URL} volunteers={volunteers} />
 
           {error ? (
             <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>

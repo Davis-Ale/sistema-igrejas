@@ -10,6 +10,7 @@ import {
   listVolunteers,
   updateVolunteerStatus
 } from "./volunteer.service.js";
+import { registerVolunteerScheduleRoutes } from "./volunteer-schedule.routes.js";
 
 function getChurchId(request: FastifyRequest): string {
   if (!request.churchId) {
@@ -86,6 +87,7 @@ export async function registerVolunteerRoutes(
   app: FastifyInstance,
   prisma: PrismaClient
 ): Promise<void> {
+  await registerVolunteerScheduleRoutes(app, prisma);
   app.get("/volunteers", { preHandler: requireRole(["SUPER_ADMIN", "PASTOR", "LEADER"]) }, async (request, reply) => {
     try {
       const churchId = getChurchId(request);

@@ -22,6 +22,12 @@ enum VolunteerStatus {
   SUSPENDED
 }
 
+enum VolunteerAssignmentStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
 enum CellStatus {
   ACTIVE
   ARCHIVED
@@ -155,6 +161,10 @@ model Church {
   cellMeetings     CellMeeting[]
   cellAttendances  CellAttendance[]
   volunteerLogs    VolunteerLog[]
+  volunteerSchedules VolunteerSchedule[]
+  volunteerScheduleSlots VolunteerScheduleSlot[]
+  volunteerAssignments VolunteerAssignment[]
+  volunteerUnavailabilities VolunteerUnavailability[]
   events           Event[]
   registrations    Registration[]
   eventTickets     EventTicket[]
@@ -268,6 +278,8 @@ model Person {
   ministryMemberships MinistryMember[]
   recordedCellMeetings CellMeeting[]    @relation("CellMeetingRecorder")
   cellAttendances      CellAttendance[] @relation("CellAttendancePerson")
+  volunteerAssignments VolunteerAssignment[] @relation("VolunteerAssignmentPerson")
+  volunteerUnavailabilities VolunteerUnavailability[] @relation("VolunteerUnavailabilityPerson")
 
   @@unique([churchId, id])
   @@index([churchId])
@@ -293,6 +305,7 @@ model Ministry {
   church  Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
   leader  Person           @relation("MinistryLeader", fields: [churchId, leaderId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
   members MinistryMember[]
+  schedules VolunteerSchedule[]
 
   @@unique([churchId, id])
   @@index([churchId, status])
@@ -494,6 +507,75 @@ model VolunteerLog {
   @@index([churchId, changedBy])
   @@index([churchId, status])
   @@index([churchId, at])
+}
+
+model VolunteerSchedule {
+  id          String   @id @default(cuid())
+  churchId    String
+  ministryId  String
+  serviceDate DateTime @db.Date
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  church   Church                  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  ministry Ministry                @relation(fields: [churchId, ministryId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  slots    VolunteerScheduleSlot[]
+
+  @@unique([churchId, id])
+  @@index([churchId, ministryId, serviceDate])
+  @@index([churchId, serviceDate])
+}
+
+model VolunteerScheduleSlot {
+  id         String @id @default(cuid())
+  churchId   String
+  scheduleId String
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  church      Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  schedule    VolunteerSchedule     @relation(fields: [churchId, scheduleId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  assignments VolunteerAssignment[]
+
+  @@unique([churchId, id])
+  @@unique([churchId, scheduleId, name])
+  @@index([churchId, scheduleId])
+}
+
+model VolunteerAssignment {
+  churchId  String
+  slotId    String
+  personId  String
+  status    VolunteerAssignmentStatus @default(PENDING)
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+
+  church Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  slot   VolunteerScheduleSlot @relation(fields: [churchId, slotId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  person Person                @relation("VolunteerAssignmentPerson", fields: [churchId, personId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([churchId, slotId, personId])
+  @@index([churchId, personId, status])
+}
+
+model VolunteerUnavailability {
+  id          String   @id @default(cuid())
+  churchId    String
+  personId    String
+  serviceDate DateTime @db.Date
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  person Person @relation("VolunteerUnavailabilityPerson", fields: [churchId, personId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([churchId, id])
+  @@index([churchId, personId, serviceDate])
 }
 
 model Event {
