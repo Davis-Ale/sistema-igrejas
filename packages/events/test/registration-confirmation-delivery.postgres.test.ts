@@ -131,10 +131,11 @@ test("concurrent PAID webhook replays post confirmation email once", async () =>
   await confirm(f);
   assert.equal(await sendPendingRegistrationConfirmationEmail(prisma, f.scope.churchId, f.scope, async () => false), false);
   assert.deepEqual(await stages(f.scope), ["DELIVERY_INTENT"]);
-  const savedKey = process.env.RESEND_API_KEY, savedFrom = process.env.EVENTS_EMAIL_FROM, savedFetch = globalThis.fetch;
+  const savedKey = process.env.RESEND_API_KEY, savedFrom = process.env.EVENTS_EMAIL_FROM, savedAppUrl = process.env.EVENTS_APP_BASE_URL, savedFetch = globalThis.fetch;
   let emails = 0;
   process.env.RESEND_API_KEY = "re_synthetic_webhook";
   process.env.EVENTS_EMAIL_FROM = "Synthetic <test@example.invalid>";
+  process.env.EVENTS_APP_BASE_URL = "https://participant.example.invalid";
   globalThis.fetch = async input => {
     const url = String(input);
     if (url === "https://api.resend.com/emails") {
@@ -157,6 +158,7 @@ test("concurrent PAID webhook replays post confirmation email once", async () =>
     globalThis.fetch = savedFetch;
     if (savedKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = savedKey;
     if (savedFrom === undefined) delete process.env.EVENTS_EMAIL_FROM; else process.env.EVENTS_EMAIL_FROM = savedFrom;
+    if (savedAppUrl === undefined) delete process.env.EVENTS_APP_BASE_URL; else process.env.EVENTS_APP_BASE_URL = savedAppUrl;
   }
 });
 
