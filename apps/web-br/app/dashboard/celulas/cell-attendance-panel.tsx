@@ -200,22 +200,36 @@ export function CellAttendancePanel({ apiBaseUrl, cells }: CellAttendancePanelPr
       ) : null}
 
       {members.length > 0 ? (
-        <div style={{ display: "grid", gap: "10px" }}>
-          {members.map((member) => (
-            <label key={member.id} style={{ alignItems: "center", color: "#e2e8f0", display: "grid", gap: "12px", gridTemplateColumns: "1fr 180px" }}>
-              <span>{member.name}</span>
-              <select
-                onChange={(event) => setStatuses((current) => ({ ...current, [member.id]: event.target.value as AttendanceStatus | "" }))}
-                required
-                style={fieldStyle}
-                value={statuses[member.id] ?? ""}
-              >
-                <option value="">Selecione</option>
-                <option value="PRESENT">Presente</option>
-                <option value="ABSENT">Ausente</option>
-              </select>
-            </label>
-          ))}
+        <div style={{ display: "grid", gap: "8px" }}>
+          {members.map((member) => {
+            const current = statuses[member.id] ?? "";
+            return (
+              <div key={member.id} style={{ alignItems: "center", display: "grid", gap: "12px", gridTemplateColumns: "1fr auto" }}>
+                <span style={{ color: "#e2e8f0" }}>{member.name}</span>
+                <span style={{ display: "flex", gap: "8px" }}>
+                  {(["PRESENT", "ABSENT"] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setStatuses((currentStatuses) => ({ ...currentStatuses, [member.id]: status }))}
+                      style={{
+                        background: current === status ? "rgba(37, 99, 235, 0.28)" : "transparent",
+                        border: current === status ? "1px solid rgba(96, 165, 250, 0.7)" : "1px solid rgba(148, 163, 184, 0.28)",
+                        borderRadius: "12px",
+                        color: status === "PRESENT" ? "#bbf7d0" : "#fecaca",
+                        cursor: "pointer",
+                        font: "inherit",
+                        fontWeight: 800,
+                        padding: "8px 12px"
+                      }}
+                      type="button"
+                    >
+                      {status === "PRESENT" ? "Presente" : "Ausente"}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
@@ -251,14 +265,29 @@ export function CellAttendancePanel({ apiBaseUrl, cells }: CellAttendancePanelPr
 
       {cell ? (
         <div style={{ display: "grid", gap: "8px" }}>
-          <strong style={{ color: "#ffffff" }}>Encontros registrados</strong>
+          <h3 style={{ color: "#ffffff", fontSize: "16px", margin: 0 }}>Encontros</h3>
           {isLoading ? <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando frequência...</p> : null}
           {!isLoading && meetings.length === 0 ? <p style={{ color: "#cbd5e1", margin: 0 }}>Nenhum encontro registrado.</p> : null}
-          {meetings.map((meeting) => (
-            <p key={meeting.id} style={{ color: "#e2e8f0", margin: 0 }}>
-              {meeting.occurredOn.split("-").reverse().join("/")} · {meeting.presentCount} presentes · {meeting.absentCount} ausentes
-            </p>
-          ))}
+          {meetings.length > 0 ? (
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  {["Data", "Presentes", "Ausentes"].map((label) => (
+                    <th key={label} style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 800, padding: "0 12px 8px 0", textAlign: "left" }}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {meetings.map((meeting) => (
+                  <tr key={meeting.id} style={{ borderTop: "1px solid rgba(148, 163, 184, 0.16)" }}>
+                    <td style={{ color: "#e2e8f0", padding: "10px 12px 10px 0" }}>{meeting.occurredOn.split("-").reverse().join("/")}</td>
+                    <td style={{ color: "#bbf7d0", padding: "10px 12px 10px 0" }}>{meeting.presentCount}</td>
+                    <td style={{ color: "#fecaca", padding: "10px 12px 10px 0" }}>{meeting.absentCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
         </div>
       ) : null}
     </form>

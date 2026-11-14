@@ -343,7 +343,7 @@ export default function CelulasPage() {
             padding: "28px"
           }}
         >
-          <div>
+          <div style={{ display: "grid", gap: "18px" }}>
             <Link
               href="/dashboard"
               style={{
@@ -351,15 +351,55 @@ export default function CelulasPage() {
                 display: "inline-flex",
                 fontSize: "14px",
                 fontWeight: 800,
-                marginBottom: "22px",
                 textDecoration: "none"
               }}
             >
-              ← Voltar ao painel
+              Voltar ao painel
             </Link>
-
-
+            <h1 style={{ fontSize: "32px", margin: 0 }}>Células</h1>
           </div>
+
+          <section
+            style={{
+              background: "rgba(15, 23, 42, 0.58)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              borderRadius: "22px",
+              display: "grid",
+              gap: "14px",
+              padding: "22px"
+            }}
+          >
+            <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>Células ativas</h2>
+            {isLoading ? <p style={{ color: "#cbd5e1", margin: 0 }}>Carregando células...</p> : null}
+            {!isLoading && cells.length === 0 ? <p style={{ color: "#cbd5e1", margin: 0 }}>Nenhuma célula cadastrada.</p> : null}
+            {!isLoading && cells.length > 0 ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", minWidth: "720px", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      {["Bairro", "Perfil", "Dia", "Horário", "Líder", "Membros"].map((label) => (
+                        <th key={label} style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 800, padding: "0 12px 10px 0", textAlign: "left" }}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cells.map((cell) => (
+                      <tr key={cell.id} style={{ borderTop: "1px solid rgba(148, 163, 184, 0.16)" }}>
+                        <td style={{ color: "#ffffff", fontWeight: 800, padding: "12px 12px 12px 0" }}>{cell.neighborhood || cell.region}</td>
+                        <td style={{ color: "#e2e8f0", padding: "12px 12px 12px 0" }}>{cell.profile}</td>
+                        <td style={{ color: "#e2e8f0", padding: "12px 12px 12px 0" }}>{cell.meetDay}</td>
+                        <td style={{ color: "#e2e8f0", padding: "12px 12px 12px 0" }}>{cell.meetTime}</td>
+                        <td style={{ color: "#e2e8f0", padding: "12px 12px 12px 0" }}>{cell.leader.name}</td>
+                        <td style={{ color: "#cbd5e1", padding: "12px 12px 12px 0" }}>{cell.people.length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </section>
+
+          <CellAttendancePanel apiBaseUrl={API_BASE_URL} cells={cells} />
 
           <form
             onSubmit={handleSaveCell}
@@ -606,40 +646,6 @@ export default function CelulasPage() {
                   </select>
                 </label>
 
-                <label
-                  style={{
-                    color: "#cbd5e1",
-                    display: "grid",
-                    fontSize: "14px",
-                    fontWeight: 800,
-                    gap: "8px"
-                  }}
-                >
-                  Telefone do novo líder
-                  <input
-                    readOnly
-                    style={{
-                      border: "1px solid rgba(148, 163, 184, 0.38)",
-                      borderRadius: "14px",
-                      boxSizing: "border-box",
-                      font: "inherit",
-                      height: "48px",
-                      padding: "0 14px",
-                      width: "100%"
-                    }}
-                    type="text"
-                    value={
-                      selectedLeaderId
-                        ? formatBrazilPhone(
-                            members.find(
-                              (member) =>
-                                member.id === selectedLeaderId
-                            )?.phone
-                          )
-                        : ""
-                    }
-                  />
-                </label>
               </div>
 
 
@@ -678,8 +684,6 @@ export default function CelulasPage() {
               {isUpdatingLeader ? "Alterando..." : "Alterar líder"}
             </button>
           </form>
-
-          <CellAttendancePanel apiBaseUrl={API_BASE_URL} cells={cells} />
 
           {error ? (
             <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
