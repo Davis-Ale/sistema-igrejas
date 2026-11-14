@@ -17,3 +17,6 @@ export * from "./cell-status.routes.js";
 export * from "./cell-status.service.js";
 export * from "./cell-delete.routes.js";
 export * from "./cell-delete.service.js";
+export * from "./cell-attendance.routes.js";
+export * from "./cell-attendance.schema.js";
+export * from "./cell-attendance.service.js";

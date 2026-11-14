@@ -5,6 +5,7 @@ import { churchApiBaseUrl, credentialedFetch } from "../../lib/session-client";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { DashboardAuthGuard } from "../dashboard-auth-guard";
+import { CellAttendancePanel } from "./cell-attendance-panel";
 import { CellEditList } from "./cell-edit-list";
 import type { CellListItem } from "./cell-list-api";
 import { CellLocationFields } from "./cell-location-fields";
@@ -677,6 +678,8 @@ export default function CelulasPage() {
               {isUpdatingLeader ? "Alterando..." : "Alterar líder"}
             </button>
           </form>
+
+          <CellAttendancePanel apiBaseUrl={API_BASE_URL} cells={cells} />
 
           {error ? (
             <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>

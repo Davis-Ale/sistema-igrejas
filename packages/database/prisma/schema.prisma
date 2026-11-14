@@ -27,6 +27,11 @@ enum CellStatus {
   ARCHIVED
 }
 
+enum CellAttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
 enum VisitorStatus {
   NEW
   CONTACTED
@@ -147,6 +152,8 @@ model Church {
   trailProgress    TrailProgress[]
   celulas          Celula[]
   memberships      Membership[]
+  cellMeetings     CellMeeting[]
+  cellAttendances  CellAttendance[]
   volunteerLogs    VolunteerLog[]
   events           Event[]
   registrations    Registration[]
@@ -259,6 +266,8 @@ model Person {
   userAccount        UserAccount?
   ledMinistries      Ministry[]       @relation("MinistryLeader")
   ministryMemberships MinistryMember[]
+  recordedCellMeetings CellMeeting[]    @relation("CellMeetingRecorder")
+  cellAttendances      CellAttendance[] @relation("CellAttendancePerson")
 
   @@unique([churchId, id])
   @@index([churchId])
@@ -392,7 +401,9 @@ model Celula {
 
   people      Person[]     @relation("PersonCelula")
   memberships Membership[]
+  meetings    CellMeeting[]
 
+  @@unique([churchId, id])
   @@index([churchId])
   @@index([churchId, campusId])
   @@index([churchId, leaderId])
@@ -424,6 +435,42 @@ model Membership {
   @@index([churchId, groupId])
   @@index([churchId, approvedBy])
   @@index([churchId, canVolunteer])
+}
+
+model CellMeeting {
+  id         String   @id @default(cuid())
+  churchId   String
+  cellId     String
+  occurredOn DateTime @db.Date
+  recordedBy String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  church   Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  cell     Celula           @relation(fields: [churchId, cellId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  recorder Person           @relation("CellMeetingRecorder", fields: [churchId, recordedBy], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  marks    CellAttendance[]
+
+  @@unique([churchId, id])
+  @@unique([churchId, cellId, occurredOn])
+  @@index([churchId, cellId])
+  @@index([churchId, recordedBy])
+}
+
+model CellAttendance {
+  churchId  String
+  meetingId String
+  personId  String
+  status    CellAttendanceStatus
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  church  Church      @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  meeting CellMeeting @relation(fields: [churchId, meetingId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  person  Person      @relation("CellAttendancePerson", fields: [churchId, personId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([churchId, meetingId, personId])
+  @@index([churchId, personId])
 }
 
 model VolunteerLog {

@@ -16,7 +16,8 @@ export async function deleteCellSafely(
         _count: {
           select: {
             people: true,
-            memberships: true
+            memberships: true,
+            meetings: true
           }
         }
       }
@@ -28,7 +29,8 @@ export async function deleteCellSafely(
 
     if (
       cell._count.people > 0 ||
-      cell._count.memberships > 0
+      cell._count.memberships > 0 ||
+      cell._count.meetings > 0
     ) {
       throw new Error("CELL_HAS_HISTORY");
     }

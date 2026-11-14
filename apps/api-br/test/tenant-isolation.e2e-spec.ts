@@ -27,7 +27,7 @@ describe("General tenant isolation", () => {
 
   beforeEach(async () => {
     records = Object.fromEntries([
-      "church", "userAccount", "campus", "person", "visitor", "celula", "membership", "trail", "trailStage",
+      "church", "userAccount", "campus", "person", "visitor", "celula", "membership", "cellMeeting", "cellAttendance", "trail", "trailStage",
       "trailProgress", "volunteerLog", "event", "registration", "eventPayment", "eventOrder", "transaction",
       "eventsFinancialOperation", "eventFormAnswer", "eventFormFieldTicket", "eventFormFieldOption", "eventFormField",
       "eventDiscount", "ticketBatch", "eventTicket"
@@ -48,8 +48,11 @@ describe("General tenant isolation", () => {
 
     const relations: Record<string, Record<string, [string, string, string]>> = {
       userAccount: { person: ["person", "personId", "id"] },
-      person: { campus: ["campus", "campusId", "id"], celula: ["celula", "celulaId", "id"], trailStage: ["trailStage", "trailStageId", "id"] },
-      celula: { leader: ["person", "leaderId", "id"], people: ["person", "id", "celulaId"], memberships: ["membership", "id", "groupId"] },
+      person: {
+        campus: ["campus", "campusId", "id"], celula: ["celula", "celulaId", "id"], trailStage: ["trailStage", "trailStageId", "id"],
+        recordedCellMeetings: ["cellMeeting", "id", "recordedBy"], cellAttendances: ["cellAttendance", "id", "personId"]
+      },
+      celula: { leader: ["person", "leaderId", "id"], people: ["person", "id", "celulaId"], memberships: ["membership", "id", "groupId"], meetings: ["cellMeeting", "id", "cellId"] },
       membership: { person: ["person", "personId", "id"], celula: ["celula", "groupId", "id"], approver: ["person", "approvedBy", "id"] },
       trail: { stages: ["trailStage", "id", "trailId"] },
       trailStage: { trail: ["trail", "trailId", "id"] },

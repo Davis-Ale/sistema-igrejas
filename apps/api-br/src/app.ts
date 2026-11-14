@@ -36,6 +36,7 @@ import {
   registerFinancialRoutes
 } from "@sistema-igrejas/financial";
 import {
+  registerCellAttendanceRoutes,
   registerCellDeleteRoutes,
   registerCellListRoutes,
   registerCellLocationRoutes,
@@ -497,6 +498,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await registerAsaasRoutes(protectedRoutes, prisma);
       await registerCellListRoutes(protectedRoutes, prisma);
       await registerCellRoutes(protectedRoutes, prisma);
+      await registerCellAttendanceRoutes(protectedRoutes, prisma);
       await registerCellStatusRoutes(protectedRoutes, prisma);
       await registerCellDeleteRoutes(
         protectedRoutes,
