@@ -37,6 +37,18 @@ export const confirmAssignmentSchema = z
   })
   .strict();
 
+export const createRecurrenceSchema = createScheduleSchema.extend({
+  weeks: z.number().int().min(2).max(12),
+  slotName: z.string().trim().min(1).max(80),
+  personId: id
+});
+
+export const substituteAssignmentSchema = z
+  .object({
+    personId: id
+  })
+  .strict();
+
 export const unavailabilitySchema = z
   .object({
     personId: id.optional(),
@@ -57,4 +69,6 @@ export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 export type CreateSlotInput = z.infer<typeof createSlotSchema>;
 export type AssignVolunteerInput = z.infer<typeof assignVolunteerSchema>;
 export type ConfirmAssignmentInput = z.infer<typeof confirmAssignmentSchema>;
+export type CreateRecurrenceInput = z.infer<typeof createRecurrenceSchema>;
+export type SubstituteAssignmentInput = z.infer<typeof substituteAssignmentSchema>;
 export type UnavailabilityInput = z.infer<typeof unavailabilitySchema>;

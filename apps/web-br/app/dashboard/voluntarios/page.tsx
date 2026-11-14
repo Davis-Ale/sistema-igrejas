@@ -162,6 +162,9 @@ export default function VoluntariosPage() {
           >
             Voltar ao painel
           </Link>
+          <h1 style={{ fontSize: "32px", margin: 0 }}>Voluntários</h1>
+
+          <VolunteerSchedulePanel apiBaseUrl={API_BASE_URL} volunteers={volunteers} />
 
           <form
             onSubmit={handleUpdateStatus}
@@ -175,7 +178,7 @@ export default function VoluntariosPage() {
             }}
           >
             <h2 style={{ color: "#ffffff", fontSize: "20px", margin: 0 }}>
-              Atualizar voluntário
+              Status
             </h2>
 
             <div
@@ -248,8 +251,6 @@ export default function VoluntariosPage() {
             </button>
           </form>
 
-          <VolunteerSchedulePanel apiBaseUrl={API_BASE_URL} volunteers={volunteers} />
-
           {error ? (
             <p style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(248, 113, 113, 0.26)", borderRadius: "14px", color: "#fecaca", fontSize: "14px", margin: 0, padding: "12px 14px" }}>
               {error}
@@ -287,35 +288,27 @@ export default function VoluntariosPage() {
             ) : null}
 
             {!isLoading && volunteers.length > 0 ? (
-              <div style={{ display: "grid", gap: "10px" }}>
-                {volunteers.map((volunteer) => (
-                  <article
-                    key={volunteer.id}
-                    style={{
-                      background: "rgba(15, 23, 42, 0.82)",
-                      border: "1px solid rgba(148, 163, 184, 0.16)",
-                      borderRadius: "18px",
-                      display: "grid",
-                      gap: "8px",
-                      padding: "14px"
-                    }}
-                  >
-                    <h3 style={{ color: "#ffffff", fontSize: "16px", margin: 0 }}>
-                      {volunteer.name}
-                    </h3>
-
-                    <p style={{ color: "#cbd5e1", fontSize: "14px", margin: 0 }}>
-                      {volunteer.phone}
-                      {volunteer.email ? ` - ${volunteer.email}` : ""}
-                    </p>
-
-                    <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: 1.5, margin: 0 }}>
-                      Status: {volunteer.volunteerStatus ? volunteerStatusLabels[volunteer.volunteerStatus] : "Não definido"}.
-                      {volunteer.celula ? ` Célula: ${volunteer.celula.name}.` : ""}
-                      {volunteer.trailStage ? ` Trilho: ${volunteer.trailStage.trail.name} - ${volunteer.trailStage.label}.` : ""}
-                    </p>
-                  </article>
-                ))}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", minWidth: "640px", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      {["Nome", "Status", "Contato", "Célula", "Trilho"].map((label) => (
+                        <th key={label} style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 800, padding: "0 12px 10px 0", textAlign: "left" }}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {volunteers.map((volunteer) => (
+                      <tr key={volunteer.id} style={{ borderTop: "1px solid rgba(148, 163, 184, 0.16)" }}>
+                        <td style={{ color: "#ffffff", fontWeight: 800, padding: "12px 12px 12px 0" }}>{volunteer.name}</td>
+                        <td style={{ color: "#e2e8f0", padding: "12px 12px 12px 0" }}>{volunteer.volunteerStatus ? volunteerStatusLabels[volunteer.volunteerStatus] : "—"}</td>
+                        <td style={{ color: "#cbd5e1", padding: "12px 12px 12px 0" }}>{volunteer.email || volunteer.phone}</td>
+                        <td style={{ color: "#cbd5e1", padding: "12px 12px 12px 0" }}>{volunteer.celula?.name ?? "—"}</td>
+                        <td style={{ color: "#cbd5e1", padding: "12px 12px 12px 0" }}>{volunteer.trailStage ? volunteer.trailStage.label : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : null}
           </section>

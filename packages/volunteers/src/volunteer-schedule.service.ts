@@ -3,8 +3,10 @@ import type { Role } from "@sistema-igrejas/auth";
 import type {
   AssignVolunteerInput,
   ConfirmAssignmentInput,
+  CreateRecurrenceInput,
   CreateScheduleInput,
   CreateSlotInput,
+  SubstituteAssignmentInput,
   UnavailabilityInput,
   UpdateScheduleInput
 } from "./volunteer-schedule.schema.js";
@@ -45,6 +47,12 @@ function windowOf(input: { serviceDate: string; startTime: string; endTime: stri
   const endMinute = minuteOf(input.endTime);
   if (endMinute <= startMinute) throw new Error("SCHEDULE_TIME_INVALID");
   return { serviceDate: calendarDate(input.serviceDate), startMinute, endMinute };
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
 
 function overlaps(start: number, end: number, otherStart: number, otherEnd: number): boolean {
@@ -169,16 +177,26 @@ async function assertCanRecordAvailability(db: Store, churchId: string, role: Ro
   throw new Error("VOLUNTEER_AVAILABILITY_FORBIDDEN");
 }
 
+type AssignmentStatus = "PENDING" | "CONFIRMED" | "DECLINED" | "REPLACED";
+
 function present(schedule: {
   id: string;
+  seriesId?: string | null;
   serviceDate: Date;
   startMinute: number;
   endMinute: number;
   ministryId: string;
   ministry: { name: string };
-}, slots: Array<{ id: string; name: string; assignments: Array<{ personId: string; status: "PENDING" | "CONFIRMED" | "DECLINED"; person: { name: string } }> }>, role: Role, actorId: string, leaderId: string) {
+}, slots: Array<{
+  id: string;
+  name: string;
+  assignments: Array<{ personId: string; status: AssignmentStatus; person: { name: string } }>;
+  substitutions?: Array<{ id: string; fromPersonId: string; toPersonId: string; createdAt: Date; fromPerson: { name: string }; toPerson: { name: string } }>;
+}>, role: Role, actorId: string, leaderId: string) {
+  const manager = canManage(role, actorId, leaderId);
   return {
     id: schedule.id,
+    seriesId: schedule.seriesId ?? null,
     ministryId: schedule.ministryId,
     ministryName: schedule.ministry.name,
     serviceDate: formatDate(schedule.serviceDate),
@@ -191,7 +209,16 @@ function present(schedule: {
         personId: assignment.personId,
         name: assignment.person.name,
         status: assignment.status,
-        canConfirm: assignment.status === "PENDING" && (canManage(role, actorId, leaderId) || actorId === assignment.personId)
+        canConfirm: assignment.status === "PENDING" && (manager || actorId === assignment.personId),
+        canSubstitute: manager && (assignment.status === "PENDING" || assignment.status === "CONFIRMED")
+      })),
+      substitutions: (slot.substitutions ?? []).map((item) => ({
+        id: item.id,
+        fromPersonId: item.fromPersonId,
+        fromName: item.fromPerson.name,
+        toPersonId: item.toPersonId,
+        toName: item.toPerson.name,
+        createdAt: item.createdAt.toISOString()
       }))
     }))
   };
@@ -211,6 +238,7 @@ export async function listVolunteerSchedules(prisma: PrismaClient, churchId: str
       take: 60,
       select: {
         id: true,
+        seriesId: true,
         ministryId: true,
         serviceDate: true,
         startMinute: true,
@@ -224,6 +252,18 @@ export async function listVolunteerSchedules(prisma: PrismaClient, churchId: str
             assignments: {
               where: { churchId, person: { is: { churchId } } },
               select: { personId: true, status: true, person: { select: { name: true } } }
+            },
+            substitutions: {
+              where: { churchId, fromPerson: { is: { churchId } }, toPerson: { is: { churchId } } },
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                fromPersonId: true,
+                toPersonId: true,
+                createdAt: true,
+                fromPerson: { select: { name: true } },
+                toPerson: { select: { name: true } }
+              }
             }
           }
         }
@@ -251,6 +291,62 @@ export async function createVolunteerSchedule(
       select: { id: true, ministryId: true, serviceDate: true, startMinute: true, endMinute: true }
     });
     return present({ ...schedule, ministry: { name: ministry.name } }, [], role, actor.id, ministry.leaderId);
+  }, isolated);
+}
+
+export async function createRecurringVolunteerSchedules(
+  prisma: PrismaClient,
+  churchId: string,
+  actorId: string,
+  role: Role,
+  input: CreateRecurrenceInput
+) {
+  const window = windowOf(input);
+  const dates = Array.from({ length: input.weeks }, (_, index) => addDays(window.serviceDate, index * 7));
+  return prisma.$transaction(async (tx) => {
+    const actor = await requireActor(tx, churchId, actorId);
+    const ministry = await requireMinistry(tx, churchId, input.ministryId);
+    if (ministry.status !== "ACTIVE") throw new Error("MINISTRY_INACTIVE");
+    assertManager(role, actor.id, ministry.leaderId);
+    const person = await requireEligible(tx, churchId, input.personId);
+    await assertOnMinistry(tx, churchId, ministry.id, ministry.leaderId, person.id);
+    for (const serviceDate of dates) {
+      await assertAvailable(tx, churchId, person.id, serviceDate, window.startMinute, window.endMinute);
+    }
+    const series = await tx.volunteerScheduleSeries.create({
+      data: {
+        churchId,
+        ministryId: ministry.id,
+        frequency: "WEEKLY",
+        anchorDate: window.serviceDate,
+        occurrenceCount: dates.length,
+        startMinute: window.startMinute,
+        endMinute: window.endMinute
+      },
+      select: { id: true }
+    });
+    const schedules = [];
+    for (const serviceDate of dates) {
+      const schedule = await tx.volunteerSchedule.create({
+        data: { churchId, ministryId: ministry.id, seriesId: series.id, serviceDate, startMinute: window.startMinute, endMinute: window.endMinute },
+        select: { id: true, seriesId: true, ministryId: true, serviceDate: true, startMinute: true, endMinute: true }
+      });
+      const slot = await tx.volunteerScheduleSlot.create({
+        data: { churchId, scheduleId: schedule.id, name: input.slotName },
+        select: { id: true, name: true }
+      });
+      await tx.volunteerAssignment.create({
+        data: { churchId, slotId: slot.id, personId: person.id, status: "PENDING" }
+      });
+      schedules.push(present(
+        { ...schedule, ministry: { name: ministry.name } },
+        [{ id: slot.id, name: slot.name, assignments: [{ personId: person.id, status: "PENDING", person: { name: person.name } }] }],
+        role,
+        actor.id,
+        ministry.leaderId
+      ));
+    }
+    return { seriesId: series.id, weeks: dates.length, schedules };
   }, isolated);
 }
 
@@ -328,7 +424,7 @@ export async function assignVolunteer(
       where: { churchId, slotId: slot.id, personId: person.id },
       select: { status: true }
     });
-    if (existing && existing.status !== "DECLINED") throw new Error("VOLUNTEER_ALREADY_ASSIGNED");
+    if (existing && existing.status !== "DECLINED" && existing.status !== "REPLACED") throw new Error("VOLUNTEER_ALREADY_ASSIGNED");
     await assertAvailable(tx, churchId, person.id, schedule.serviceDate, schedule.startMinute, schedule.endMinute);
     if (existing) {
       await tx.volunteerAssignment.update({
@@ -383,6 +479,7 @@ export async function confirmVolunteerAssignment(
       select: { status: true, person: { select: { name: true } } }
     });
     if (!assignment) throw new Error("ASSIGNMENT_NOT_FOUND");
+    if (assignment.status === "REPLACED") throw new Error("SUBSTITUTION_CLOSED");
     if (!canManage(role, actor.id, schedule.ministry.leaderId) && actor.id !== personId) {
       throw new Error("SCHEDULE_FORBIDDEN");
     }
@@ -396,6 +493,73 @@ export async function confirmVolunteerAssignment(
       });
     }
     return { scheduleId: schedule.id, slotId, personId, name: assignment.person.name, status: input.status };
+  }, isolated);
+}
+
+export async function substituteVolunteerAssignment(
+  prisma: PrismaClient,
+  churchId: string,
+  actorId: string,
+  role: Role,
+  scheduleId: string,
+  slotId: string,
+  fromPersonId: string,
+  input: SubstituteAssignmentInput
+) {
+  return prisma.$transaction(async (tx) => {
+    const actor = await requireActor(tx, churchId, actorId);
+    const schedule = await requireSchedule(tx, churchId, scheduleId);
+    if (schedule.ministry.status !== "ACTIVE") throw new Error("MINISTRY_INACTIVE");
+    assertManager(role, actor.id, schedule.ministry.leaderId);
+    const slot = await tx.volunteerScheduleSlot.findFirst({
+      where: { id: slotId, churchId, scheduleId: schedule.id },
+      select: { id: true }
+    });
+    if (!slot) throw new Error("SLOT_NOT_FOUND");
+    const current = await tx.volunteerAssignment.findFirst({
+      where: { churchId, slotId: slot.id, personId: fromPersonId, person: { is: { churchId } }, slot: { is: { churchId, scheduleId: schedule.id } } },
+      select: { status: true, person: { select: { name: true } } }
+    });
+    if (!current) throw new Error("ASSIGNMENT_NOT_FOUND");
+    if (current.status !== "PENDING" && current.status !== "CONFIRMED") throw new Error("SUBSTITUTION_NOT_OPEN");
+    if (input.personId === fromPersonId) throw new Error("SUBSTITUTION_SAME_PERSON");
+    const person = await requireEligible(tx, churchId, input.personId);
+    await assertOnMinistry(tx, churchId, schedule.ministryId, schedule.ministry.leaderId, person.id);
+    const existing = await tx.volunteerAssignment.findFirst({
+      where: { churchId, slotId: slot.id, personId: person.id },
+      select: { status: true }
+    });
+    if (existing && existing.status !== "DECLINED" && existing.status !== "REPLACED") throw new Error("VOLUNTEER_ALREADY_ASSIGNED");
+    await assertAvailable(tx, churchId, person.id, schedule.serviceDate, schedule.startMinute, schedule.endMinute);
+    await tx.volunteerAssignment.update({
+      where: { churchId_slotId_personId: { churchId, slotId: slot.id, personId: fromPersonId } },
+      data: { status: "REPLACED" }
+    });
+    if (existing) {
+      await tx.volunteerAssignment.update({
+        where: { churchId_slotId_personId: { churchId, slotId: slot.id, personId: person.id } },
+        data: { status: "PENDING" }
+      });
+    } else {
+      await tx.volunteerAssignment.create({
+        data: { churchId, slotId: slot.id, personId: person.id, status: "PENDING" }
+      });
+    }
+    const history = await tx.volunteerSubstitution.create({
+      data: { churchId, slotId: slot.id, fromPersonId, toPersonId: person.id, actorPersonId: actor.id },
+      select: { id: true, createdAt: true }
+    });
+    return {
+      id: history.id,
+      scheduleId: schedule.id,
+      slotId: slot.id,
+      fromPersonId,
+      fromName: current.person.name,
+      toPersonId: person.id,
+      toName: person.name,
+      status: "PENDING" as const,
+      createdAt: history.createdAt.toISOString()
+    };
   }, isolated);
 }
 

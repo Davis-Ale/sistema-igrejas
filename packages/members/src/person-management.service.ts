@@ -57,7 +57,8 @@ export async function deleteManagedPerson(db: PrismaClient, churchId: string, id
         memberships: true, approvedMembership: true, volunteerLogs: true,
         changedLogs: true, registrations: true, transactions: true,
         recordedCellMeetings: true, cellAttendances: true,
-        volunteerAssignments: true, volunteerUnavailabilities: true
+        volunteerAssignments: true, volunteerUnavailabilities: true,
+        substitutionsFrom: true, substitutionsTo: true, substitutionsMade: true
       } } }
     });
     if (!linked) throw new Error("PERSON_NOT_FOUND");

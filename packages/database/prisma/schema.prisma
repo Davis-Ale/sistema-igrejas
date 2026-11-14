@@ -26,6 +26,11 @@ enum VolunteerAssignmentStatus {
   PENDING
   CONFIRMED
   DECLINED
+  REPLACED
+}
+
+enum VolunteerScheduleFrequency {
+  WEEKLY
 }
 
 enum CellStatus {
@@ -162,8 +167,10 @@ model Church {
   cellAttendances  CellAttendance[]
   volunteerLogs    VolunteerLog[]
   volunteerSchedules VolunteerSchedule[]
+  volunteerScheduleSeries VolunteerScheduleSeries[]
   volunteerScheduleSlots VolunteerScheduleSlot[]
   volunteerAssignments VolunteerAssignment[]
+  volunteerSubstitutions VolunteerSubstitution[]
   volunteerUnavailabilities VolunteerUnavailability[]
   events           Event[]
   registrations    Registration[]
@@ -279,6 +286,9 @@ model Person {
   recordedCellMeetings CellMeeting[]    @relation("CellMeetingRecorder")
   cellAttendances      CellAttendance[] @relation("CellAttendancePerson")
   volunteerAssignments VolunteerAssignment[] @relation("VolunteerAssignmentPerson")
+  substitutionsFrom VolunteerSubstitution[] @relation("SubstitutionFrom")
+  substitutionsTo VolunteerSubstitution[] @relation("SubstitutionTo")
+  substitutionsMade VolunteerSubstitution[] @relation("SubstitutionActor")
   volunteerUnavailabilities VolunteerUnavailability[] @relation("VolunteerUnavailabilityPerson")
 
   @@unique([churchId, id])
@@ -306,6 +316,7 @@ model Ministry {
   leader  Person           @relation("MinistryLeader", fields: [churchId, leaderId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
   members MinistryMember[]
   schedules VolunteerSchedule[]
+  scheduleSeries VolunteerScheduleSeries[]
 
   @@unique([churchId, id])
   @@index([churchId, status])
@@ -509,23 +520,46 @@ model VolunteerLog {
   @@index([churchId, at])
 }
 
+model VolunteerScheduleSeries {
+  id              String                     @id @default(cuid())
+  churchId        String
+  ministryId      String
+  frequency       VolunteerScheduleFrequency
+  anchorDate      DateTime                   @db.Date
+  occurrenceCount Int
+  startMinute     Int
+  endMinute       Int
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  church    Church              @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  ministry  Ministry            @relation(fields: [churchId, ministryId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  schedules VolunteerSchedule[]
+
+  @@unique([churchId, id])
+  @@index([churchId, ministryId])
+}
+
 model VolunteerSchedule {
   id          String   @id @default(cuid())
   churchId    String
   ministryId  String
+  seriesId    String?
   serviceDate DateTime @db.Date
   startMinute Int
   endMinute   Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  church   Church                  @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  ministry Ministry                @relation(fields: [churchId, ministryId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  church   Church                   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  ministry Ministry                 @relation(fields: [churchId, ministryId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  series   VolunteerScheduleSeries? @relation(fields: [churchId, seriesId], references: [churchId, id], onDelete: SetNull, onUpdate: Restrict)
   slots    VolunteerScheduleSlot[]
 
   @@unique([churchId, id])
   @@index([churchId, ministryId, serviceDate])
   @@index([churchId, serviceDate])
+  @@index([churchId, seriesId])
 }
 
 model VolunteerScheduleSlot {
@@ -536,9 +570,10 @@ model VolunteerScheduleSlot {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  church      Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  schedule    VolunteerSchedule     @relation(fields: [churchId, scheduleId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
-  assignments VolunteerAssignment[]
+  church        Church                  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  schedule      VolunteerSchedule       @relation(fields: [churchId, scheduleId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  assignments   VolunteerAssignment[]
+  substitutions VolunteerSubstitution[]
 
   @@unique([churchId, id])
   @@unique([churchId, scheduleId, name])
@@ -559,6 +594,25 @@ model VolunteerAssignment {
 
   @@id([churchId, slotId, personId])
   @@index([churchId, personId, status])
+}
+
+model VolunteerSubstitution {
+  id            String   @id @default(cuid())
+  churchId      String
+  slotId        String
+  fromPersonId  String
+  toPersonId    String
+  actorPersonId String
+  createdAt     DateTime @default(now())
+
+  church     Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  slot       VolunteerScheduleSlot @relation(fields: [churchId, slotId], references: [churchId, id], onDelete: Cascade, onUpdate: Restrict)
+  fromPerson Person                @relation("SubstitutionFrom", fields: [churchId, fromPersonId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  toPerson   Person                @relation("SubstitutionTo", fields: [churchId, toPersonId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor      Person                @relation("SubstitutionActor", fields: [churchId, actorPersonId], references: [churchId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([churchId, id])
+  @@index([churchId, slotId, createdAt])
 }
 
 model VolunteerUnavailability {

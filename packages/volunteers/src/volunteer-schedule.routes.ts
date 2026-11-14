@@ -7,8 +7,10 @@ import { ZodError } from "zod";
 import {
   assignVolunteerSchema,
   confirmAssignmentSchema,
+  createRecurrenceSchema,
   createScheduleSchema,
   createSlotSchema,
+  substituteAssignmentSchema,
   listUnavailabilityQuerySchema,
   unavailabilitySchema,
   updateScheduleSchema
@@ -17,12 +19,14 @@ import {
   addScheduleSlot,
   assignVolunteer,
   confirmVolunteerAssignment,
+  createRecurringVolunteerSchedules,
   createVolunteerSchedule,
   createVolunteerUnavailability,
   deleteVolunteerUnavailability,
   listVolunteerSchedules,
   listVolunteerUnavailability,
   removeVolunteerAssignment,
+  substituteVolunteerAssignment,
   updateVolunteerSchedule
 } from "./volunteer-schedule.service.js";
 
@@ -94,6 +98,18 @@ async function sendError(error: unknown, reply: FastifyReply): Promise<void> {
     await reply.code(409).send({ error: code, message: "A pessoa está indisponível neste horário." });
     return;
   }
+  if (code === "SUBSTITUTION_NOT_OPEN") {
+    await reply.code(409).send({ error: code, message: "Só uma designação pendente ou confirmada pode ser substituída." });
+    return;
+  }
+  if (code === "SUBSTITUTION_SAME_PERSON") {
+    await reply.code(409).send({ error: code, message: "Escolha outra pessoa." });
+    return;
+  }
+  if (code === "SUBSTITUTION_CLOSED") {
+    await reply.code(409).send({ error: code, message: "Esta designação já foi substituída." });
+    return;
+  }
   await reply.code(500).send({ error: "INTERNAL_SERVER_ERROR", message: "Erro interno." });
 }
 
@@ -105,6 +121,15 @@ export async function registerVolunteerScheduleRoutes(app: FastifyInstance, pris
   app.get("/volunteers/schedules", read, async (request, reply) => {
     try {
       return await listVolunteerSchedules(prisma, churchIdOf(request), await actor(request), roleOf(request));
+    } catch (error) {
+      await sendError(error, reply);
+    }
+  });
+
+  app.post("/volunteers/schedules/recurrence", manage, async (request, reply) => {
+    try {
+      const series = await createRecurringVolunteerSchedules(prisma, churchIdOf(request), await actor(request), roleOf(request), createRecurrenceSchema.parse(request.body));
+      await reply.code(201).send(series);
     } catch (error) {
       await sendError(error, reply);
     }
@@ -152,6 +177,25 @@ export async function registerVolunteerScheduleRoutes(app: FastifyInstance, pris
     try {
       const params = request.params as { scheduleId: string; slotId: string; personId: string };
       return await removeVolunteerAssignment(prisma, churchIdOf(request), await actor(request), roleOf(request), params.scheduleId, params.slotId, params.personId);
+    } catch (error) {
+      await sendError(error, reply);
+    }
+  });
+
+  app.post("/volunteers/schedules/:scheduleId/slots/:slotId/assignments/:personId/substitution", manage, async (request, reply) => {
+    try {
+      const params = request.params as { scheduleId: string; slotId: string; personId: string };
+      const substitution = await substituteVolunteerAssignment(
+        prisma,
+        churchIdOf(request),
+        await actor(request),
+        roleOf(request),
+        params.scheduleId,
+        params.slotId,
+        params.personId,
+        substituteAssignmentSchema.parse(request.body)
+      );
+      await reply.code(201).send(substitution);
     } catch (error) {
       await sendError(error, reply);
     }
