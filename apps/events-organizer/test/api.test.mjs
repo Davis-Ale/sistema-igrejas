@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { ApiError, checkIn, listEvents, listEventTickets, listRegistrations, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
+import { ApiError, checkIn, getOrganizerEventFinancial, listEvents, listEventTickets, listRegistrations, login, readSession, SESSION_KEY } from "../app/lib/api.ts";
 
 const originalFetch = globalThis.fetch;
 const originalBase = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -71,6 +71,37 @@ test("event tickets occupancy uses the existing tickets contract without churchI
   assert.equal(url.pathname, "/api/events/event-test/tickets");
   assert.equal(url.searchParams.get("occupancy"), "1");
   assert.equal(requests[0].credentials, "include");
+  assert.doesNotMatch(requests[0].url, /churchId/);
+});
+
+test("organizer financial reads one event without sending churchId or a bearer token", async () => {
+  const summary = {
+    eventId: "event-test",
+    realized: { grossAmount: "100.00", platformFeeAmount: "7.50", netAmount: "92.50", count: 1 },
+    pending: { amount: "40.00", count: 1 },
+    reversed: { amount: "0.00", count: 0 },
+    refundPending: { amount: "0.00", count: 0 },
+    cancelled: { count: 0 },
+    noCharge: { count: 0 },
+    inconsistent: { count: 0 },
+    tickets: [{
+      ticketId: "ticket-a",
+      ticketName: "Pista",
+      realized: { grossAmount: "100.00", platformFeeAmount: "7.50", netAmount: "92.50", count: 1 },
+      pending: { amount: "0.00", count: 0 },
+      reversed: { amount: "0.00", count: 0 },
+      inconsistent: { count: 0 }
+    }]
+  };
+  const requests = respond(summary);
+  const signal = new AbortController().signal;
+  assert.deepEqual(await getOrganizerEventFinancial("event-test", signal), summary);
+  const url = new URL(requests[0].url);
+  assert.equal(url.pathname, "/api/events/event-test/organizer-financial");
+  assert.equal(url.search, "");
+  assert.equal(requests[0].credentials, "include");
+  assert.equal(requests[0].headers.get("Authorization"), null);
+  assert.equal(requests[0].signal, signal);
   assert.doesNotMatch(requests[0].url, /churchId/);
 });
 

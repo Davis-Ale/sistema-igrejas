@@ -32,6 +32,31 @@ export type RegistrationPage = {
   items: RegistrationSummary[];
   pagination: { page: number; totalPages: number; total: number };
 };
+export type OrganizerFinancialAmounts = {
+  grossAmount: string;
+  platformFeeAmount: string;
+  netAmount: string;
+  count: number;
+};
+export type OrganizerFinancialPending = { amount: string; count: number };
+export type OrganizerEventFinancial = {
+  eventId: string;
+  realized: OrganizerFinancialAmounts;
+  pending: OrganizerFinancialPending;
+  reversed: OrganizerFinancialPending;
+  refundPending: OrganizerFinancialPending;
+  cancelled: { count: number };
+  noCharge: { count: number };
+  inconsistent: { count: number };
+  tickets: Array<{
+    ticketId: string | null;
+    ticketName: string;
+    realized: OrganizerFinancialAmounts;
+    pending: OrganizerFinancialPending;
+    reversed: OrganizerFinancialPending;
+    inconsistent: { count: number };
+  }>;
+};
 export type TicketOccupancy = {
   registered: number;
   sold: number;
@@ -64,6 +89,43 @@ function isEventTicketOccupancy(value: unknown): value is EventTicketOccupancy {
   const ticket = value as EventTicketOccupancy;
   return typeof ticket.id === "string" && typeof ticket.name === "string" &&
     isTicketOccupancy(ticket.occupancy);
+}
+
+const moneyPattern = /^-?\d+\.\d{2}$/;
+
+function isMoney(value: unknown) {
+  return typeof value === "string" && moneyPattern.test(value);
+}
+
+function isCount(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isFinancialAmounts(value: unknown): value is OrganizerFinancialAmounts {
+  if (!value || typeof value !== "object") return false;
+  const amounts = value as OrganizerFinancialAmounts;
+  return isMoney(amounts.grossAmount) && isMoney(amounts.platformFeeAmount) &&
+    isMoney(amounts.netAmount) && isCount(amounts.count);
+}
+
+function isFinancialPending(value: unknown): value is OrganizerFinancialPending {
+  if (!value || typeof value !== "object") return false;
+  const pending = value as OrganizerFinancialPending;
+  return isMoney(pending.amount) && isCount(pending.count);
+}
+
+function isOrganizerEventFinancial(value: unknown): value is OrganizerEventFinancial {
+  if (!value || typeof value !== "object") return false;
+  const summary = value as OrganizerEventFinancial;
+  return typeof summary.eventId === "string" && summary.eventId.length > 0 &&
+    isFinancialAmounts(summary.realized) && isFinancialPending(summary.pending) &&
+    isFinancialPending(summary.reversed) && isFinancialPending(summary.refundPending) &&
+    isCount(summary.cancelled?.count) && isCount(summary.noCharge?.count) &&
+    isCount(summary.inconsistent?.count) && Array.isArray(summary.tickets) &&
+    summary.tickets.every((ticket) => ticket && typeof ticket.ticketName === "string" &&
+      (ticket.ticketId === null || typeof ticket.ticketId === "string") &&
+      isFinancialAmounts(ticket.realized) && isFinancialPending(ticket.pending) &&
+      isFinancialPending(ticket.reversed) && isCount(ticket.inconsistent?.count));
 }
 
 function isEventTicketOccupancyPage(value: unknown): value is EventTicketOccupancyPage {
@@ -178,6 +240,17 @@ export async function loadEventCover(eventId: string, signal: AbortSignal) {
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiError(response.status, "EVENT_COVER_UNAVAILABLE", "Capa indisponível.");
   return response.blob();
+}
+
+export async function getOrganizerEventFinancial(eventId: string, signal: AbortSignal) {
+  const data = await request<unknown>(
+    `/api/events/${encodeURIComponent(eventId)}/organizer-financial`,
+    { signal }
+  );
+  if (!isOrganizerEventFinancial(data) || data.eventId !== eventId) {
+    throw new Error("A API retornou uma resposta inválida.");
+  }
+  return data;
 }
 
 export async function listEventTickets(eventId: string, signal: AbortSignal) {

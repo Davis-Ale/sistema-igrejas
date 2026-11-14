@@ -27,11 +27,16 @@ test("organizer keeps login, event selection, QR check-in and participant lookup
 });
 
 test("organizer opens the event dashboard without summing participant pages", () => {
-  assert.match(app, /useState<"dashboard" \| "tickets" \| "checkin" \| "people">\("dashboard"\)/);
+  assert.match(app, /useState<"dashboard" \| "tickets" \| "checkin" \| "people" \| "financial">\("dashboard"\)/);
   assert.match(app, />Dashboard</);
   assert.match(app, />Por ingresso</);
   assert.match(app, />Check-in</);
   assert.match(app, />Participantes</);
+  assert.match(app, /role === "SUPER_ADMIN"/);
+  assert.match(app, /getOrganizerEventFinancial/);
+  assert.match(app, /tab === "financial" && financialAccess/);
+  assert.match(app, /Bruto confirmado/);
+  assert.match(app, /Não entram no bruto confirmado/);
   assert.match(app, /listEventTickets/);
   assert.match(app, /Total de vagas/);
   assert.match(app, /Vendidos/);

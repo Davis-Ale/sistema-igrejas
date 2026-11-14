@@ -1,4 +1,4 @@
-import type {} from "@sistema-igrejas/auth";
+import { requireRole } from "@sistema-igrejas/auth";
 import type { PrismaClient } from "@prisma/client";
 import type {
   FastifyInstance,
@@ -16,6 +16,7 @@ import {
   listEventFinancialTransactions,
   streamEventFinancialExport
 } from "./event-financial.service.js";
+import { getOrganizerEventFinancial } from "./organizer-event-financial.js";
 import { upsertEventsReceivingAccountSchema } from "./event-receiving-account.schema.js";
 import {
   getEventsReceivingAccount,
@@ -112,6 +113,22 @@ async function sendEventFinancialError(
     return;
   }
 
+  if (error instanceof Error && error.message === "EVENT_NOT_FOUND") {
+    await reply.code(404).send({
+      error: "EVENT_NOT_FOUND",
+      message: "Evento não encontrado."
+    });
+    return;
+  }
+
+  if (error instanceof Error && error.message === "ORGANIZER_FINANCIAL_DENIED") {
+    await reply.code(403).send({
+      error: "ORGANIZER_FINANCIAL_DENIED",
+      message: "Você não tem permissão para consultar o financeiro do evento."
+    });
+    return;
+  }
+
   if (error instanceof Error && error.message === "EVENT_PAYMENT_NOT_FOUND") {
     await reply.code(404).send({
       error: "EVENT_PAYMENT_NOT_FOUND",
@@ -187,6 +204,34 @@ export async function registerEventFinancialRoutes(
     ) => Promise<void>;
   }
 ) {
+  app.get(
+    "/events/:eventId/organizer-financial",
+    { preHandler: requireRole(["SUPER_ADMIN"]) },
+    async (request, reply) => {
+      try {
+        if (request.user?.role !== "SUPER_ADMIN") {
+          throw new Error("ORGANIZER_FINANCIAL_DENIED");
+        }
+
+        const params = request.params as { eventId?: string };
+        const eventId = typeof params.eventId === "string" ? params.eventId.trim() : "";
+
+        if (!eventId) {
+          await reply.code(400).send({
+            error: "VALIDATION_ERROR",
+            message: "Evento inválido."
+          });
+          return;
+        }
+
+        const summary = await getOrganizerEventFinancial(prisma, getChurchId(request), eventId);
+        await reply.send(summary);
+      } catch (error) {
+        await sendEventFinancialError(error, reply);
+      }
+    }
+  );
+
   app.get("/events/financial/summary", async (request, reply) => {
     try {
       const churchId = getChurchId(request);

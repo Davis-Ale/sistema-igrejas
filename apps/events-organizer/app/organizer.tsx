@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, checkIn, listEvents, listEventTickets, listRegistrations, login, logout as logoutRequest, restoreSession, SESSION_KEY,
-  type CheckInResult, type EventPage, type EventSummary, type EventTicketOccupancy, type EventTicketOccupancyPage, type RegistrationPage, type RegistrationSummary, type Session, type TicketOccupancy } from "./lib/api";
+import { ApiError, checkIn, getOrganizerEventFinancial, listEvents, listEventTickets, listRegistrations, login, logout as logoutRequest, restoreSession, SESSION_KEY,
+  type CheckInResult, type EventPage, type EventSummary, type EventTicketOccupancy, type EventTicketOccupancyPage, type OrganizerEventFinancial, type RegistrationPage, type RegistrationSummary, type Session, type TicketOccupancy } from "./lib/api";
 import { canCheckIn, registrationBlock, statusLabel } from "./lib/registration-status";
 import QrScanner from "./qr-scanner";
 import { EventCover } from "./event-cover";
@@ -24,6 +24,10 @@ function participantContact(item: Pick<RegistrationSummary, "person" | "visitor"
 
 function formatCount(value: number | null) {
   return value === null ? "—" : new Intl.NumberFormat("pt-BR").format(value);
+}
+
+function formatMoney(value: string) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
 }
 
 export default function Organizer({ initialEvent }: {
@@ -139,7 +143,7 @@ function Events({ session, initialEvent, onExpired }: {
     return () => controller.abort();
   }, [page, query, reload, selected, onExpired]);
 
-  if (selected) return <CheckIn key={selected.id} event={selected}
+  if (selected) return <CheckIn key={selected.id} event={selected} role={session.user.role}
     onBack={() => { resetList(); setSelected(null); }} onExpired={onExpired} />;
 
   return <section className="stack">
@@ -173,10 +177,11 @@ function Events({ session, initialEvent, onExpired }: {
   </section>;
 }
 
-function CheckIn({ event, onBack, onExpired }: {
-  event: Pick<EventSummary, "id" | "title">; onBack: () => void; onExpired: () => void;
+function CheckIn({ event, role, onBack, onExpired }: {
+  event: Pick<EventSummary, "id" | "title">; role: string; onBack: () => void; onExpired: () => void;
 }) {
-  const [tab, setTab] = useState<"dashboard" | "tickets" | "checkin" | "people">("dashboard");
+  const financialAccess = role === "SUPER_ADMIN";
+  const [tab, setTab] = useState<"dashboard" | "tickets" | "checkin" | "people" | "financial">("dashboard");
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -231,8 +236,9 @@ function CheckIn({ event, onBack, onExpired }: {
   return <section className="stack">
     <button className="text-button back" disabled={busy} onClick={onBack}>← Trocar evento</button>
     <EventCover eventId={event.id} title={event.title} banner onExpired={onExpired} />
-    <div><p className="eyebrow">{tab === "checkin" || tab === "people" ? "Recepção" : "Dashboard"}</p><h1>{event.title}</h1>
-      <p className="muted">{tab === "tickets" ? "Inscritos e vendidos por tipo de ingresso." :
+    <div><p className="eyebrow">{tab === "financial" && financialAccess ? "Financeiro" : tab === "checkin" || tab === "people" ? "Recepção" : "Dashboard"}</p><h1>{event.title}</h1>
+      <p className="muted">{tab === "financial" && financialAccess ? "Bruto confirmado, taxas registradas, líquido e pagamentos pendentes." :
+        tab === "tickets" ? "Inscritos e vendidos por tipo de ingresso." :
         tab === "checkin" || tab === "people" ? "Leia o QR, digite o código ou localize o participante." :
         "Vagas, vendidos confirmados, restantes e pendentes."}</p></div>
     <div className="tabs" role="tablist" aria-label="Operação do evento">
@@ -244,8 +250,10 @@ function CheckIn({ event, onBack, onExpired }: {
         disabled={busy} onClick={() => { setTab("checkin"); setCamera(false); }}>Check-in</button>
       <button type="button" role="tab" aria-selected={tab === "people"} className={tab === "people" ? "tab active" : "tab"}
         disabled={busy} onClick={() => { setTab("people"); setCamera(false); }}>Participantes</button>
+      {financialAccess ? <button type="button" role="tab" aria-selected={tab === "financial"} className={tab === "financial" ? "tab active" : "tab"}
+        disabled={busy} onClick={() => { setTab("financial"); setCamera(false); }}>Financeiro</button> : null}
     </div>
-    {result ? <div className="success stack" role="status" aria-live="polite">
+    {tab === "financial" && financialAccess ? <EventFinancial eventId={event.id} onExpired={onExpired} /> : result ? <div className="success stack" role="status" aria-live="polite">
       <span className="success-icon" aria-hidden="true">✓</span>
       <h2>Check-in realizado</h2>
       <p className="participant">{result.person?.name || result.visitor?.name || "Nome não informado"}</p>
@@ -287,6 +295,58 @@ function CheckIn({ event, onBack, onExpired }: {
       </form>
     </>}
     {tab === "people" && error && !result ? <p className="error" role="alert">{error}</p> : null}
+  </section>;
+}
+
+function EventFinancial({ eventId, onExpired }: { eventId: string; onExpired: () => void }) {
+  const [summary, setSummary] = useState<OrganizerEventFinancial | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    setSummary(null);
+    void getOrganizerEventFinancial(eventId, controller.signal).then((result) => {
+      if (!controller.signal.aborted) setSummary(result);
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return;
+      if (error instanceof ApiError && error.status === 401) onExpired();
+      else if (error instanceof ApiError && error.status === 403) setError(error.message);
+      else setError(errorText(error));
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [eventId, reload, onExpired]);
+
+  return <section className="stack">
+    {loading ? <p role="status">Carregando financeiro…</p> : null}
+    {error ? <div className="error" role="alert"><p>{error}</p>
+      <button className="secondary" onClick={() => setReload((value) => value + 1)}>Tentar novamente</button></div> : null}
+    {!loading && !error && summary ? <>
+      <div className="stats">
+        <article className="stat"><span>Bruto confirmado</span><strong>{formatMoney(summary.realized.grossAmount)}</strong></article>
+        <article className="stat"><span>Taxas</span><strong>{formatMoney(summary.realized.platformFeeAmount)}</strong></article>
+        <article className="stat"><span>Líquido</span><strong>{formatMoney(summary.realized.netAmount)}</strong></article>
+        <article className="stat"><span>Pendentes</span><strong>{formatMoney(summary.pending.amount)}</strong>
+          <span>Não entram no bruto confirmado</span></article>
+      </div>
+      {summary.reversed.count > 0 ? <p className="muted">Estornos {formatMoney(summary.reversed.amount)}. Fora da receita confirmada.</p> : null}
+      {summary.refundPending.count > 0 ? <p className="muted">Reembolso em processamento {formatMoney(summary.refundPending.amount)}. Fora da receita confirmada.</p> : null}
+      {summary.cancelled.count > 0 ? <p className="muted">Cancelados {formatCount(summary.cancelled.count)}. Fora da receita confirmada.</p> : null}
+      {summary.inconsistent.count > 0 ? <p className="muted">Pagamentos sem taxa registrada {formatCount(summary.inconsistent.count)}. Não entram nos totais.</p> : null}
+      {summary.tickets.length === 0 ? <p className="panel">Nenhum pagamento neste evento.</p> :
+        <ul className="ticket-stats">{summary.tickets.map((ticket) => <li key={ticket.ticketId ?? ticket.ticketName} className="ticket-stat">
+          <strong>{ticket.ticketName}</strong>
+          <span>Bruto {formatMoney(ticket.realized.grossAmount)}</span>
+          <span>Taxa {formatMoney(ticket.realized.platformFeeAmount)}</span>
+          <span>Líquido {formatMoney(ticket.realized.netAmount)}</span>
+          <span>Pendentes {formatMoney(ticket.pending.amount)}</span>
+          {ticket.reversed.count > 0 ? <span>Estornos {formatMoney(ticket.reversed.amount)}</span> : null}
+          {ticket.inconsistent.count > 0 ? <span>Sem taxa registrada {formatCount(ticket.inconsistent.count)}</span> : null}
+        </li>)}</ul>}
+    </> : null}
   </section>;
 }
 
