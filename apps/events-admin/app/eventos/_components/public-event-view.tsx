@@ -10,6 +10,7 @@ import {
   useState
 } from "react";
 import { credentialedFetch, eventsApiBaseUrl } from "../../lib/session-client";
+import { getPublicRegistrationMessage, isPublicRegistrationConfirmed } from "./public-registration-message";
 import { PublicEventTracking } from "./public-event-tracking";
 import type { PublicCheckoutV2Factory } from "./public-checkout-v2.client";
 import { usePreparedCheckoutV2 } from "./use-prepared-checkout-v2";
@@ -161,20 +162,6 @@ function formatMoney(value: string | number) {
   );
 }
 
-function getSuccessMessage(
-  registration: PublicRegistration
-) {
-  if (registration.waitlistedAt) {
-    return "Sua inscrição entrou na lista de espera.";
-  }
-
-  if (isPublicRegistrationConfirmed(registration)) return "Sua inscrição foi confirmada.";
-  if (registration.paymentStatus === "CANCELLED" || registration.status === "CANCELLED") return "Esta inscrição foi cancelada.";
-  if (registration.paymentStatus === "OVERDUE") return "O prazo do pagamento venceu. Sua inscrição ainda não foi confirmada.";
-  if (registration.paymentStatus === "REFUND_PENDING") return "O estorno está em processamento. A credencial está indisponível.";
-  return "Sua inscrição foi recebida e ficará pendente até a confirmação do pagamento.";
-}
-
 function getAppUrl(
   event: PublicEvent,
   checkInToken: string | null = null
@@ -183,20 +170,6 @@ function getAppUrl(
     event.publicSlug ?? event.slug;
 
   return `${EVENTS_APP_BASE_URL}/${encodeURIComponent(publicSlug)}#aplicativo${checkInToken ? `?checkInToken=${encodeURIComponent(checkInToken)}` : ""}`;
-}
-
-function isPublicRegistrationConfirmed(
-  registration: PublicRegistration | null
-) {
-  if (!registration) {
-    return false;
-  }
-
-  return (
-    !registration.waitlistedAt &&
-    (registration.paymentStatus === "PAID" || registration.paymentStatus === "NOT_REQUIRED") &&
-    (registration.status === "CONFIRMED" || registration.status === "CHECKED_IN")
-  );
 }
 
 export function PublicEventView({
@@ -2130,7 +2103,7 @@ export function PublicEventView({
                       margin: 0
                     }}
                   >
-                    {getSuccessMessage(registration)}
+                    {getPublicRegistrationMessage(registration)}
                   </p>
 
                   {registration.paymentStatus ===
@@ -2275,7 +2248,7 @@ export function PublicEventView({
                         </a>
                       </div>
                     )
-                  ) : registration.checkInToken ? (
+                  ) : isPublicRegistrationConfirmed(registration) && registration.checkInToken ? (
                     <>
                         <div
                           style={{
@@ -2338,7 +2311,7 @@ export function PublicEventView({
                       margin: 0
                     }}
                   >
-                    {isPublicRegistrationConfirmed(registration) ? "Sua inscrição está confirmada. O QR Code e o acesso ao aplicativo estão liberados." : getSuccessMessage(registration)}
+                    {getPublicRegistrationMessage(registration)}
                   </p>
 
                   {(

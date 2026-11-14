@@ -107,6 +107,7 @@ export function buildListWhereSql(
       OR position(${normalizedSearch} in ${searchableText(Prisma.sql`v.name`)}) > 0
       OR position(${normalizedSearch} in ${searchableText(Prisma.sql`v.email`)}) > 0
       OR position(${normalizedSearch} in ${searchableText(Prisma.sql`v.phone`)}) > 0
+      OR position(${normalizedSearch} in ${searchableText(Prisma.sql`r."checkoutEmail"`)}) > 0
       OR (
         position(${normalizedSearch} in ${searchableText(Prisma.sql`r."checkInToken"`)}) > 0
         AND r.status <> 'CANCELLED'

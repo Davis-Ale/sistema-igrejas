@@ -119,6 +119,17 @@ test("participant lookup uses the existing registrations contract without church
   assert.doesNotMatch(request.url, /churchId/);
 });
 
+test("participant lookup forwards an email search without a tenant from the client", async () => {
+  const requests = respond({ items: [], pagination: { page: 1, totalPages: 1, total: 0 } });
+  const signal = new AbortController().signal;
+  await listRegistrations("event-test", 1, "Ada@Igreja.Test", signal);
+  const url = new URL(requests[0].url);
+  assert.equal(url.searchParams.get("search"), "Ada@Igreja.Test");
+  assert.equal(requests[0].credentials, "include");
+  assert.equal(requests[0].headers.get("Authorization"), null);
+  assert.doesNotMatch(requests[0].url, /churchId/);
+});
+
 test("check-in sends only selected event and credential, and returns the server participant", async () => {
   const result = { id: "registration-test", status: "CHECKED_IN", event: { id: "event-test", title: "Test" }, person: null, visitor: { name: "Test participant" } };
   const requests = respond(result);
